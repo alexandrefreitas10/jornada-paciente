@@ -1,0 +1,113 @@
+// src/components/PatientDetailClient.tsx
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { PatientDetail } from '@/lib/patients'
+import { TASK_PHASES } from '@/lib/task-definitions'
+import { ProgressBar } from './ProgressBar'
+import { TaskPhase } from './TaskPhase'
+import { PatientModal } from './PatientModal'
+import { DeleteButton } from './DeleteButton'
+
+const AVATAR_COLORS = [
+  'bg-violet-500', 'bg-blue-500', 'bg-emerald-500',
+  'bg-orange-500', 'bg-pink-500', 'bg-teal-500',
+]
+function avatarColor(name: string) {
+  return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]
+}
+
+interface Props {
+  patient: PatientDetail
+}
+
+export function PatientDetailClient({ patient }: Props) {
+  const [completedKeys, setCompletedKeys] = useState<string[]>(patient.completed_task_keys)
+  const [editOpen, setEditOpen] = useState(false)
+  const router = useRouter()
+
+  async function handleToggle(taskKey: string, completed: boolean) {
+    setCompletedKeys((prev) =>
+      completed ? [...prev, taskKey] : prev.filter((k) => k !== taskKey)
+    )
+    const method = completed ? 'POST' : 'DELETE'
+    await fetch(`/api/patients/${patient.id}/tasks/${taskKey}`, { method })
+  }
+
+  async function handleEdit(data: { name: string; start_date: string; duration: string; notes: string }) {
+    const res = await fetch(`/api/patients/${patient.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    if (!res.ok) throw new Error('Erro ao atualizar')
+    router.refresh()
+  }
+
+  return (
+    <main className="max-w-2xl mx-auto px-4 py-8">
+      {/* Navegação */}
+      <button onClick={() => router.push('/')} className="text-sm text-gray-500 hover:text-gray-700 mb-6 flex items-center gap-1">
+        ← Voltar
+      </button>
+
+      {/* Cabeçalho do paciente */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+        <div className="flex items-start gap-4 mb-4">
+          <div className={`w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-2xl flex-shrink-0 ${avatarColor(patient.name)}`}>
+            {patient.name.charAt(0).toUpperCase()}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl font-bold text-gray-900">{patient.name}</h1>
+            <p className="text-sm text-gray-500">
+              {patient.start_date && `Início: ${patient.start_date}`}
+              {patient.start_date && patient.duration && ' · '}
+              {patient.duration}
+            </p>
+            {patient.notes && (
+              <p className="text-sm text-gray-500 italic mt-1">{patient.notes}</p>
+            )}
+          </div>
+          <div className="flex gap-2 flex-shrink-0">
+            <button
+              onClick={() => setEditOpen(true)}
+              className="text-sm px-3 py-1 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              ✏️ Editar
+            </button>
+            <DeleteButton patientId={patient.id} patientName={patient.name} />
+          </div>
+        </div>
+        <ProgressBar completed={completedKeys.length} total={18} />
+      </div>
+
+      {/* Tarefas por fase */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-6">
+        {TASK_PHASES.map((phase) => (
+          <TaskPhase
+            key={phase.key}
+            phase={phase}
+            completedKeys={completedKeys}
+            patientId={patient.id}
+            onToggle={handleToggle}
+          />
+        ))}
+      </div>
+
+      {editOpen && (
+        <PatientModal
+          title="Editar Paciente"
+          initial={{
+            name: patient.name,
+            start_date: patient.start_date,
+            duration: patient.duration,
+            notes: patient.notes,
+          }}
+          onSave={handleEdit}
+          onClose={() => setEditOpen(false)}
+        />
+      )}
+    </main>
+  )
+}
