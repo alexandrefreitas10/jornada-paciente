@@ -1,5 +1,4 @@
-// src/lib/patients.ts
-import Database from 'better-sqlite3'
+import sql, { initSchema } from './db'
 
 export interface PatientRow {
   id: number
@@ -25,45 +24,55 @@ export interface PatientInput {
   notes: string
 }
 
-export function listPatients(db: Database.Database): PatientListItem[] {
-  return db.prepare(`
-    SELECT p.*, COUNT(tc.id) as completed_count
+export async function listPatients(): Promise<PatientListItem[]> {
+  await initSchema()
+  const rows = await sql<PatientListItem[]>`
+    SELECT p.*, COUNT(tc.id)::int as completed_count
     FROM patients p
     LEFT JOIN task_completions tc ON tc.patient_id = p.id
     GROUP BY p.id
     ORDER BY p.created_at DESC
-  `).all() as PatientListItem[]
+  `
+  return rows
 }
 
-export function createPatient(db: Database.Database, input: PatientInput): number {
+export async function createPatient(input: PatientInput): Promise<number> {
   if (!input.name.trim()) throw new Error('name is required')
-  const result = db.prepare(
-    'INSERT INTO patients (name, start_date, duration, notes) VALUES (?, ?, ?, ?)'
-  ).run(input.name.trim(), input.start_date, input.duration, input.notes)
-  return result.lastInsertRowid as number
+  await initSchema()
+  const rows = await sql`
+    INSERT INTO patients (name, start_date, duration, notes)
+    VALUES (${input.name.trim()}, ${input.start_date}, ${input.duration}, ${input.notes})
+    RETURNING id
+  `
+  return rows[0].id
 }
 
-export function getPatient(db: Database.Database, id: number): PatientDetail | null {
-  const patient = db.prepare('SELECT * FROM patients WHERE id = ?').get(id) as PatientRow | undefined
-  if (!patient) return null
+export async function getPatient(id: number): Promise<PatientDetail | null> {
+  await initSchema()
+  const patients = await sql<PatientRow[]>`SELECT * FROM patients WHERE id = ${id}`
+  if (patients.length === 0) return null
 
-  const completions = db.prepare(
-    'SELECT task_key FROM task_completions WHERE patient_id = ?'
-  ).all(id) as { task_key: string }[]
+  const completions = await sql<{ task_key: string }[]>`
+    SELECT task_key FROM task_completions WHERE patient_id = ${id}
+  `
 
   return {
-    ...patient,
+    ...patients[0],
     completed_task_keys: completions.map((c) => c.task_key),
   }
 }
 
-export function updatePatient(db: Database.Database, id: number, input: PatientInput): void {
+export async function updatePatient(id: number, input: PatientInput): Promise<void> {
   if (!input.name.trim()) throw new Error('name is required')
-  db.prepare(
-    'UPDATE patients SET name = ?, start_date = ?, duration = ?, notes = ? WHERE id = ?'
-  ).run(input.name.trim(), input.start_date, input.duration, input.notes, id)
+  await initSchema()
+  await sql`
+    UPDATE patients
+    SET name = ${input.name.trim()}, start_date = ${input.start_date},
+        duration = ${input.duration}, notes = ${input.notes}
+    WHERE id = ${id}
+  `
 }
 
-export function deletePatient(db: Database.Database, id: number): void {
-  db.prepare('DELETE FROM patients WHERE id = ?').run(id)
+export async function deletePatient(id: number): Promise<void> {
+  await sql`DELETE FROM patients WHERE id = ${id}`
 }

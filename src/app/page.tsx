@@ -1,13 +1,12 @@
 // src/app/page.tsx
-import { db } from '@/lib/db'
 import { listPatients } from '@/lib/patients'
 import { PatientCard } from '@/components/PatientCard'
 import { NewPatientButton } from '@/components/NewPatientButton'
 
 export const dynamic = 'force-dynamic'
 
-export default function HomePage() {
-  const patients = listPatients(db)
+export default async function HomePage() {
+  const patients = await listPatients()
 
   return (
     <main className="max-w-2xl mx-auto px-4 py-8">

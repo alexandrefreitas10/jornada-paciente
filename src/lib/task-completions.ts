@@ -1,22 +1,15 @@
-// src/lib/task-completions.ts
-import Database from 'better-sqlite3'
+import sql from './db'
 
-export function markTaskComplete(
-  db: Database.Database,
-  patientId: number,
-  taskKey: string
-): void {
-  db.prepare(
-    'INSERT OR IGNORE INTO task_completions (patient_id, task_key) VALUES (?, ?)'
-  ).run(patientId, taskKey)
+export async function markTaskComplete(patientId: number, taskKey: string): Promise<void> {
+  await sql`
+    INSERT INTO task_completions (patient_id, task_key)
+    VALUES (${patientId}, ${taskKey})
+    ON CONFLICT (patient_id, task_key) DO NOTHING
+  `
 }
 
-export function unmarkTaskComplete(
-  db: Database.Database,
-  patientId: number,
-  taskKey: string
-): void {
-  db.prepare(
-    'DELETE FROM task_completions WHERE patient_id = ? AND task_key = ?'
-  ).run(patientId, taskKey)
+export async function unmarkTaskComplete(patientId: number, taskKey: string): Promise<void> {
+  await sql`
+    DELETE FROM task_completions WHERE patient_id = ${patientId} AND task_key = ${taskKey}
+  `
 }

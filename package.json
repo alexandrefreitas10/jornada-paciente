@@ -9,8 +9,8 @@
     "test": "jest"
   },
   "dependencies": {
-    "better-sqlite3": "^12.10.0",
     "next": "16.2.7",
+    "postgres": "^3.4.9",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
@@ -19,7 +19,6 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
-    "@types/better-sqlite3": "^7.6.13",
     "@types/jest": "^30.0.0",
     "@types/node": "^20",
     "@types/react": "^19",

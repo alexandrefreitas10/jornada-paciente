@@ -23,7 +23,16 @@
       "Bash(npx create-next-app@latest \"C:\\\\tmp\\\\patient-journey\" --typescript --tailwind --app --no-src-dir --import-alias \"@/*\" --yes)",
       "Bash(cd \"C:\\\\Users\\\\alexa\\\\Projeto Curso IA\" && ls \"C:\\\\tmp\\\\patient-journey\")",
       "Bash(npm install *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(npm show *)",
+      "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\); const v=JSON.parse\\(d\\); console.log\\(v.slice\\(-10\\).join\\('\\\\n'\\)\\);\")",
+      "Bash(npx tsc *)",
+      "Bash(npx jest *)",
+      "Bash(git diff *)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "mcp__Claude_in_Chrome__navigate",
+      "mcp__Claude_in_Chrome__get_page_text",
+      "Bash(npm uninstall *)"
     ]
   }
 }
