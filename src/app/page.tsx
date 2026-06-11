@@ -1,7 +1,7 @@
 // src/app/page.tsx
 import { listPatients } from '@/lib/patients'
-import { PatientCard } from '@/components/PatientCard'
 import { NewPatientButton } from '@/components/NewPatientButton'
+import { PatientSearch } from '@/components/PatientSearch'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,11 +24,7 @@ export default async function HomePage() {
           <p className="text-sm">Clique em &quot;+ Novo Paciente&quot; para começar</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {patients.map((patient) => (
-            <PatientCard key={patient.id} patient={patient} />
-          ))}
-        </div>
+        <PatientSearch patients={patients} />
       )}
     </main>
   )
