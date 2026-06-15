@@ -1,14 +1,15 @@
-// src/components/PatientDetailClient.tsx
 'use client'
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { PatientDetail } from '@/lib/patients'
+import { Measurement } from '@/lib/measurements'
 import { TASK_PHASES } from '@/lib/task-definitions'
 import { ProgressBar } from './ProgressBar'
 import { TaskPhase } from './TaskPhase'
 import { PatientModal } from './PatientModal'
 import { DeleteButton } from './DeleteButton'
+import { EvolutionTab } from './EvolutionTab'
 
 const AVATAR_COLORS = [
   'bg-violet-500', 'bg-blue-500', 'bg-emerald-500',
@@ -20,11 +21,13 @@ function avatarColor(name: string) {
 
 interface Props {
   patient: PatientDetail
+  initialMeasurements: Measurement[]
 }
 
-export function PatientDetailClient({ patient }: Props) {
+export function PatientDetailClient({ patient, initialMeasurements }: Props) {
   const [completedKeys, setCompletedKeys] = useState<string[]>(patient.completed_task_keys)
   const [editOpen, setEditOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState<'tasks' | 'evolution'>('tasks')
   const router = useRouter()
 
   async function handleToggle(taskKey: string, completed: boolean) {
@@ -82,18 +85,48 @@ export function PatientDetailClient({ patient }: Props) {
         <ProgressBar completed={completedKeys.length} total={18} />
       </div>
 
-      {/* Tarefas por fase */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-6">
-        {TASK_PHASES.map((phase) => (
-          <TaskPhase
-            key={phase.key}
-            phase={phase}
-            completedKeys={completedKeys}
-            patientId={patient.id}
-            onToggle={handleToggle}
-          />
-        ))}
+      {/* Abas */}
+      <div className="flex gap-1 mb-4 border-b border-gray-200">
+        <button
+          onClick={() => setActiveTab('tasks')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'tasks'
+              ? 'border-violet-600 text-violet-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Tarefas
+        </button>
+        <button
+          onClick={() => setActiveTab('evolution')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'evolution'
+              ? 'border-violet-600 text-violet-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Evolução
+        </button>
       </div>
+
+      {/* Conteúdo da aba ativa */}
+      {activeTab === 'tasks' ? (
+        <div className="bg-white rounded-2xl border border-gray-200 p-6">
+          {TASK_PHASES.map((phase) => (
+            <TaskPhase
+              key={phase.key}
+              phase={phase}
+              completedKeys={completedKeys}
+              patientId={patient.id}
+              onToggle={handleToggle}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-gray-200 p-6">
+          <EvolutionTab patientId={patient.id} initialMeasurements={initialMeasurements} />
+        </div>
+      )}
 
       {editOpen && (
         <PatientModal
