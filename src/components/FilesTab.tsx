@@ -91,18 +91,90 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
     setCompareMode(false)
   }
 
+  async function handleDownloadComparison() {
+    const [a, b] = comparing
+    const loadImage = (url: string): Promise<HTMLImageElement> =>
+      new Promise((resolve, reject) => {
+        const img = new Image()
+        img.crossOrigin = 'anonymous'
+        img.onload = () => resolve(img)
+        img.onerror = reject
+        img.src = url
+      })
+
+    try {
+      const [imgA, imgB] = await Promise.all([loadImage(a.url), loadImage(b.url)])
+
+      const GAP = 20
+      const LABEL_H = 40
+      const PADDING = 20
+      const maxH = Math.max(imgA.naturalHeight, imgB.naturalHeight)
+      const scaleA = maxH / imgA.naturalHeight
+      const scaleB = maxH / imgB.naturalHeight
+      const wA = imgA.naturalWidth * scaleA
+      const wB = imgB.naturalWidth * scaleB
+      const totalW = wA + wB + GAP + PADDING * 2
+      const totalH = maxH + LABEL_H + PADDING * 2
+
+      const canvas = document.createElement('canvas')
+      canvas.width = totalW
+      canvas.height = totalH
+      const ctx = canvas.getContext('2d')!
+
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, totalW, totalH)
+
+      // Labels
+      ctx.fillStyle = '#6b7280'
+      ctx.font = 'bold 24px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText('ANTES', PADDING + wA / 2, PADDING + 28)
+      ctx.fillText('DEPOIS', PADDING + wA + GAP + wB / 2, PADDING + 28)
+
+      // Fotos
+      ctx.drawImage(imgA, PADDING, PADDING + LABEL_H, wA, maxH)
+      ctx.drawImage(imgB, PADDING + wA + GAP, PADDING + LABEL_H, wB, maxH)
+
+      // Datas
+      ctx.fillStyle = '#9ca3af'
+      ctx.font = '18px sans-serif'
+      ctx.fillText(formatDate(a.created_at), PADDING + wA / 2, PADDING + LABEL_H + maxH + 22)
+      ctx.fillText(formatDate(b.created_at), PADDING + wA + GAP + wB / 2, PADDING + LABEL_H + maxH + 22)
+
+      canvas.toBlob(blob => {
+        if (!blob) return
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = 'comparacao-antes-depois.png'
+        link.click()
+        URL.revokeObjectURL(url)
+      }, 'image/png')
+    } catch {
+      alert('Não foi possível gerar a imagem. Tente novamente.')
+    }
+  }
+
   // Modal de comparação
   if (comparing.length === 2) {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-gray-700">Comparação — Antes e Depois</h3>
-          <button
-            onClick={exitCompare}
-            className="text-sm text-gray-500 hover:text-gray-800 px-3 py-1 border border-gray-200 rounded-lg transition-colors"
-          >
-            ✕ Fechar
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleDownloadComparison}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 transition-colors"
+            >
+              ⬇️ Baixar montagem
+            </button>
+            <button
+              onClick={exitCompare}
+              className="text-sm text-gray-500 hover:text-gray-800 px-3 py-1.5 border border-gray-200 rounded-lg transition-colors"
+            >
+              ✕ Fechar
+            </button>
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           {comparing.map((f, i) => (
