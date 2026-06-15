@@ -1,0 +1,44 @@
+import { NextRequest } from 'next/server'
+import { listPatientFiles, createPatientFile, FileType } from '@/lib/patient-files'
+import { uploadFile, getSignedDownloadUrl } from '@/lib/s3'
+import { randomUUID } from 'crypto'
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params
+  const fileType = req.nextUrl.searchParams.get('type') as FileType
+  const files = await listPatientFiles(Number(id), fileType)
+  const withUrls = await Promise.all(
+    files.map(async (f) => ({
+      ...f,
+      url: await getSignedDownloadUrl(f.s3_key),
+    }))
+  )
+  return Response.json(withUrls)
+}
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params
+  const formData = await req.formData()
+  const file = formData.get('file') as File | null
+  const fileType = formData.get('type') as FileType | null
+
+  if (!file || !fileType) {
+    return Response.json({ error: 'Arquivo ou tipo não enviado' }, { status: 400 })
+  }
+
+  const ext = file.name.split('.').pop() ?? 'bin'
+  const s3Key = `patients/${id}/${fileType}/${randomUUID()}.${ext}`
+  const buffer = Buffer.from(await file.arrayBuffer())
+
+  await uploadFile(s3Key, buffer, file.type || 'application/octet-stream')
+  const record = await createPatientFile(Number(id), fileType, s3Key, file.name)
+  const url = await getSignedDownloadUrl(s3Key)
+
+  return Response.json({ ...record, url }, { status: 201 })
+}

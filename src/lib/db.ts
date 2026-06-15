@@ -22,6 +22,14 @@ export async function initSchema() {
       completed_at TIMESTAMPTZ DEFAULT NOW(),
       UNIQUE(patient_id, task_key)
     );
+    CREATE TABLE IF NOT EXISTS patient_files (
+      id SERIAL PRIMARY KEY,
+      patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      file_type TEXT NOT NULL,
+      s3_key TEXT NOT NULL,
+      original_name TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
     CREATE TABLE IF NOT EXISTS weekly_measurements (
       id SERIAL PRIMARY KEY,
       patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,

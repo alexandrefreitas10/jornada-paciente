@@ -1,16 +1,39 @@
 import { notFound } from 'next/navigation'
 import { getPatient } from '@/lib/patients'
 import { listMeasurements } from '@/lib/measurements'
+import { listPatientFiles } from '@/lib/patient-files'
+import { getSignedDownloadUrl } from '@/lib/s3'
 import { PatientDetailClient } from '@/components/PatientDetailClient'
 
 export const dynamic = 'force-dynamic'
 
 export default async function PatientPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const [patient, measurements] = await Promise.all([
-    getPatient(Number(id)),
-    listMeasurements(Number(id)),
+  const patientId = Number(id)
+
+  const [patient, measurements, photos, bioimpedances] = await Promise.all([
+    getPatient(patientId),
+    listMeasurements(patientId),
+    listPatientFiles(patientId, 'photo'),
+    listPatientFiles(patientId, 'bioimpedance'),
   ])
+
   if (!patient) notFound()
-  return <PatientDetailClient patient={patient} initialMeasurements={measurements} />
+
+  const withUrls = async (files: typeof photos) =>
+    Promise.all(files.map(async (f) => ({ ...f, url: await getSignedDownloadUrl(f.s3_key) })))
+
+  const [initialPhotos, initialBioimpedances] = await Promise.all([
+    withUrls(photos),
+    withUrls(bioimpedances),
+  ])
+
+  return (
+    <PatientDetailClient
+      patient={patient}
+      initialMeasurements={measurements}
+      initialPhotos={initialPhotos}
+      initialBioimpedances={initialBioimpedances}
+    />
+  )
 }

@@ -10,6 +10,7 @@ import { TaskPhase } from './TaskPhase'
 import { PatientModal } from './PatientModal'
 import { DeleteButton } from './DeleteButton'
 import { EvolutionTab } from './EvolutionTab'
+import { FilesTab } from './FilesTab'
 
 const AVATAR_COLORS = [
   'bg-violet-500', 'bg-blue-500', 'bg-emerald-500',
@@ -19,15 +20,27 @@ function avatarColor(name: string) {
   return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]
 }
 
+type Tab = 'tasks' | 'evolution' | 'photos' | 'bioimpedance'
+
+interface FileRecord {
+  id: number
+  original_name: string
+  url: string
+  created_at: string
+  file_type: string
+}
+
 interface Props {
   patient: PatientDetail
   initialMeasurements: Measurement[]
+  initialPhotos: FileRecord[]
+  initialBioimpedances: FileRecord[]
 }
 
-export function PatientDetailClient({ patient, initialMeasurements }: Props) {
+export function PatientDetailClient({ patient, initialMeasurements, initialPhotos, initialBioimpedances }: Props) {
   const [completedKeys, setCompletedKeys] = useState<string[]>(patient.completed_task_keys)
   const [editOpen, setEditOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState<'tasks' | 'evolution'>('tasks')
+  const [activeTab, setActiveTab] = useState<Tab>('tasks')
   const router = useRouter()
 
   async function handleToggle(taskKey: string, completed: boolean) {
@@ -47,6 +60,13 @@ export function PatientDetailClient({ patient, initialMeasurements }: Props) {
     if (!res.ok) throw new Error('Erro ao atualizar')
     router.refresh()
   }
+
+  const tabs: { key: Tab; label: string }[] = [
+    { key: 'tasks', label: 'Tarefas' },
+    { key: 'evolution', label: 'Evolução' },
+    { key: 'photos', label: 'Fotos' },
+    { key: 'bioimpedance', label: 'Bioimpedância' },
+  ]
 
   return (
     <main className="max-w-2xl mx-auto px-4 py-8">
@@ -86,33 +106,26 @@ export function PatientDetailClient({ patient, initialMeasurements }: Props) {
       </div>
 
       {/* Abas */}
-      <div className="flex gap-1 mb-4 border-b border-gray-200">
-        <button
-          onClick={() => setActiveTab('tasks')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'tasks'
-              ? 'border-violet-600 text-violet-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Tarefas
-        </button>
-        <button
-          onClick={() => setActiveTab('evolution')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'evolution'
-              ? 'border-violet-600 text-violet-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Evolução
-        </button>
+      <div className="flex gap-1 mb-4 border-b border-gray-200 overflow-x-auto">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
+              activeTab === tab.key
+                ? 'border-violet-600 text-violet-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* Conteúdo da aba ativa */}
-      {activeTab === 'tasks' ? (
-        <div className="bg-white rounded-2xl border border-gray-200 p-6">
-          {TASK_PHASES.map((phase) => (
+      <div className="bg-white rounded-2xl border border-gray-200 p-6">
+        {activeTab === 'tasks' && (
+          TASK_PHASES.map((phase) => (
             <TaskPhase
               key={phase.key}
               phase={phase}
@@ -120,13 +133,18 @@ export function PatientDetailClient({ patient, initialMeasurements }: Props) {
               patientId={patient.id}
               onToggle={handleToggle}
             />
-          ))}
-        </div>
-      ) : (
-        <div className="bg-white rounded-2xl border border-gray-200 p-6">
+          ))
+        )}
+        {activeTab === 'evolution' && (
           <EvolutionTab patientId={patient.id} initialMeasurements={initialMeasurements} />
-        </div>
-      )}
+        )}
+        {activeTab === 'photos' && (
+          <FilesTab patientId={patient.id} fileType="photo" initialFiles={initialPhotos} />
+        )}
+        {activeTab === 'bioimpedance' && (
+          <FilesTab patientId={patient.id} fileType="bioimpedance" initialFiles={initialBioimpedances} />
+        )}
+      </div>
 
       {editOpen && (
         <PatientModal
