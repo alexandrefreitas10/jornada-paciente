@@ -44,9 +44,10 @@ export function EvolutionTab({ patientId, initialMeasurements }: Props) {
         const err = await res.json()
         throw new Error(err.error || 'Erro ao processar a foto')
       }
-      const created: Measurement = await res.json()
+      const created: Measurement[] = await res.json()
+      const newItems = Array.isArray(created) ? created : [created]
       setMeasurements((prev) =>
-        [...prev, created].sort((a, b) => (a.week ?? 999) - (b.week ?? 999))
+        [...prev, ...newItems].sort((a, b) => (a.week ?? 999) - (b.week ?? 999))
       )
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Erro desconhecido')

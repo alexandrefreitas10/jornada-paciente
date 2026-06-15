@@ -1,8 +1,21 @@
 import { NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
-import { createMeasurement } from '@/lib/measurements'
+import { createMeasurement, MeasurementInput } from '@/lib/measurements'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+function toNum(v: unknown): number | null {
+  if (typeof v === 'number') return v
+  if (typeof v === 'string') {
+    const n = parseFloat(v.replace(',', '.'))
+    return isNaN(n) ? null : n
+  }
+  return null
+}
+
+function toStr(v: unknown): string | null {
+  return typeof v === 'string' && v.trim() ? v.trim() : null
+}
 
 export async function POST(
   req: NextRequest,
@@ -27,7 +40,7 @@ export async function POST(
 
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 512,
+    max_tokens: 1024,
     messages: [
       {
         role: 'user',
@@ -38,16 +51,18 @@ export async function POST(
           },
           {
             type: 'text',
-            text: `Esta imagem contém uma tabela de acompanhamento de paciente. Extraia os dados e retorne APENAS um objeto JSON válido com estes campos (use null quando o valor não estiver presente):
-{
-  "week": <número inteiro da semana ou null>,
-  "date": <data como string ou null>,
-  "weight": <peso em kg como número decimal ou null>,
-  "abdominal_circumference": <circunferência do abdômen em cm como número decimal ou null>,
-  "waist_circumference": <circunferência da cintura em cm como número decimal ou null>,
-  "tirzepatide_dose": <dose de tirzepatida em mg como número decimal ou null>
-}
-Retorne somente o JSON, sem texto adicional, sem markdown.`,
+            text: `Esta imagem contém uma tabela de acompanhamento de paciente com várias semanas. Extraia TODAS as linhas que tiverem pelo menos um dado preenchido e retorne APENAS um array JSON válido. Cada item do array deve ter estes campos (use null quando não estiver presente):
+[
+  {
+    "week": <número inteiro da semana, ex: 1 para "1ª SEMANA">,
+    "date": <data como string, ex: "15/05/26">,
+    "weight": <peso em kg como número decimal, ex: 54.8>,
+    "abdominal_circumference": <circunferência do abdômen em cm como número decimal>,
+    "waist_circumference": <circunferência da cintura em cm como número decimal>,
+    "tirzepatide_dose": <dose em mg como número decimal, ex: 4>
+  }
+]
+Ignore linhas completamente vazias. Retorne somente o array JSON, sem texto adicional, sem markdown.`,
           },
         ],
       },
@@ -56,9 +71,10 @@ Retorne somente o JSON, sem texto adicional, sem markdown.`,
 
   const text = (message.content[0] as { type: string; text: string }).text.trim()
 
-  let extracted: Record<string, unknown>
+  let extracted: unknown[]
   try {
-    extracted = JSON.parse(text)
+    const parsed = JSON.parse(text)
+    extracted = Array.isArray(parsed) ? parsed : [parsed]
   } catch {
     return Response.json(
       { error: 'Não foi possível extrair os dados da foto. Tente uma imagem mais nítida ou adicione manualmente.' },
@@ -66,21 +82,20 @@ Retorne somente o JSON, sem texto adicional, sem markdown.`,
     )
   }
 
-  const measurement = await createMeasurement(Number(id), {
-    week: typeof extracted.week === 'number' ? extracted.week : null,
-    date: typeof extracted.date === 'string' ? extracted.date : null,
-    weight: typeof extracted.weight === 'number' ? extracted.weight : null,
-    abdominal_circumference:
-      typeof extracted.abdominal_circumference === 'number'
-        ? extracted.abdominal_circumference
-        : null,
-    waist_circumference:
-      typeof extracted.waist_circumference === 'number'
-        ? extracted.waist_circumference
-        : null,
-    tirzepatide_dose:
-      typeof extracted.tirzepatide_dose === 'number' ? extracted.tirzepatide_dose : null,
-  })
+  const created = await Promise.all(
+    extracted.map((row) => {
+      const r = row as Record<string, unknown>
+      const input: MeasurementInput = {
+        week: toNum(r.week),
+        date: toStr(r.date),
+        weight: toNum(r.weight),
+        abdominal_circumference: toNum(r.abdominal_circumference),
+        waist_circumference: toNum(r.waist_circumference),
+        tirzepatide_dose: toNum(r.tirzepatide_dose),
+      }
+      return createMeasurement(Number(id), input)
+    })
+  )
 
-  return Response.json(measurement, { status: 201 })
+  return Response.json(created, { status: 201 })
 }
