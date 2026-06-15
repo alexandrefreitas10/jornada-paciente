@@ -25,9 +25,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <Image
                   src="/logo.png"
                   alt="Instituto Torres"
-                  width={160}
-                  height={80}
-                  className="h-16 w-auto"
+                  width={100}
+                  height={130}
+                  className="h-20 w-auto"
                   priority
                 />
               </a>
