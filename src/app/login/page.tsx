@@ -1,4 +1,3 @@
-import Image from 'next/image'
 import { LoginForm } from './LoginForm'
 
 export default function LoginPage() {
@@ -6,13 +5,11 @@ export default function LoginPage() {
     <main className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <Image
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
             src="/logo.png"
             alt="Instituto Torres"
-            width={220}
-            height={220}
-            className="mx-auto mb-4"
-            priority
+            style={{ height: '160px', width: 'auto', margin: '0 auto 16px' }}
           />
           <p className="text-sm text-gray-500">Entre com suas credenciais</p>
         </div>

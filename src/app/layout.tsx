@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
-import Image from 'next/image'
 import './globals.css'
 import { auth } from '../auth'
 import { LogoutButton } from '@/components/LogoutButton'
@@ -20,15 +19,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className={`${inter.className} bg-gray-50 min-h-screen`}>
         <SessionProviderWrapper>
           {session?.user && (
-            <header className="bg-white border-b border-gray-200 px-6 py-3 relative flex items-center justify-center">
-              <a href="/" className="flex items-center">
-                <Image
+            <header className="bg-white border-b border-gray-200 px-6 py-2 relative flex items-center justify-center">
+              <a href="/">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
                   src="/logo.png"
                   alt="Instituto Torres"
-                  width={100}
-                  height={130}
-                  className="h-20 w-auto"
-                  priority
+                  style={{ height: '80px', width: 'auto' }}
                 />
               </a>
               <div className="absolute right-6 flex items-center gap-4 text-sm text-gray-600">
