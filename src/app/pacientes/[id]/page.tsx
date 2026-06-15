@@ -11,12 +11,13 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
   const { id } = await params
   const patientId = Number(id)
 
-  const [patient, measurements, photos, bioimpedances, exams] = await Promise.all([
+  const [patient, measurements, photos, bioimpedances, exams, diets] = await Promise.all([
     getPatient(patientId),
     listMeasurements(patientId),
     listPatientFiles(patientId, 'photo'),
     listPatientFiles(patientId, 'bioimpedance'),
     listPatientFiles(patientId, 'exam'),
+    listPatientFiles(patientId, 'diet'),
   ])
 
   if (!patient) notFound()
@@ -24,10 +25,11 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
   const withUrls = async (files: typeof photos) =>
     Promise.all(files.map(async (f) => ({ ...f, url: await getSignedDownloadUrl(f.s3_key) })))
 
-  const [initialPhotos, initialBioimpedances, initialExams] = await Promise.all([
+  const [initialPhotos, initialBioimpedances, initialExams, initialDiets] = await Promise.all([
     withUrls(photos),
     withUrls(bioimpedances),
     withUrls(exams),
+    withUrls(diets),
   ])
 
   return (
@@ -37,6 +39,7 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
       initialPhotos={initialPhotos}
       initialBioimpedances={initialBioimpedances}
       initialExams={initialExams}
+      initialDiets={initialDiets}
     />
   )
 }

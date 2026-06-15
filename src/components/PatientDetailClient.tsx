@@ -21,7 +21,7 @@ function avatarColor(name: string) {
   return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]
 }
 
-type Tab = 'tasks' | 'evolution' | 'photos' | 'bioimpedance' | 'exams'
+type Tab = 'tasks' | 'evolution' | 'photos' | 'bioimpedance' | 'exams' | 'diet'
 
 interface FileRecord {
   id: number
@@ -38,9 +38,10 @@ interface Props {
   initialPhotos: FileRecord[]
   initialBioimpedances: FileRecord[]
   initialExams: FileRecord[]
+  initialDiets: FileRecord[]
 }
 
-export function PatientDetailClient({ patient, initialMeasurements, initialPhotos, initialBioimpedances, initialExams }: Props) {
+export function PatientDetailClient({ patient, initialMeasurements, initialPhotos, initialBioimpedances, initialExams, initialDiets }: Props) {
   const [completedKeys, setCompletedKeys] = useState<string[]>(patient.completed_task_keys)
   const [editOpen, setEditOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<Tab>('tasks')
@@ -70,6 +71,7 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
     { key: 'photos', label: 'Fotos' },
     { key: 'bioimpedance', label: 'Bioimpedância' },
     { key: 'exams', label: 'Exames' },
+    { key: 'diet', label: 'Dietas' },
   ]
 
   return (
@@ -150,6 +152,9 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
         )}
         {activeTab === 'exams' && (
           <ExamsTab patientId={patient.id} initialFiles={initialExams} />
+        )}
+        {activeTab === 'diet' && (
+          <FilesTab patientId={patient.id} fileType="diet" initialFiles={initialDiets} />
         )}
       </div>
 

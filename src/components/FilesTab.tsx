@@ -12,7 +12,7 @@ interface FileRecord {
 
 interface Props {
   patientId: number
-  fileType: 'photo' | 'bioimpedance'
+  fileType: 'photo' | 'bioimpedance' | 'diet'
   initialFiles: FileRecord[]
 }
 
@@ -28,8 +28,8 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
   const [comparing, setComparing] = useState<FileRecord[]>([])
 
   const isPhoto = fileType === 'photo'
-  const accept = isPhoto ? 'image/*' : 'image/*,application/pdf'
-  const label = isPhoto ? '📷 Enviar foto' : '📎 Enviar arquivo'
+  const accept = isPhoto ? 'image/*' : 'image/*,application/pdf,.doc,.docx,.xls,.xlsx'
+  const label = isPhoto ? '📷 Enviar foto' : fileType === 'diet' ? '🥗 Enviar dieta' : '📎 Enviar arquivo'
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
