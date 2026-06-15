@@ -59,6 +59,16 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
     setFiles((prev) => prev.filter((f) => f.id !== id))
   }
 
+  async function handleDownload(url: string, name: string) {
+    const res = await fetch(url)
+    const blob = await res.blob()
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = name
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
   function formatDate(iso: string) {
     return new Date(iso).toLocaleDateString('pt-BR', {
       day: '2-digit', month: '2-digit', year: 'numeric',
@@ -98,7 +108,7 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
       {/* Lista de arquivos */}
       {files.length === 0 ? (
         <p className="text-sm text-gray-400 text-center py-8">
-          Nenhum arquivo ainda. {isPhoto ? 'Envie uma foto.' : 'Envie um PDF.'}
+          Nenhum arquivo ainda. {isPhoto ? 'Envie uma foto.' : 'Envie um arquivo.'}
         </p>
       ) : isPhoto ? (
         /* Grade de fotos */
@@ -112,8 +122,15 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
                   className="w-full h-40 object-cover hover:opacity-90 transition-opacity"
                 />
               </a>
-              <div className="p-2 bg-white">
+              <div className="p-2 bg-white flex items-center justify-between gap-1">
                 <p className="text-xs text-gray-500 truncate">{formatDate(f.created_at)}</p>
+                <button
+                  onClick={() => handleDownload(f.url, f.original_name)}
+                  className="text-xs text-violet-600 hover:text-violet-800 shrink-0"
+                  title="Baixar"
+                >
+                  ⬇️
+                </button>
               </div>
               <button
                 onClick={() => handleDelete(f.id)}
@@ -145,6 +162,13 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
                 >
                   Abrir
                 </a>
+                <button
+                  onClick={() => handleDownload(f.url, f.original_name)}
+                  className="text-xs text-violet-600 hover:text-violet-800 shrink-0"
+                  title="Baixar"
+                >
+                  ⬇️
+                </button>
                 <button
                   onClick={() => handleDelete(f.id)}
                   className="text-xs text-gray-400 hover:text-red-500 shrink-0"
