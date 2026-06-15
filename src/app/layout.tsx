@@ -19,19 +19,23 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className={`${inter.className} bg-gray-50 min-h-screen`}>
         <SessionProviderWrapper>
           {session?.user && (
-            <header className="bg-white border-b border-gray-200 px-6 py-2 relative flex items-center justify-center">
-              <a href="/">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/logo.png"
-                  alt="Instituto Torres"
-                  style={{ height: '80px', width: 'auto' }}
-                />
-              </a>
-              <div className="absolute right-6 flex items-center gap-4 text-sm text-gray-600">
+            <header className="bg-white border-b border-gray-200 px-4 py-2">
+              {/* Logo centralizada */}
+              <div className="flex justify-center">
+                <a href="/">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/logo.png"
+                    alt="Instituto Torres"
+                    style={{ height: '70px', width: 'auto' }}
+                  />
+                </a>
+              </div>
+              {/* Menu abaixo da logo */}
+              <div className="flex items-center justify-center gap-3 text-sm text-gray-600 mt-1 pb-1">
                 <a href="/usuarios" className="hover:text-violet-700 transition-colors">Usuários</a>
                 <span className="text-gray-300">|</span>
-                <span>{session.user.name}</span>
+                <span className="truncate max-w-[140px]">{session.user.name}</span>
                 <LogoutButton />
               </div>
             </header>
