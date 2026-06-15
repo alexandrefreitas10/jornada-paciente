@@ -20,7 +20,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <SessionProviderWrapper>
         {session?.user && (
           <header className="bg-white border-b border-gray-200 px-4 py-2 flex items-center justify-between">
-            <a href="/" className="text-sm font-semibold text-violet-700">Jornada do Paciente</a>
+            <a href="/">
+              <img src="/logo.png" alt="Instituto Torres" className="h-10 w-auto" />
+            </a>
             <div className="flex items-center gap-4 text-sm text-gray-600">
               <a href="/usuarios" className="hover:text-violet-700 transition-colors">Usuários</a>
               <span className="text-gray-400">|</span>
