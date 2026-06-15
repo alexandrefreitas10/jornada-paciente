@@ -23,8 +23,8 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const isPhoto = fileType === 'photo'
-  const accept = isPhoto ? 'image/*' : 'application/pdf'
-  const label = isPhoto ? '📷 Enviar foto' : '📄 Enviar PDF'
+  const accept = isPhoto ? 'image/*' : 'image/*,application/pdf'
+  const label = isPhoto ? '📷 Enviar foto' : '📎 Enviar arquivo'
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -123,32 +123,35 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
           ))}
         </div>
       ) : (
-        /* Lista de PDFs */
+        /* Lista de arquivos (fotos e PDFs) */
         <div className="space-y-2">
-          {files.map((f) => (
-            <div key={f.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-              <span className="text-2xl">📄</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-800 truncate">{f.original_name}</p>
-                <p className="text-xs text-gray-500">{formatDate(f.created_at)}</p>
+          {files.map((f) => {
+            const isImage = /\.(jpg|jpeg|png|gif|webp|heic)$/i.test(f.original_name)
+            return (
+              <div key={f.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <span className="text-2xl">{isImage ? '🖼️' : '📄'}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800 truncate">{f.original_name}</p>
+                  <p className="text-xs text-gray-500">{formatDate(f.created_at)}</p>
+                </div>
+                <a
+                  href={f.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-violet-600 hover:underline font-medium shrink-0"
+                >
+                  Abrir
+                </a>
+                <button
+                  onClick={() => handleDelete(f.id)}
+                  className="text-xs text-gray-400 hover:text-red-500 shrink-0"
+                  title="Apagar"
+                >
+                  🗑️
+                </button>
               </div>
-              <a
-                href={f.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-violet-600 hover:underline font-medium shrink-0"
-              >
-                Abrir
-              </a>
-              <button
-                onClick={() => handleDelete(f.id)}
-                className="text-xs text-gray-400 hover:text-red-500 shrink-0"
-                title="Apagar"
-              >
-                🗑️
-              </button>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
