@@ -7,6 +7,7 @@ export interface PatientRow {
   duration: string
   notes: string
   created_at: string
+  created_by: string | null
 }
 
 export interface PatientListItem extends PatientRow {
@@ -22,6 +23,7 @@ export interface PatientInput {
   start_date: string
   duration: string
   notes: string
+  created_by?: string | null
 }
 
 export async function listPatients(): Promise<PatientListItem[]> {
@@ -40,8 +42,8 @@ export async function createPatient(input: PatientInput): Promise<number> {
   if (!input.name.trim()) throw new Error('name is required')
   await initSchema()
   const rows = await sql`
-    INSERT INTO patients (name, start_date, duration, notes)
-    VALUES (${input.name.trim()}, ${input.start_date}, ${input.duration}, ${input.notes})
+    INSERT INTO patients (name, start_date, duration, notes, created_by)
+    VALUES (${input.name.trim()}, ${input.start_date}, ${input.duration}, ${input.notes}, ${input.created_by ?? null})
     RETURNING id
   `
   return rows[0].id

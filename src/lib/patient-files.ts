@@ -10,6 +10,7 @@ export interface PatientFile {
   original_name: string
   summary: string | null
   created_at: string
+  created_by: string | null
 }
 
 export async function listPatientFiles(patientId: number, fileType: FileType): Promise<PatientFile[]> {
@@ -26,12 +27,13 @@ export async function createPatientFile(
   fileType: FileType,
   s3Key: string,
   originalName: string,
-  summary?: string | null
+  summary?: string | null,
+  createdBy?: string | null
 ): Promise<PatientFile> {
   await initSchema()
   const [row] = await sql<PatientFile[]>`
-    INSERT INTO patient_files (patient_id, file_type, s3_key, original_name, summary)
-    VALUES (${patientId}, ${fileType}, ${s3Key}, ${originalName}, ${summary ?? null})
+    INSERT INTO patient_files (patient_id, file_type, s3_key, original_name, summary, created_by)
+    VALUES (${patientId}, ${fileType}, ${s3Key}, ${originalName}, ${summary ?? null}, ${createdBy ?? null})
     RETURNING *
   `
   return row

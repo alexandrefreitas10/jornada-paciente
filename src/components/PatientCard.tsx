@@ -30,6 +30,9 @@ export function PatientCard({ patient }: Props) {
             {patient.start_date && `Início: ${patient.start_date}`}
             {patient.start_date && patient.duration && ' · '}
             {patient.duration}
+            {patient.created_by && (
+              <span className="block text-gray-400 mt-0.5">Criado por {patient.created_by}</span>
+            )}
           </div>
           <ProgressBar completed={patient.completed_count} total={18} />
         </div>

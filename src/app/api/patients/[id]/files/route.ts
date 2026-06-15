@@ -3,6 +3,7 @@ import { listPatientFiles, createPatientFile, FileType } from '@/lib/patient-fil
 import { uploadFile, getSignedDownloadUrl } from '@/lib/s3'
 import { randomUUID } from 'crypto'
 import Anthropic from '@anthropic-ai/sdk'
+import { auth } from '@/auth'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -62,6 +63,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
+  const session = await auth()
+  const createdBy = session?.user?.name ?? null
+
   const formData = await req.formData()
   const file = formData.get('file') as File | null
   const fileType = formData.get('type') as FileType | null
@@ -92,7 +96,7 @@ export async function POST(
     }
   }
 
-  const record = await createPatientFile(Number(id), fileType, s3Key, file.name, summary)
+  const record = await createPatientFile(Number(id), fileType, s3Key, file.name, summary, createdBy)
   const url = await getSignedDownloadUrl(s3Key)
 
   return Response.json({ ...record, url }, { status: 201 })

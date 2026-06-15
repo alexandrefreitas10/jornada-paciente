@@ -8,6 +8,7 @@ interface FileRecord {
   url: string
   created_at: string
   file_type: string
+  created_by: string | null
 }
 
 interface Props {
@@ -335,7 +336,12 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
                 )}
 
                 <div className="p-2 bg-white flex items-center justify-between gap-1">
-                  <p className="text-xs text-gray-500 truncate">{formatDate(f.created_at)}</p>
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-500 truncate">{formatDate(f.created_at)}</p>
+                    {f.created_by && (
+                      <p className="text-xs text-gray-400 truncate">por {f.created_by}</p>
+                    )}
+                  </div>
                   {!compareMode && (
                     <button
                       onClick={() => handleDownload(f.id)}
@@ -369,7 +375,10 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
                 <span className="text-2xl">{isImage ? '🖼️' : '📄'}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-800 truncate">{f.original_name}</p>
-                  <p className="text-xs text-gray-500">{formatDate(f.created_at)}</p>
+                  <p className="text-xs text-gray-500">
+                    {formatDate(f.created_at)}
+                    {f.created_by && ` · por ${f.created_by}`}
+                  </p>
                 </div>
                 <a
                   href={f.url}
