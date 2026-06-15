@@ -22,6 +22,17 @@ export async function initSchema() {
       completed_at TIMESTAMPTZ DEFAULT NOW(),
       UNIQUE(patient_id, task_key)
     );
+    CREATE TABLE IF NOT EXISTS weekly_measurements (
+      id SERIAL PRIMARY KEY,
+      patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      week INTEGER,
+      date TEXT,
+      weight NUMERIC,
+      abdominal_circumference NUMERIC,
+      waist_circumference NUMERIC,
+      tirzepatide_dose NUMERIC,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
   `)
 }
 
