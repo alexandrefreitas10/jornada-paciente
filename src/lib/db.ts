@@ -28,8 +28,10 @@ export async function initSchema() {
       file_type TEXT NOT NULL,
       s3_key TEXT NOT NULL,
       original_name TEXT NOT NULL,
+      summary TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
+    ALTER TABLE patient_files ADD COLUMN IF NOT EXISTS summary TEXT;
     CREATE TABLE IF NOT EXISTS weekly_measurements (
       id SERIAL PRIMARY KEY,
       patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,

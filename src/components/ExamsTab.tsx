@@ -1,0 +1,219 @@
+'use client'
+
+import { useState, useRef } from 'react'
+
+interface ExamFile {
+  id: number
+  original_name: string
+  url: string
+  summary: string | null
+  created_at: string
+}
+
+interface Props {
+  patientId: number
+  initialFiles: ExamFile[]
+}
+
+export function ExamsTab({ patientId, initialFiles }: Props) {
+  const [files, setFiles] = useState<ExamFile[]>(initialFiles)
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [activeSubTab, setActiveSubTab] = useState<'files' | 'summary'>('files')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setError(null)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('type', 'exam')
+      const res = await fetch(`/api/patients/${patientId}/files`, {
+        method: 'POST',
+        body: formData,
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || 'Erro ao enviar arquivo')
+      }
+      const created: ExamFile = await res.json()
+      setFiles((prev) => [created, ...prev])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro desconhecido')
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  async function handleDelete(id: number) {
+    if (!confirm('Tem certeza que deseja apagar este exame?')) return
+    await fetch(`/api/patients/${patientId}/files/${id}`, { method: 'DELETE' })
+    setFiles((prev) => prev.filter((f) => f.id !== id))
+  }
+
+  async function handleDownload(url: string, name: string) {
+    const res = await fetch(url)
+    const blob = await res.blob()
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = name
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
+  function formatDate(iso: string) {
+    return new Date(iso).toLocaleDateString('pt-BR', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    })
+  }
+
+  const filesWithSummary = files.filter((f) => f.summary)
+
+  return (
+    <div className="space-y-4">
+      {/* Sub-abas */}
+      <div className="flex gap-1 border-b border-gray-100">
+        <button
+          onClick={() => setActiveSubTab('files')}
+          className={`px-3 py-1.5 text-sm font-medium border-b-2 transition-colors ${
+            activeSubTab === 'files'
+              ? 'border-violet-600 text-violet-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Arquivos
+        </button>
+        <button
+          onClick={() => setActiveSubTab('summary')}
+          className={`px-3 py-1.5 text-sm font-medium border-b-2 transition-colors ${
+            activeSubTab === 'summary'
+              ? 'border-violet-600 text-violet-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Resumo dos Exames
+          {filesWithSummary.length > 0 && (
+            <span className="ml-1.5 bg-violet-100 text-violet-700 text-xs px-1.5 py-0.5 rounded-full">
+              {filesWithSummary.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {activeSubTab === 'files' ? (
+        <div className="space-y-4">
+          {/* Upload */}
+          <div className="flex items-center gap-3">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {uploading ? (
+                <>
+                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                  Enviando e analisando...
+                </>
+              ) : '🔬 Enviar exame'}
+            </button>
+            {error && <p className="text-sm text-red-600">{error}</p>}
+          </div>
+
+          {/* Lista de arquivos */}
+          {files.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-8">
+              Nenhum exame ainda. Envie um arquivo para começar.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {files.map((f) => {
+                const isImage = /\.(jpg|jpeg|png|gif|webp|heic)$/i.test(f.original_name)
+                return (
+                  <div key={f.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <span className="text-2xl">{isImage ? '🖼️' : '📄'}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-800 truncate">{f.original_name}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <p className="text-xs text-gray-500">{formatDate(f.created_at)}</p>
+                        {f.summary && (
+                          <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">
+                            ✓ Resumo gerado
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <a
+                      href={f.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-violet-600 hover:underline font-medium shrink-0"
+                    >
+                      Abrir
+                    </a>
+                    <button
+                      onClick={() => handleDownload(f.url, f.original_name)}
+                      className="text-xs text-violet-600 hover:text-violet-800 shrink-0"
+                      title="Baixar"
+                    >
+                      ⬇️
+                    </button>
+                    <button
+                      onClick={() => handleDelete(f.id)}
+                      className="text-xs text-gray-400 hover:text-red-500 shrink-0"
+                      title="Apagar"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Sub-aba: Resumo dos Exames */
+        <div className="space-y-4">
+          {filesWithSummary.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-8">
+              Nenhum resumo disponível. Envie um exame para gerar o resumo automaticamente.
+            </p>
+          ) : (
+            filesWithSummary.map((f) => (
+              <div key={f.id} className="border border-gray-200 rounded-xl overflow-hidden">
+                <div className="bg-gray-50 px-4 py-2 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">{f.original_name}</p>
+                    <p className="text-xs text-gray-500">{formatDate(f.created_at)}</p>
+                  </div>
+                  <span className="text-xs bg-violet-100 text-violet-700 px-2 py-1 rounded-full font-medium">
+                    🤖 Resumo IA
+                  </span>
+                </div>
+                <div className="px-4 py-3">
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                    {f.summary}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
+}

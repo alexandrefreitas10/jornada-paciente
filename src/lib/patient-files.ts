@@ -1,6 +1,6 @@
 import sql, { initSchema } from './db'
 
-export type FileType = 'photo' | 'bioimpedance'
+export type FileType = 'photo' | 'bioimpedance' | 'exam'
 
 export interface PatientFile {
   id: number
@@ -8,6 +8,7 @@ export interface PatientFile {
   file_type: FileType
   s3_key: string
   original_name: string
+  summary: string | null
   created_at: string
 }
 
@@ -24,12 +25,13 @@ export async function createPatientFile(
   patientId: number,
   fileType: FileType,
   s3Key: string,
-  originalName: string
+  originalName: string,
+  summary?: string | null
 ): Promise<PatientFile> {
   await initSchema()
   const [row] = await sql<PatientFile[]>`
-    INSERT INTO patient_files (patient_id, file_type, s3_key, original_name)
-    VALUES (${patientId}, ${fileType}, ${s3Key}, ${originalName})
+    INSERT INTO patient_files (patient_id, file_type, s3_key, original_name, summary)
+    VALUES (${patientId}, ${fileType}, ${s3Key}, ${originalName}, ${summary ?? null})
     RETURNING *
   `
   return row

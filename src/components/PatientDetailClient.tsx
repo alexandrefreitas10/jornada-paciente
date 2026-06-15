@@ -11,6 +11,7 @@ import { PatientModal } from './PatientModal'
 import { DeleteButton } from './DeleteButton'
 import { EvolutionTab } from './EvolutionTab'
 import { FilesTab } from './FilesTab'
+import { ExamsTab } from './ExamsTab'
 
 const AVATAR_COLORS = [
   'bg-violet-500', 'bg-blue-500', 'bg-emerald-500',
@@ -20,7 +21,7 @@ function avatarColor(name: string) {
   return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]
 }
 
-type Tab = 'tasks' | 'evolution' | 'photos' | 'bioimpedance'
+type Tab = 'tasks' | 'evolution' | 'photos' | 'bioimpedance' | 'exams'
 
 interface FileRecord {
   id: number
@@ -28,6 +29,7 @@ interface FileRecord {
   url: string
   created_at: string
   file_type: string
+  summary: string | null
 }
 
 interface Props {
@@ -35,9 +37,10 @@ interface Props {
   initialMeasurements: Measurement[]
   initialPhotos: FileRecord[]
   initialBioimpedances: FileRecord[]
+  initialExams: FileRecord[]
 }
 
-export function PatientDetailClient({ patient, initialMeasurements, initialPhotos, initialBioimpedances }: Props) {
+export function PatientDetailClient({ patient, initialMeasurements, initialPhotos, initialBioimpedances, initialExams }: Props) {
   const [completedKeys, setCompletedKeys] = useState<string[]>(patient.completed_task_keys)
   const [editOpen, setEditOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<Tab>('tasks')
@@ -66,6 +69,7 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
     { key: 'evolution', label: 'Evolução' },
     { key: 'photos', label: 'Fotos' },
     { key: 'bioimpedance', label: 'Bioimpedância' },
+    { key: 'exams', label: 'Exames' },
   ]
 
   return (
@@ -143,6 +147,9 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
         )}
         {activeTab === 'bioimpedance' && (
           <FilesTab patientId={patient.id} fileType="bioimpedance" initialFiles={initialBioimpedances} />
+        )}
+        {activeTab === 'exams' && (
+          <ExamsTab patientId={patient.id} initialFiles={initialExams} />
         )}
       </div>
 
