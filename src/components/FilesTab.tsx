@@ -8,7 +8,7 @@ interface FileRecord {
   url: string
   created_at: string
   file_type: string
-  created_by: string | null
+  created_by?: string | null
 }
 
 interface Props {

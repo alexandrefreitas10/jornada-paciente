@@ -30,6 +30,7 @@ interface FileRecord {
   created_at: string
   file_type: string
   summary: string | null
+  created_by?: string | null
 }
 
 interface Props {
