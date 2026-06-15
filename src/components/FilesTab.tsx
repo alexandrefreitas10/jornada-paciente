@@ -106,19 +106,34 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
       })
     }
 
+    const loadImageFromUrl = (url: string): Promise<HTMLImageElement> =>
+      new Promise((resolve, reject) => {
+        const img = new Image()
+        img.onload = () => resolve(img)
+        img.onerror = reject
+        img.src = url
+      })
+
     try {
-      const [imgA, imgB] = await Promise.all([loadImageFromApi(a.id), loadImageFromApi(b.id)])
+      const [imgA, imgB, logoImg] = await Promise.all([
+        loadImageFromApi(a.id),
+        loadImageFromApi(b.id),
+        loadImageFromUrl('/logo-dra.png'),
+      ])
 
       const GAP = 20
       const LABEL_H = 40
       const PADDING = 20
+      const LOGO_H = 80
+      const LOGO_GAP = 16
       const maxH = Math.max(imgA.naturalHeight, imgB.naturalHeight)
       const scaleA = maxH / imgA.naturalHeight
       const scaleB = maxH / imgB.naturalHeight
       const wA = imgA.naturalWidth * scaleA
       const wB = imgB.naturalWidth * scaleB
       const totalW = wA + wB + GAP + PADDING * 2
-      const totalH = maxH + LABEL_H + PADDING * 2
+      const logoW = logoImg.naturalWidth * (LOGO_H / logoImg.naturalHeight)
+      const totalH = LOGO_H + LOGO_GAP + LABEL_H + maxH + PADDING * 2 + 24
 
       const canvas = document.createElement('canvas')
       canvas.width = totalW
@@ -128,22 +143,27 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
       ctx.fillStyle = '#ffffff'
       ctx.fillRect(0, 0, totalW, totalH)
 
+      // Logo da médica centralizada no topo
+      ctx.drawImage(logoImg, (totalW - logoW) / 2, PADDING, logoW, LOGO_H)
+
+      const contentTop = PADDING + LOGO_H + LOGO_GAP
+
       // Labels
       ctx.fillStyle = '#6b7280'
       ctx.font = 'bold 24px sans-serif'
       ctx.textAlign = 'center'
-      ctx.fillText('ANTES', PADDING + wA / 2, PADDING + 28)
-      ctx.fillText('DEPOIS', PADDING + wA + GAP + wB / 2, PADDING + 28)
+      ctx.fillText('ANTES', PADDING + wA / 2, contentTop + 28)
+      ctx.fillText('DEPOIS', PADDING + wA + GAP + wB / 2, contentTop + 28)
 
       // Fotos
-      ctx.drawImage(imgA, PADDING, PADDING + LABEL_H, wA, maxH)
-      ctx.drawImage(imgB, PADDING + wA + GAP, PADDING + LABEL_H, wB, maxH)
+      ctx.drawImage(imgA, PADDING, contentTop + LABEL_H, wA, maxH)
+      ctx.drawImage(imgB, PADDING + wA + GAP, contentTop + LABEL_H, wB, maxH)
 
       // Datas
       ctx.fillStyle = '#9ca3af'
       ctx.font = '18px sans-serif'
-      ctx.fillText(formatDate(a.created_at), PADDING + wA / 2, PADDING + LABEL_H + maxH + 22)
-      ctx.fillText(formatDate(b.created_at), PADDING + wA + GAP + wB / 2, PADDING + LABEL_H + maxH + 22)
+      ctx.fillText(formatDate(a.created_at), PADDING + wA / 2, contentTop + LABEL_H + maxH + 22)
+      ctx.fillText(formatDate(b.created_at), PADDING + wA + GAP + wB / 2, contentTop + LABEL_H + maxH + 22)
 
       canvas.toBlob(blob => {
         if (!blob) return
