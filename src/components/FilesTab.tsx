@@ -93,17 +93,21 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
 
   async function handleDownloadComparison() {
     const [a, b] = comparing
-    const loadImage = (url: string): Promise<HTMLImageElement> =>
-      new Promise((resolve, reject) => {
+
+    const loadImageFromApi = async (id: number): Promise<HTMLImageElement> => {
+      const res = await fetch(`/api/patients/${patientId}/files/${id}/download?proxy=1`)
+      const blob = await res.blob()
+      const blobUrl = URL.createObjectURL(blob)
+      return new Promise((resolve, reject) => {
         const img = new Image()
-        img.crossOrigin = 'anonymous'
-        img.onload = () => resolve(img)
+        img.onload = () => { resolve(img); URL.revokeObjectURL(blobUrl) }
         img.onerror = reject
-        img.src = url
+        img.src = blobUrl
       })
+    }
 
     try {
-      const [imgA, imgB] = await Promise.all([loadImage(a.url), loadImage(b.url)])
+      const [imgA, imgB] = await Promise.all([loadImageFromApi(a.id), loadImageFromApi(b.id)])
 
       const GAP = 20
       const LABEL_H = 40
