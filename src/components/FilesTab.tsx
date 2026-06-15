@@ -22,6 +22,11 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Comparação
+  const [compareMode, setCompareMode] = useState(false)
+  const [selected, setSelected] = useState<number[]>([])
+  const [comparing, setComparing] = useState<FileRecord[]>([])
+
   const isPhoto = fileType === 'photo'
   const accept = isPhoto ? 'image/*' : 'image/*,application/pdf'
   const label = isPhoto ? '📷 Enviar foto' : '📎 Enviar arquivo'
@@ -66,14 +71,64 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
   function formatDate(iso: string) {
     return new Date(iso).toLocaleDateString('pt-BR', {
       day: '2-digit', month: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
     })
+  }
+
+  function toggleSelect(id: number) {
+    setSelected(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : prev.length < 2 ? [...prev, id] : prev
+    )
+  }
+
+  function startCompare() {
+    const pics = selected.map(id => files.find(f => f.id === id)!).filter(Boolean)
+    setComparing(pics)
+  }
+
+  function exitCompare() {
+    setComparing([])
+    setSelected([])
+    setCompareMode(false)
+  }
+
+  // Modal de comparação
+  if (comparing.length === 2) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-gray-700">Comparação — Antes e Depois</h3>
+          <button
+            onClick={exitCompare}
+            className="text-sm text-gray-500 hover:text-gray-800 px-3 py-1 border border-gray-200 rounded-lg transition-colors"
+          >
+            ✕ Fechar
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {comparing.map((f, i) => (
+            <div key={f.id} className="space-y-1">
+              <p className="text-xs font-semibold text-center text-gray-500 uppercase tracking-wide">
+                {i === 0 ? 'Antes' : 'Depois'}
+              </p>
+              <div className="rounded-xl overflow-hidden border border-gray-200">
+                <img
+                  src={f.url}
+                  alt={f.original_name}
+                  className="w-full object-cover"
+                />
+              </div>
+              <p className="text-xs text-center text-gray-400">{formatDate(f.created_at)}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="space-y-5">
-      {/* Upload */}
-      <div className="flex items-center gap-3">
+      {/* Barra de ações */}
+      <div className="flex items-center gap-3 flex-wrap">
         <input
           ref={fileInputRef}
           type="file"
@@ -81,63 +136,135 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
           className="hidden"
           onChange={handleFileChange}
         />
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-          className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {uploading ? (
-            <>
-              <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-              </svg>
-              Enviando...
-            </>
-          ) : label}
-        </button>
+        {!compareMode && (
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {uploading ? (
+              <>
+                <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+                Enviando...
+              </>
+            ) : label}
+          </button>
+        )}
+
+        {isPhoto && files.length >= 2 && (
+          <>
+            {!compareMode ? (
+              <button
+                onClick={() => setCompareMode(true)}
+                className="px-4 py-2 border border-violet-300 text-violet-700 text-sm font-medium rounded-lg hover:bg-violet-50 transition-colors"
+              >
+                🔍 Comparar fotos
+              </button>
+            ) : (
+              <div className="flex items-center gap-3">
+                <p className="text-sm text-gray-600">
+                  {selected.length === 0 && 'Selecione 2 fotos para comparar'}
+                  {selected.length === 1 && 'Selecione mais 1 foto'}
+                  {selected.length === 2 && '2 fotos selecionadas'}
+                </p>
+                <button
+                  onClick={startCompare}
+                  disabled={selected.length !== 2}
+                  className="px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Ver comparação
+                </button>
+                <button
+                  onClick={() => { setCompareMode(false); setSelected([]) }}
+                  className="text-sm text-gray-500 hover:text-gray-800 transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
         {error && <p className="text-sm text-red-600">{error}</p>}
       </div>
 
-      {/* Lista de arquivos */}
+      {/* Grade de fotos / lista de arquivos */}
       {files.length === 0 ? (
         <p className="text-sm text-gray-400 text-center py-8">
           Nenhum arquivo ainda. {isPhoto ? 'Envie uma foto.' : 'Envie um arquivo.'}
         </p>
       ) : isPhoto ? (
-        /* Grade de fotos */
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {files.map((f) => (
-            <div key={f.id} className="relative group rounded-xl overflow-hidden border border-gray-200">
-              <a href={f.url} target="_blank" rel="noopener noreferrer">
-                <img
-                  src={f.url}
-                  alt={f.original_name}
-                  className="w-full h-40 object-cover hover:opacity-90 transition-opacity"
-                />
-              </a>
-              <div className="p-2 bg-white flex items-center justify-between gap-1">
-                <p className="text-xs text-gray-500 truncate">{formatDate(f.created_at)}</p>
-                <button
-                  onClick={() => handleDownload(f.id)}
-                  className="text-xs text-violet-600 hover:text-violet-800 shrink-0"
-                  title="Baixar"
-                >
-                  ⬇️
-                </button>
-              </div>
-              <button
-                onClick={() => handleDelete(f.id)}
-                className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                title="Apagar"
+          {files.map((f) => {
+            const isSelected = selected.includes(f.id)
+            const selIndex = selected.indexOf(f.id)
+            return (
+              <div
+                key={f.id}
+                className={`relative group rounded-xl overflow-hidden border-2 transition-colors ${
+                  compareMode
+                    ? isSelected
+                      ? 'border-violet-500 cursor-pointer'
+                      : 'border-gray-200 cursor-pointer hover:border-violet-300'
+                    : 'border-gray-200'
+                }`}
+                onClick={compareMode ? () => toggleSelect(f.id) : undefined}
               >
-                ✕
-              </button>
-            </div>
-          ))}
+                {/* Badge de seleção no modo comparar */}
+                {compareMode && (
+                  <div className={`absolute top-2 left-2 z-10 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                    isSelected ? 'bg-violet-600 text-white' : 'bg-white/80 text-gray-400 border border-gray-300'
+                  }`}>
+                    {isSelected ? selIndex + 1 : ''}
+                  </div>
+                )}
+
+                {!compareMode ? (
+                  <a href={f.url} target="_blank" rel="noopener noreferrer">
+                    <img
+                      src={f.url}
+                      alt={f.original_name}
+                      className="w-full h-40 object-cover hover:opacity-90 transition-opacity"
+                    />
+                  </a>
+                ) : (
+                  <img
+                    src={f.url}
+                    alt={f.original_name}
+                    className={`w-full h-40 object-cover transition-opacity ${isSelected ? 'opacity-100' : 'opacity-70'}`}
+                  />
+                )}
+
+                <div className="p-2 bg-white flex items-center justify-between gap-1">
+                  <p className="text-xs text-gray-500 truncate">{formatDate(f.created_at)}</p>
+                  {!compareMode && (
+                    <button
+                      onClick={() => handleDownload(f.id)}
+                      className="text-xs text-violet-600 hover:text-violet-800 shrink-0"
+                      title="Baixar"
+                    >
+                      ⬇️
+                    </button>
+                  )}
+                </div>
+
+                {!compareMode && (
+                  <button
+                    onClick={() => handleDelete(f.id)}
+                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Apagar"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            )
+          })}
         </div>
       ) : (
-        /* Lista de arquivos (fotos e PDFs) */
         <div className="space-y-2">
           {files.map((f) => {
             const isImage = /\.(jpg|jpeg|png|gif|webp|heic)$/i.test(f.original_name)
