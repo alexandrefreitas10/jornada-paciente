@@ -10,6 +10,9 @@ interface Patient {
   end_date: string
   days_remaining: number
   completed_count: number
+  current_week: number | null
+  total_weeks: number | null
+  reason: 'calendar' | 'evolution' | 'both'
 }
 
 export function RelatorioUltimaSemana() {
@@ -95,22 +98,35 @@ export function RelatorioUltimaSemana() {
                     <div>
                       <p className="text-sm font-semibold text-gray-900">{p.name}</p>
                       <p className="text-xs text-gray-500 mt-0.5">
-                        Início: {formatDate(p.start_date)} · Duração: {p.duration}
+                        Início: {p.start_date ? formatDate(p.start_date) : '—'} · Duração: {p.duration}
                       </p>
-                      <p className="text-xs text-gray-500">
-                        Término previsto: {formatDate(p.end_date)}
-                      </p>
+                      {p.end_date && (
+                        <p className="text-xs text-gray-500">
+                          Término previsto: {formatDate(p.end_date)}
+                        </p>
+                      )}
+                      {p.current_week !== null && p.total_weeks !== null && (
+                        <p className="text-xs text-violet-600 font-medium mt-0.5">
+                          Evolução: semana {p.current_week} de {p.total_weeks}
+                        </p>
+                      )}
                     </div>
                     <div className="text-right shrink-0 ml-4">
-                      <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold ${
-                        p.days_remaining === 0
-                          ? 'bg-red-100 text-red-700'
-                          : p.days_remaining <= 3
-                          ? 'bg-orange-100 text-orange-700'
-                          : 'bg-amber-100 text-amber-700'
-                      }`}>
-                        {p.days_remaining === 0 ? 'Hoje' : `${p.days_remaining} dia${p.days_remaining !== 1 ? 's' : ''}`}
-                      </span>
+                      {p.reason !== 'evolution' ? (
+                        <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold ${
+                          p.days_remaining === 0
+                            ? 'bg-red-100 text-red-700'
+                            : p.days_remaining <= 3
+                            ? 'bg-orange-100 text-orange-700'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {p.days_remaining === 0 ? 'Hoje' : `${p.days_remaining} dia${p.days_remaining !== 1 ? 's' : ''}`}
+                        </span>
+                      ) : (
+                        <span className="inline-block px-2.5 py-1 rounded-full text-xs font-bold bg-violet-100 text-violet-700">
+                          Última semana
+                        </span>
+                      )}
                       <p className="text-xs text-gray-400 mt-1">{p.completed_count}/18 tarefas</p>
                     </div>
                   </div>
@@ -139,6 +155,7 @@ export function RelatorioUltimaSemana() {
                 <th style={{ textAlign: 'left', padding: '8px 4px', color: '#374151' }}>Início</th>
                 <th style={{ textAlign: 'left', padding: '8px 4px', color: '#374151' }}>Duração</th>
                 <th style={{ textAlign: 'left', padding: '8px 4px', color: '#374151' }}>Término</th>
+                <th style={{ textAlign: 'center', padding: '8px 4px', color: '#374151' }}>Semana (Evolução)</th>
                 <th style={{ textAlign: 'center', padding: '8px 4px', color: '#374151' }}>Dias restantes</th>
                 <th style={{ textAlign: 'center', padding: '8px 4px', color: '#374151' }}>Tarefas</th>
               </tr>
@@ -151,7 +168,12 @@ export function RelatorioUltimaSemana() {
                   <td style={{ padding: '10px 4px' }}>{p.duration}</td>
                   <td style={{ padding: '10px 4px' }}>{formatDate(p.end_date)}</td>
                   <td style={{ padding: '10px 4px', textAlign: 'center' }}>
-                    {p.days_remaining === 0 ? 'Hoje' : p.days_remaining}
+                    {p.current_week !== null && p.total_weeks !== null
+                      ? `${p.current_week}/${p.total_weeks}`
+                      : '—'}
+                  </td>
+                  <td style={{ padding: '10px 4px', textAlign: 'center' }}>
+                    {p.reason === 'evolution' ? 'Última semana' : p.days_remaining === 0 ? 'Hoje' : p.days_remaining}
                   </td>
                   <td style={{ padding: '10px 4px', textAlign: 'center' }}>{p.completed_count}/18</td>
                 </tr>
