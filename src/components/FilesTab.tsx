@@ -122,9 +122,9 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
       ])
 
       const GAP = 20
-      const LABEL_H = 40
-      const PADDING = 20
-      const LOGO_H = 200
+      const LABEL_H = 80
+      const PADDING = 40
+      const LOGO_H = 400
       const LOGO_GAP = 16
       const maxH = Math.max(imgA.naturalHeight, imgB.naturalHeight)
       const scaleA = maxH / imgA.naturalHeight
@@ -149,21 +149,21 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
       const contentTop = PADDING + LOGO_H + LOGO_GAP
 
       // Labels
-      ctx.fillStyle = '#6b7280'
-      ctx.font = 'bold 24px sans-serif'
+      ctx.fillStyle = '#374151'
+      ctx.font = 'bold 48px sans-serif'
       ctx.textAlign = 'center'
-      ctx.fillText('ANTES', PADDING + wA / 2, contentTop + 28)
-      ctx.fillText('DEPOIS', PADDING + wA + GAP + wB / 2, contentTop + 28)
+      ctx.fillText('ANTES', PADDING + wA / 2, contentTop + 56)
+      ctx.fillText('DEPOIS', PADDING + wA + GAP + wB / 2, contentTop + 56)
 
       // Fotos
       ctx.drawImage(imgA, PADDING, contentTop + LABEL_H, wA, maxH)
       ctx.drawImage(imgB, PADDING + wA + GAP, contentTop + LABEL_H, wB, maxH)
 
       // Datas
-      ctx.fillStyle = '#9ca3af'
-      ctx.font = '18px sans-serif'
-      ctx.fillText(formatDate(a.created_at), PADDING + wA / 2, contentTop + LABEL_H + maxH + 22)
-      ctx.fillText(formatDate(b.created_at), PADDING + wA + GAP + wB / 2, contentTop + LABEL_H + maxH + 22)
+      ctx.fillStyle = '#374151'
+      ctx.font = 'bold 36px sans-serif'
+      ctx.fillText(formatDate(a.created_at), PADDING + wA / 2, contentTop + LABEL_H + maxH + 50)
+      ctx.fillText(formatDate(b.created_at), PADDING + wA + GAP + wB / 2, contentTop + LABEL_H + maxH + 50)
 
       canvas.toBlob(blob => {
         if (!blob) return
