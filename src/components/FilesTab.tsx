@@ -59,14 +59,8 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
     setFiles((prev) => prev.filter((f) => f.id !== id))
   }
 
-  async function handleDownload(url: string, name: string) {
-    const res = await fetch(url)
-    const blob = await res.blob()
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = name
-    a.click()
-    URL.revokeObjectURL(a.href)
+  function handleDownload(id: number) {
+    window.location.href = `/api/patients/${patientId}/files/${id}/download`
   }
 
   function formatDate(iso: string) {
@@ -125,7 +119,7 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
               <div className="p-2 bg-white flex items-center justify-between gap-1">
                 <p className="text-xs text-gray-500 truncate">{formatDate(f.created_at)}</p>
                 <button
-                  onClick={() => handleDownload(f.url, f.original_name)}
+                  onClick={() => handleDownload(f.id)}
                   className="text-xs text-violet-600 hover:text-violet-800 shrink-0"
                   title="Baixar"
                 >
@@ -163,7 +157,7 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
                   Abrir
                 </a>
                 <button
-                  onClick={() => handleDownload(f.url, f.original_name)}
+                  onClick={() => handleDownload(f.id)}
                   className="text-xs text-violet-600 hover:text-violet-800 shrink-0"
                   title="Baixar"
                 >

@@ -37,6 +37,12 @@ export async function createPatientFile(
   return row
 }
 
+export async function getFileById(id: number): Promise<PatientFile | null> {
+  await initSchema()
+  const [row] = await sql<PatientFile[]>`SELECT * FROM patient_files WHERE id = ${id}`
+  return row ?? null
+}
+
 export async function deletePatientFile(id: number): Promise<string> {
   await initSchema()
   const [row] = await sql<PatientFile[]>`

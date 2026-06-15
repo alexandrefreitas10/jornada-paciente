@@ -31,3 +31,19 @@ export async function deleteFile(key: string): Promise<void> {
 export async function getSignedDownloadUrl(key: string, expiresIn = 300): Promise<string> {
   return getSignedUrl(s3, new GetObjectCommand({ Bucket: BUCKET, Key: key }), { expiresIn })
 }
+
+export async function getSignedDownloadUrlWithFilename(
+  key: string,
+  filename: string,
+  expiresIn = 300
+): Promise<string> {
+  return getSignedUrl(
+    s3,
+    new GetObjectCommand({
+      Bucket: BUCKET,
+      Key: key,
+      ResponseContentDisposition: `attachment; filename="${encodeURIComponent(filename)}"`,
+    }),
+    { expiresIn }
+  )
+}
