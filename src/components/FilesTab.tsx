@@ -124,7 +124,7 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
       const GAP = 20
       const LABEL_H = 40
       const PADDING = 20
-      const LOGO_H = 80
+      const LOGO_H = 200
       const LOGO_GAP = 16
       const maxH = Math.max(imgA.naturalHeight, imgB.naturalHeight)
       const scaleA = maxH / imgA.naturalHeight
