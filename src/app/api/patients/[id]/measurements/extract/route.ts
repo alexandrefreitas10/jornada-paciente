@@ -69,13 +69,23 @@ Ignore linhas completamente vazias. Retorne somente o array JSON, sem texto adic
     ],
   })
 
-  const text = (message.content[0] as { type: string; text: string }).text.trim()
+  const rawText = (message.content[0] as { type: string; text: string }).text.trim()
+
+  // Remove markdown code blocks if present
+  const text = rawText
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/, '')
+    .trim()
+
+  // Try to find a JSON array or object in the response
+  const jsonMatch = text.match(/(\[[\s\S]*\]|\{[\s\S]*\})/)
 
   let extracted: unknown[]
   try {
-    const parsed = JSON.parse(text)
+    const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : text)
     extracted = Array.isArray(parsed) ? parsed : [parsed]
   } catch {
+    console.error('Claude response could not be parsed as JSON:', rawText)
     return Response.json(
       { error: 'Não foi possível extrair os dados da foto. Tente uma imagem mais nítida ou adicione manualmente.' },
       { status: 422 }
