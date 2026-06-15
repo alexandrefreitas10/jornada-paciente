@@ -22,6 +22,12 @@ export async function initSchema() {
       completed_at TIMESTAMPTZ DEFAULT NOW(),
       UNIQUE(patient_id, task_key)
     );
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
     CREATE TABLE IF NOT EXISTS patient_files (
       id SERIAL PRIMARY KEY,
       patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
