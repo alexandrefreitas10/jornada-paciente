@@ -25,7 +25,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <a href="/">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src="/logo.png"
+                    src="/logo-it.png"
                     alt="Instituto Torres"
                     style={{ height: '70px', width: 'auto' }}
                   />

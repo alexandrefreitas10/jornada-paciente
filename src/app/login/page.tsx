@@ -7,7 +7,7 @@ export default function LoginPage() {
         <div className="text-center mb-8">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/logo.png"
+            src="/logo-it.png"
             alt="Instituto Torres"
             style={{ height: '160px', width: 'auto', margin: '0 auto 16px' }}
           />
