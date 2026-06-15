@@ -39,7 +39,10 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
         method: 'POST',
         body: formData,
       })
-      if (!res.ok) throw new Error('Erro ao enviar arquivo')
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || 'Erro ao enviar arquivo')
+      }
       const created: FileRecord = await res.json()
       setFiles((prev) => [created, ...prev])
     } catch (err) {

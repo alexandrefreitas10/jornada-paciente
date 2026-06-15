@@ -36,7 +36,14 @@ export async function POST(
   const s3Key = `patients/${id}/${fileType}/${randomUUID()}.${ext}`
   const buffer = Buffer.from(await file.arrayBuffer())
 
-  await uploadFile(s3Key, buffer, file.type || 'application/octet-stream')
+  try {
+    await uploadFile(s3Key, buffer, file.type || 'application/octet-stream')
+  } catch (err) {
+    console.error('S3 upload error:', err)
+    const msg = err instanceof Error ? err.message : String(err)
+    return Response.json({ error: `Erro S3: ${msg}` }, { status: 500 })
+  }
+
   const record = await createPatientFile(Number(id), fileType, s3Key, file.name)
   const url = await getSignedDownloadUrl(s3Key)
 
