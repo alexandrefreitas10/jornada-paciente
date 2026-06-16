@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import OpenAI from 'openai'
 import { createEvolutionSummary, listEvolutionSummaries, SummaryTopics } from '@/lib/evolution-summaries'
 import { uploadFile } from '@/lib/s3'
 import { randomUUID } from 'crypto'
+import { toFile } from 'openai'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 export async function GET(
   _req: NextRequest,
@@ -15,54 +18,15 @@ export async function GET(
   return NextResponse.json(summaries)
 }
 
-const AUDIO_MIME_TO_FORMAT: Record<string, string> = {
-  'audio/mpeg': 'mp3',
-  'audio/mp3': 'mp3',
-  'audio/mp4': 'mp4',
-  'audio/x-m4a': 'mp4',
-  'audio/m4a': 'mp4',
-  'audio/wav': 'wav',
-  'audio/wave': 'wav',
-  'audio/ogg': 'ogg',
-  'audio/flac': 'flac',
-  'audio/webm': 'webm',
-}
-
-function audioFormat(mimeType: string, fileName: string): string {
-  if (AUDIO_MIME_TO_FORMAT[mimeType]) return AUDIO_MIME_TO_FORMAT[mimeType]
-  const ext = fileName.split('.').pop()?.toLowerCase()
-  if (ext === 'm4a') return 'mp4'
-  if (ext && AUDIO_MIME_TO_FORMAT[`audio/${ext}`]) return AUDIO_MIME_TO_FORMAT[`audio/${ext}`]
-  return 'mp4'
-}
 
 async function transcribeAudio(buffer: Buffer, mimeType: string, fileName: string): Promise<string> {
-  const format = audioFormat(mimeType, fileName)
-  const base64 = buffer.toString('base64')
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const msg = await (client.messages.create as any)({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 4096,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'text',
-            text: 'Transcreva o áudio abaixo na íntegra, em português brasileiro. Retorne APENAS o texto transcrito, sem comentários, sem introdução, sem formatação extra.',
-          },
-          {
-            type: 'input_audio',
-            format,
-            data: base64,
-          },
-        ],
-      },
-    ],
+  const file = await toFile(buffer, fileName, { type: mimeType || 'audio/mp4' })
+  const result = await openai.audio.transcriptions.create({
+    file,
+    model: 'whisper-1',
+    language: 'pt',
   })
-
-  return (msg.content[0] as { type: string; text: string }).text.trim()
+  return result.text.trim()
 }
 
 export async function POST(
