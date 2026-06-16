@@ -260,10 +260,7 @@ function ItensSent({ patients }: { patients: PatientOption[] }) {
 // ── Componente principal ─────────────────────────────────────────────────────
 
 export function RelatoriosClient({ patients }: { patients: PatientOption[] }) {
-  const [unlocked, setUnlocked] = useState(false)
   const [tab, setTab] = useState<Tab>('cards')
-
-  if (!unlocked) return <AdminGate onUnlock={() => setUnlocked(true)} />
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'cards', label: 'Cards criados' },
