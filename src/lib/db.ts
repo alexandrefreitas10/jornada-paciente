@@ -51,6 +51,14 @@ export async function initSchema() {
       tirzepatide_dose NUMERIC,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
+    -- Remove duplicatas de semana, mantendo o registro mais recente
+    DELETE FROM weekly_measurements a
+    USING weekly_measurements b
+    WHERE a.patient_id = b.patient_id
+      AND a.week = b.week
+      AND a.week IS NOT NULL
+      AND a.id < b.id;
+    -- Adiciona constraint única após limpeza
     ALTER TABLE weekly_measurements DROP CONSTRAINT IF EXISTS weekly_measurements_patient_week_unique;
     DO $$ BEGIN
       IF NOT EXISTS (
