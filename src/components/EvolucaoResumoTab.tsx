@@ -123,7 +123,7 @@ function NovaConsultaForm({ patientId, onCreated }: { patientId: number; onCreat
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!transcription.trim() && !audioFile) { setError('Envie um áudio ou cole a transcrição para continuar'); return }
+    if (!transcription.trim()) { setError('Cole ou grave a transcrição para continuar'); return }
     setLoading(true)
     setError(null)
     try {
@@ -188,21 +188,15 @@ function NovaConsultaForm({ patientId, onCreated }: { patientId: number; onCreat
         <p className="text-xs text-gray-400 mt-1">{transcription.length} caracteres</p>
       </div>
 
-      {!transcription.trim() && audioFile && (
-        <p className="text-xs text-violet-600 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
-          🎙 O áudio será transcrito automaticamente pela IA antes de gerar o resumo.
-        </p>
-      )}
-
       {error && <p className="text-xs text-red-600">{error}</p>}
 
-      <button type="submit" disabled={loading || (!transcription.trim() && !audioFile)}
+      <button type="submit" disabled={loading || !transcription.trim()}
         className="w-full py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
         {loading ? (
           <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-          </svg> {!transcription.trim() && audioFile ? 'Transcrevendo e resumindo...' : 'Processando com IA...'}</>
+          </svg> Processando com IA...</>
         ) : '✨ Gerar resumo com IA'}
       </button>
     </form>
