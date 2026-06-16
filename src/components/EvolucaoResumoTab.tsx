@@ -89,53 +89,22 @@ function AdminGate({ onUnlock }: { onUnlock: () => void }) {
 
 function NovaConsultaForm({ patientId, onCreated }: { patientId: number; onCreated: (s: EvolutionSummary) => void }) {
   const [transcription, setTranscription] = useState('')
-  const [audioFile, setAudioFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [recording, setRecording] = useState(false)
-  const audioInputRef = useRef<HTMLInputElement>(null)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const recognitionRef = useRef<any>(null)
-
-  function startRecording() {
-    const w = window as any
-    const SR = w.SpeechRecognition ?? w.webkitSpeechRecognition
-    if (!SR) { alert('Seu navegador não suporta gravação. Use o Chrome.'); return }
-    const rec = new SR()
-    rec.lang = 'pt-BR'
-    rec.continuous = true
-    rec.interimResults = false
-    rec.onresult = (e: any) => {
-      const text = Array.from(e.results).map((r: any) => r[0].transcript).join(' ')
-      setTranscription(prev => prev + (prev ? ' ' : '') + text)
-    }
-    rec.onerror = () => { setRecording(false) }
-    rec.onend = () => { setRecording(false) }
-    rec.start()
-    recognitionRef.current = rec
-    setRecording(true)
-  }
-
-  function stopRecording() {
-    recognitionRef.current?.stop()
-    setRecording(false)
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!transcription.trim() && !audioFile) { setError('Envie um áudio ou cole a transcrição para continuar'); return }
+    if (!transcription.trim()) { setError('Cole a transcrição para continuar'); return }
     setLoading(true)
     setError(null)
     try {
       const fd = new FormData()
       fd.append('transcription', transcription.trim())
-      if (audioFile) fd.append('audio', audioFile)
       const res = await fetch(`/api/patients/${patientId}/evolution-summaries`, { method: 'POST', body: fd })
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Erro ao processar') }
       const created: EvolutionSummary = await res.json()
       onCreated(created)
       setTranscription('')
-      setAudioFile(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro desconhecido')
     } finally {
@@ -147,62 +116,27 @@ function NovaConsultaForm({ patientId, onCreated }: { patientId: number; onCreat
     <form onSubmit={handleSubmit} className="space-y-4 border border-violet-200 rounded-xl p-4 bg-violet-50">
       <p className="text-sm font-semibold text-violet-800">Nova consulta</p>
 
-      {/* Áudio (opcional) */}
       <div>
-        <label className="text-xs text-gray-600 mb-1.5 block">Áudio da consulta (opcional)</label>
-        <input ref={audioInputRef} type="file" accept="audio/*" className="hidden"
-          onChange={e => setAudioFile(e.target.files?.[0] ?? null)} />
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={() => audioInputRef.current?.click()}
-            className="text-xs px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-white transition-colors">
-            📎 {audioFile ? audioFile.name : 'Anexar áudio'}
-          </button>
-          {audioFile && (
-            <button type="button" onClick={() => setAudioFile(null)}
-              className="text-xs text-red-500 hover:text-red-700">✕</button>
-          )}
-        </div>
-      </div>
-
-      {/* Transcrição */}
-      <div>
-        <div className="flex items-center justify-between mb-1.5">
-          <label className="text-xs text-gray-600">Transcrição da consulta</label>
-          <button type="button"
-            onClick={recording ? stopRecording : startRecording}
-            className={`text-xs px-3 py-1 rounded-lg border transition-colors ${
-              recording
-                ? 'bg-red-500 text-white border-red-500 animate-pulse'
-                : 'border-gray-300 hover:bg-white'
-            }`}>
-            {recording ? '⏹ Parar gravação' : '🎙 Gravar voz'}
-          </button>
-        </div>
+        <label className="text-xs text-gray-600 mb-1.5 block">Transcrição da consulta</label>
         <textarea
           value={transcription}
           onChange={e => setTranscription(e.target.value)}
-          rows={6}
-          placeholder="Cole aqui a transcrição da consulta, ou use o botão 'Gravar voz' para ditar diretamente..."
+          rows={8}
+          placeholder="Cole aqui a transcrição gerada pelo Plaud..."
           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 resize-none"
         />
         <p className="text-xs text-gray-400 mt-1">{transcription.length} caracteres</p>
       </div>
 
-      {!transcription.trim() && audioFile && (
-        <p className="text-xs text-violet-600 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
-          🎙 O áudio será transcrito automaticamente antes de gerar o resumo.
-        </p>
-      )}
-
       {error && <p className="text-xs text-red-600">{error}</p>}
 
-      <button type="submit" disabled={loading || (!transcription.trim() && !audioFile)}
+      <button type="submit" disabled={loading || !transcription.trim()}
         className="w-full py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
         {loading ? (
           <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-          </svg> {!transcription.trim() && audioFile ? 'Transcrevendo e resumindo...' : 'Processando com IA...'}</>
+          </svg> Processando com IA...</>
         ) : '✨ Gerar resumo com IA'}
       </button>
     </form>
@@ -234,20 +168,10 @@ function SummaryCard({
         />
       )}
 
-      {/* Cabeçalho do card */}
       <div className="bg-gray-50 px-4 py-3 flex items-center justify-between gap-3 border-b border-gray-200">
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-semibold text-gray-800">
-            {new Date(summary.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
-          </span>
-          {summary.audio_name && (
-            <a href={`/api/patients/${patientId}/evolution-summaries/${summary.id}/audio`}
-              className="text-xs px-2 py-0.5 bg-violet-100 text-violet-700 rounded-full hover:bg-violet-200 transition-colors"
-              title="Baixar áudio">
-              🎵 {summary.audio_name}
-            </a>
-          )}
-        </div>
+        <span className="text-sm font-semibold text-gray-800">
+          {new Date(summary.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+        </span>
         <div className="flex items-center gap-2">
           <button onClick={() => setShowTranscription(v => !v)}
             className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
@@ -260,7 +184,6 @@ function SummaryCard({
         </div>
       </div>
 
-      {/* Transcrição (colapsável) */}
       {showTranscription && (
         <div className="px-4 py-3 bg-amber-50 border-b border-amber-100">
           <p className="text-xs font-semibold text-amber-700 mb-1">Transcrição original</p>
@@ -268,16 +191,13 @@ function SummaryCard({
         </div>
       )}
 
-      {/* Tópicos */}
       <div className="divide-y divide-gray-100">
         {visibleTopics.map(topic => {
           const value = summary.summary[topic.key]
           if (!hasContent(value) && activeFilter) return null
           return (
             <div key={topic.key} className={`px-4 py-3 ${!hasContent(value) ? 'opacity-40' : ''}`}>
-              <p className="text-xs font-semibold text-gray-500 mb-1">
-                {topic.icon} {topic.label}
-              </p>
+              <p className="text-xs font-semibold text-gray-500 mb-1">{topic.icon} {topic.label}</p>
               <p className="text-sm text-gray-800 leading-relaxed">
                 {hasContent(value) ? value : 'Não mencionado'}
               </p>
@@ -316,7 +236,6 @@ export function EvolucaoResumoTab({ patientId, initialSummaries }: Props) {
 
   return (
     <div className="space-y-5">
-      {/* Botão nova consulta */}
       {!showForm && (
         <button onClick={() => setShowForm(true)}
           className="w-full py-2.5 border-2 border-dashed border-violet-300 text-violet-600 text-sm font-medium rounded-xl hover:bg-violet-50 transition-colors">
@@ -333,7 +252,6 @@ export function EvolucaoResumoTab({ patientId, initialSummaries }: Props) {
         </div>
       )}
 
-      {/* Filtros por tópico */}
       {summaries.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Filtrar por tópico</p>
@@ -356,7 +274,6 @@ export function EvolucaoResumoTab({ patientId, initialSummaries }: Props) {
         </div>
       )}
 
-      {/* Lista de resumos */}
       {summaries.length === 0 && !showForm && (
         <p className="text-sm text-gray-400 text-center py-8">
           Nenhuma consulta registrada ainda. Clique em &quot;+ Nova consulta&quot; para começar.
