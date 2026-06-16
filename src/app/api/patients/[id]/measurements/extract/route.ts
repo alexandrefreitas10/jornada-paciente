@@ -112,7 +112,7 @@ Ignore linhas completamente vazias. Retorne somente o array JSON, sem texto adic
         tirzepatide_dose: toNum(r.tirzepatide_dose),
       } as MeasurementInput
     })
-    .filter(input => input.week === null || !existingWeeks.has(input.week))
+    .filter(input => input.week == null || !existingWeeks.has(input.week))
 
   const created = await Promise.all(
     newRows.map(input => createMeasurement(Number(id), input))
