@@ -40,7 +40,8 @@ async function transcribeAudio(buffer: Buffer, mimeType: string, fileName: strin
   const format = audioFormat(mimeType, fileName)
   const base64 = buffer.toString('base64')
 
-  const msg = await client.messages.create({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const msg = await (client.messages.create as any)({
     model: 'claude-sonnet-4-6',
     max_tokens: 4096,
     messages: [
@@ -55,7 +56,7 @@ async function transcribeAudio(buffer: Buffer, mimeType: string, fileName: strin
             type: 'input_audio',
             format,
             data: base64,
-          } as Parameters<typeof client.messages.create>[0]['messages'][0]['content'][1],
+          },
         ],
       },
     ],
