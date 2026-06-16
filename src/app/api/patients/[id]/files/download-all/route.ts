@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listPatientFiles, FileType } from '@/lib/patient-files'
+import { getPatient } from '@/lib/patients'
 import { getFileStream } from '@/lib/s3'
-import { zipSync, strToU8 } from 'fflate'
+import { zipSync } from 'fflate'
 
 export async function GET(
   req: NextRequest,
@@ -14,7 +15,10 @@ export async function GET(
     return NextResponse.json({ error: 'Tipo não informado' }, { status: 400 })
   }
 
-  const files = await listPatientFiles(Number(id), fileType)
+  const [patient, files] = await Promise.all([
+    getPatient(Number(id)),
+    listPatientFiles(Number(id), fileType),
+  ])
 
   if (files.length === 0) {
     return NextResponse.json({ error: 'Nenhum arquivo encontrado' }, { status: 404 })
@@ -58,10 +62,18 @@ export async function GET(
     evolution: 'evolucao',
   }
 
+  const patientName = (patient?.name ?? `paciente-${id}`)
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')  // remove acentos
+    .replace(/[^a-zA-Z0-9 _-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+
+  const filename = `${patientName}-${typeLabel[fileType]}.zip`
+
   return new NextResponse(zip, {
     headers: {
       'Content-Type': 'application/zip',
-      'Content-Disposition': `attachment; filename="${typeLabel[fileType]}-paciente-${id}.zip"`,
+      'Content-Disposition': `attachment; filename="${filename}"`,
     },
   })
 }
