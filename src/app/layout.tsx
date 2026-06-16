@@ -33,6 +33,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               </div>
               {/* Menu abaixo da logo */}
               <div className="flex items-center justify-center gap-3 text-sm text-gray-600 mt-1 pb-1">
+                <a href="/" className="hover:text-violet-700 transition-colors">Início</a>
+                <span className="text-gray-300">|</span>
                 <a href="/usuarios" className="hover:text-violet-700 transition-colors">Usuários</a>
                 <span className="text-gray-300">|</span>
                 <a href="/relatorios" className="hover:text-violet-700 transition-colors">Relatórios</a>
