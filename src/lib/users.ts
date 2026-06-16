@@ -29,6 +29,20 @@ export async function createUser(username: string, password: string): Promise<Om
   return user
 }
 
+export async function updateUsername(id: number, username: string): Promise<Omit<User, 'password_hash'>> {
+  await initSchema()
+  const [user] = await sql<User[]>`
+    UPDATE users SET username = ${username} WHERE id = ${id} RETURNING id, username, is_admin, created_at
+  `
+  return user
+}
+
+export async function updatePassword(id: number, password: string): Promise<void> {
+  await initSchema()
+  const hash = await bcrypt.hash(password, 12)
+  await sql`UPDATE users SET password_hash = ${hash} WHERE id = ${id}`
+}
+
 export async function deleteUser(id: number): Promise<void> {
   await initSchema()
   await sql`DELETE FROM users WHERE id = ${id}`
