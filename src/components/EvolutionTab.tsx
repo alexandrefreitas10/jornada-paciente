@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { Measurement, MeasurementInput } from '@/lib/measurements'
 import { MeasurementChart } from './MeasurementChart'
+import { AdminPasswordModal } from './AdminPasswordModal'
 
 interface EvolutionPhoto {
   id: number
@@ -28,6 +29,7 @@ const emptyInput = (): MeasurementInput => ({
 
 export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionPhotos }: Props) {
   const [measurements, setMeasurements] = useState<Measurement[]>(initialMeasurements)
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null)
   const [evolutionPhotos, setEvolutionPhotos] = useState<EvolutionPhoto[]>(initialEvolutionPhotos)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
@@ -87,6 +89,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
   async function handleDelete(id: number) {
     await fetch(`/api/patients/${patientId}/measurements/${id}`, { method: 'DELETE' })
     setMeasurements((prev) => prev.filter((m) => m.id !== id))
+    setPendingDeleteId(null)
   }
 
   async function handleSaveNew() {
@@ -129,6 +132,12 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
 
   return (
     <div className="space-y-6">
+      {pendingDeleteId !== null && (
+        <AdminPasswordModal
+          onConfirm={() => handleDelete(pendingDeleteId)}
+          onCancel={() => setPendingDeleteId(null)}
+        />
+      )}
       {/* Upload de foto */}
       <div className="flex items-center gap-3">
         <input
@@ -246,7 +255,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
                       ✏️
                     </button>
                     <button
-                      onClick={() => handleDelete(m.id)}
+                      onClick={() => setPendingDeleteId(m.id)}
                       className="text-xs text-gray-400 hover:text-red-500"
                       title="Apagar"
                     >

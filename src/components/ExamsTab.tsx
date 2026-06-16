@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { AdminPasswordModal } from './AdminPasswordModal'
 
 interface ExamFile {
   id: number
@@ -17,6 +18,7 @@ interface Props {
 
 export function ExamsTab({ patientId, initialFiles }: Props) {
   const [files, setFiles] = useState<ExamFile[]>(initialFiles)
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [activeSubTab, setActiveSubTab] = useState<'files' | 'summary'>('files')
@@ -50,9 +52,9 @@ export function ExamsTab({ patientId, initialFiles }: Props) {
   }
 
   async function handleDelete(id: number) {
-    if (!confirm('Tem certeza que deseja apagar este exame?')) return
     await fetch(`/api/patients/${patientId}/files/${id}`, { method: 'DELETE' })
     setFiles((prev) => prev.filter((f) => f.id !== id))
+    setPendingDeleteId(null)
   }
 
   function handleDownload(id: number) {
@@ -70,6 +72,12 @@ export function ExamsTab({ patientId, initialFiles }: Props) {
 
   return (
     <div className="space-y-4">
+      {pendingDeleteId !== null && (
+        <AdminPasswordModal
+          onConfirm={() => handleDelete(pendingDeleteId)}
+          onCancel={() => setPendingDeleteId(null)}
+        />
+      )}
       {/* Sub-abas */}
       <div className="flex gap-1 border-b border-gray-100">
         <button
@@ -175,7 +183,7 @@ export function ExamsTab({ patientId, initialFiles }: Props) {
                       ⬇️
                     </button>
                     <button
-                      onClick={() => handleDelete(f.id)}
+                      onClick={() => setPendingDeleteId(f.id)}
                       className="text-xs text-gray-400 hover:text-red-500 shrink-0"
                       title="Apagar"
                     >

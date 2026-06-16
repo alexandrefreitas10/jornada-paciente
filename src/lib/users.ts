@@ -5,6 +5,7 @@ export interface User {
   id: number
   username: string
   password_hash: string
+  is_admin: boolean
   created_at: string
 }
 

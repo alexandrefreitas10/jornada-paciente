@@ -16,7 +16,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!user) return null
         const valid = await bcrypt.compare(credentials.password as string, user.password_hash)
         if (!valid) return null
-        return { id: String(user.id), name: user.username }
+        return { id: String(user.id), name: user.username, is_admin: user.is_admin }
       },
     }),
   ],
@@ -24,11 +24,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: 'jwt' },
   callbacks: {
     jwt({ token, user }) {
-      if (user) token.id = user.id
+      if (user) {
+        token.id = user.id
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        token.is_admin = (user as any).is_admin ?? false
+      }
       return token
     },
     session({ session, token }) {
-      if (session.user) session.user.id = token.id as string
+      if (session.user) {
+        session.user.id = token.id as string
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(session.user as any).is_admin = token.is_admin ?? false
+      }
       return session
     },
   },
