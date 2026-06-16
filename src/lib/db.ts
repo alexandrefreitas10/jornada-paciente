@@ -51,6 +51,14 @@ export async function initSchema() {
       tirzepatide_dose NUMERIC,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
+    ALTER TABLE weekly_measurements DROP CONSTRAINT IF EXISTS weekly_measurements_patient_week_unique;
+    DO $$ BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'weekly_measurements_patient_week_unique'
+      ) THEN
+        ALTER TABLE weekly_measurements ADD CONSTRAINT weekly_measurements_patient_week_unique UNIQUE (patient_id, week);
+      END IF;
+    END $$;
   `)
 }
 

@@ -36,11 +36,33 @@ export async function createMeasurement(
   input: MeasurementInput
 ): Promise<Measurement> {
   await initSchema()
+
+  // Se tem número de semana, faz upsert para não duplicar
+  if (input.week != null) {
+    const [row] = await sql<Measurement[]>`
+      INSERT INTO weekly_measurements
+        (patient_id, week, date, weight, abdominal_circumference, waist_circumference, tirzepatide_dose)
+      VALUES
+        (${patientId}, ${input.week}, ${input.date ?? null}, ${input.weight ?? null},
+         ${input.abdominal_circumference ?? null}, ${input.waist_circumference ?? null},
+         ${input.tirzepatide_dose ?? null})
+      ON CONFLICT (patient_id, week) DO UPDATE SET
+        date = EXCLUDED.date,
+        weight = EXCLUDED.weight,
+        abdominal_circumference = EXCLUDED.abdominal_circumference,
+        waist_circumference = EXCLUDED.waist_circumference,
+        tirzepatide_dose = EXCLUDED.tirzepatide_dose
+      RETURNING *
+    `
+    return row
+  }
+
+  // Sem semana definida, insere normalmente
   const [row] = await sql<Measurement[]>`
     INSERT INTO weekly_measurements
       (patient_id, week, date, weight, abdominal_circumference, waist_circumference, tirzepatide_dose)
     VALUES
-      (${patientId}, ${input.week ?? null}, ${input.date ?? null}, ${input.weight ?? null},
+      (${patientId}, ${null}, ${input.date ?? null}, ${input.weight ?? null},
        ${input.abdominal_circumference ?? null}, ${input.waist_circumference ?? null},
        ${input.tirzepatide_dose ?? null})
     RETURNING *
