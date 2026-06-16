@@ -266,14 +266,26 @@ const PRESET_OPTIONS = [
   { label: '60 dias', days: 60 },
 ]
 
+const CONTENT_TYPES = [
+  { key: 'evolution', label: 'Evolução' },
+  { key: 'tasks', label: 'Tarefas' },
+  { key: 'photo', label: 'Fotos' },
+  { key: 'bioimpedance', label: 'Bioimpedância' },
+  { key: 'exam', label: 'Exames' },
+  { key: 'diet', label: 'Dietas' },
+] as const
+
+type ContentType = typeof CONTENT_TYPES[number]['key']
+
 function SemAtualizacao() {
+  const [contentType, setContentType] = useState<ContentType>('evolution')
   const [preset, setPreset] = useState<number>(7)
   const [customDate, setCustomDate] = useState('')
   const [useCustom, setUseCustom] = useState(false)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<{
     total: number
-    patients: { id: number; name: string; start_date: string; duration: string; created_at: string; last_evolution: string | null }[]
+    patients: { id: number; name: string; duration: string; last_update: string | null }[]
   } | null>(null)
 
   function getSinceDate() {
@@ -287,16 +299,40 @@ function SemAtualizacao() {
     e.preventDefault()
     setLoading(true)
     const since = getSinceDate()
-    const res = await fetch(`/api/relatorio/sem-atualizacao?since=${since}`)
+    const res = await fetch(`/api/relatorio/sem-atualizacao?since=${since}&type=${contentType}`)
     setResult(await res.json())
     setLoading(false)
   }
 
+  const typeLabel = CONTENT_TYPES.find(t => t.key === contentType)?.label ?? ''
+
   return (
     <div className="space-y-5">
       <form onSubmit={handleSearch} className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
-        <h2 className="text-sm font-semibold text-gray-700">Pacientes sem atualização na evolução</h2>
+        <h2 className="text-sm font-semibold text-gray-700">Pacientes sem atualização</h2>
 
+        {/* Tipo de conteúdo */}
+        <div>
+          <label className="text-xs text-gray-500 mb-2 block">O que verificar</label>
+          <div className="flex flex-wrap gap-2">
+            {CONTENT_TYPES.map(t => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => { setContentType(t.key); setResult(null) }}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                  contentType === t.key
+                    ? 'bg-violet-600 text-white border-violet-600'
+                    : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Prazo */}
         <div>
           <label className="text-xs text-gray-500 mb-2 block">Prazo sem atualização</label>
           <div className="flex flex-wrap gap-2 mb-3">
@@ -327,16 +363,13 @@ function SemAtualizacao() {
             </button>
           </div>
           {useCustom && (
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Sem atualização desde</label>
-              <input
-                type="date"
-                value={customDate}
-                onChange={e => setCustomDate(e.target.value)}
-                required={useCustom}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
-              />
-            </div>
+            <input
+              type="date"
+              value={customDate}
+              onChange={e => setCustomDate(e.target.value)}
+              required={useCustom}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+            />
           )}
         </div>
 
@@ -349,7 +382,7 @@ function SemAtualizacao() {
       {result && (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
-            <span className="text-sm font-semibold text-gray-700">Sem atualização</span>
+            <span className="text-sm font-semibold text-gray-700">Sem atualização em {typeLabel}</span>
             <span className="text-sm font-bold text-orange-600">{result.total} paciente{result.total !== 1 ? 's' : ''}</span>
           </div>
           {result.patients.length === 0 ? (
@@ -362,14 +395,12 @@ function SemAtualizacao() {
                     <a href={`/pacientes/${p.id}`} className="text-sm font-medium text-gray-900 hover:text-violet-700 transition-colors">
                       {p.name}
                     </a>
-                    {p.duration && (
-                      <p className="text-xs text-gray-400">Duração: {p.duration}</p>
-                    )}
+                    {p.duration && <p className="text-xs text-gray-400">Duração: {p.duration}</p>}
                   </div>
                   <div className="text-right shrink-0">
-                    {p.last_evolution ? (
+                    {p.last_update ? (
                       <span className="text-xs text-orange-500">
-                        Última: {new Date(p.last_evolution).toLocaleDateString('pt-BR')}
+                        Última: {new Date(p.last_update).toLocaleDateString('pt-BR')}
                       </span>
                     ) : (
                       <span className="text-xs text-red-500">Nunca atualizado</span>
