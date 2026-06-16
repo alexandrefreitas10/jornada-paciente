@@ -53,14 +53,16 @@ export async function initSchema() {
     );
   `)
 
-  // Remove duplicatas de semana mantendo o mais recente
+  // Remove duplicatas de semana mantendo o registro de maior id (mais recente)
   await sql.unsafe(`
-    DELETE FROM weekly_measurements a
-    USING weekly_measurements b
-    WHERE a.patient_id = b.patient_id
-      AND a.week = b.week
-      AND a.week IS NOT NULL
-      AND a.id < b.id;
+    DELETE FROM weekly_measurements
+    WHERE week IS NOT NULL
+      AND id NOT IN (
+        SELECT MAX(id)
+        FROM weekly_measurements
+        WHERE week IS NOT NULL
+        GROUP BY patient_id, week
+      );
   `).catch(() => {})
 
   // Cria índice único por paciente+semana (ignora se já existe)
