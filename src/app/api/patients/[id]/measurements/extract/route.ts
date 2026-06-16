@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
-import { createMeasurement, MeasurementInput } from '@/lib/measurements'
+import { createMeasurement, listMeasurements, MeasurementInput } from '@/lib/measurements'
 import { uploadFile } from '@/lib/s3'
 import { createPatientFile } from '@/lib/patient-files'
 import { randomUUID } from 'crypto'
@@ -96,19 +96,26 @@ Ignore linhas completamente vazias. Retorne somente o array JSON, sem texto adic
     )
   }
 
-  const created = await Promise.all(
-    extracted.map((row) => {
+  // Busca semanas já existentes para evitar duplicação
+  const existing = await listMeasurements(Number(id))
+  const existingWeeks = new Set(existing.map(m => m.week).filter(w => w !== null))
+
+  const newRows = extracted
+    .map((row) => {
       const r = row as Record<string, unknown>
-      const input: MeasurementInput = {
+      return {
         week: toNum(r.week),
         date: toStr(r.date),
         weight: toNum(r.weight),
         abdominal_circumference: toNum(r.abdominal_circumference),
         waist_circumference: toNum(r.waist_circumference),
         tirzepatide_dose: toNum(r.tirzepatide_dose),
-      }
-      return createMeasurement(Number(id), input)
+      } as MeasurementInput
     })
+    .filter(input => input.week === null || !existingWeeks.has(input.week))
+
+  const created = await Promise.all(
+    newRows.map(input => createMeasurement(Number(id), input))
   )
 
   // Salva a foto original no S3 para consulta futura
