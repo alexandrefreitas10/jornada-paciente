@@ -17,8 +17,11 @@ export async function GET(
   return NextResponse.json(summaries)
 }
 
-async function transcribeAudio(buffer: Buffer, mimeType: string, fileName: string): Promise<string> {
-  const file = await toFile(buffer, fileName, { type: mimeType || 'audio/mp4' })
+async function transcribeAudio(buffer: Buffer, fileName: string): Promise<string> {
+  // Whisper aceita m4a como mp4 — garante extensão correta
+  const ext = fileName.split('.').pop()?.toLowerCase() ?? 'mp4'
+  const safeName = ext === 'm4a' ? fileName.replace(/\.m4a$/i, '.mp4') : fileName
+  const file = await toFile(buffer, safeName)
   const result = await openai.audio.transcriptions.create({
     file,
     model: 'whisper-1',
@@ -53,11 +56,12 @@ export async function POST(
   // Transcrição automática via Whisper se não veio texto mas veio áudio
   if (!transcription && audioBuffer) {
     try {
-      transcription = await transcribeAudio(audioBuffer, audio!.type || 'audio/mp4', audio!.name)
-    } catch (err) {
-      console.error('Erro na transcrição automática:', err)
+      transcription = await transcribeAudio(audioBuffer, audio!.name)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('Erro na transcrição automática:', msg)
       return NextResponse.json(
-        { error: 'Não foi possível transcrever o áudio. Cole a transcrição manualmente.' },
+        { error: `Erro na transcrição: ${msg}` },
         { status: 422 }
       )
     }
