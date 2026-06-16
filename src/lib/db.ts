@@ -51,23 +51,24 @@ export async function initSchema() {
       tirzepatide_dose NUMERIC,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
-    -- Remove duplicatas de semana, mantendo o registro mais recente
+  `)
+
+  // Remove duplicatas de semana mantendo o mais recente
+  await sql.unsafe(`
     DELETE FROM weekly_measurements a
     USING weekly_measurements b
     WHERE a.patient_id = b.patient_id
       AND a.week = b.week
       AND a.week IS NOT NULL
       AND a.id < b.id;
-    -- Adiciona constraint única após limpeza
-    ALTER TABLE weekly_measurements DROP CONSTRAINT IF EXISTS weekly_measurements_patient_week_unique;
-    DO $$ BEGIN
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'weekly_measurements_patient_week_unique'
-      ) THEN
-        ALTER TABLE weekly_measurements ADD CONSTRAINT weekly_measurements_patient_week_unique UNIQUE (patient_id, week);
-      END IF;
-    END $$;
-  `)
+  `).catch(() => {})
+
+  // Cria índice único por paciente+semana (ignora se já existe)
+  await sql.unsafe(`
+    CREATE UNIQUE INDEX IF NOT EXISTS weekly_measurements_patient_week_idx
+    ON weekly_measurements (patient_id, week)
+    WHERE week IS NOT NULL;
+  `).catch(() => {})
 }
 
 export default sql

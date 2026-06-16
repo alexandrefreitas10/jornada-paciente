@@ -46,7 +46,7 @@ export async function createMeasurement(
         (${patientId}, ${input.week}, ${input.date ?? null}, ${input.weight ?? null},
          ${input.abdominal_circumference ?? null}, ${input.waist_circumference ?? null},
          ${input.tirzepatide_dose ?? null})
-      ON CONFLICT (patient_id, week) DO UPDATE SET
+      ON CONFLICT (patient_id, week) WHERE week IS NOT NULL DO UPDATE SET
         date = EXCLUDED.date,
         weight = EXCLUDED.weight,
         abdominal_circumference = EXCLUDED.abdominal_circumference,
