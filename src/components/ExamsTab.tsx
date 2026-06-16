@@ -102,7 +102,7 @@ export function ExamsTab({ patientId, initialFiles }: Props) {
       {activeSubTab === 'files' ? (
         <div className="space-y-4">
           {/* Upload */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <input
               ref={fileInputRef}
               type="file"
@@ -125,6 +125,14 @@ export function ExamsTab({ patientId, initialFiles }: Props) {
                 </>
               ) : '🔬 Enviar exame'}
             </button>
+            {files.length > 0 && (
+              <button
+                onClick={() => { window.location.href = `/api/patients/${patientId}/files/download-all?type=exam` }}
+                className="flex items-center gap-1.5 px-4 py-2 border border-gray-300 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                ⬇️ Baixar todos
+              </button>
+            )}
             {error && <p className="text-sm text-red-600">{error}</p>}
           </div>
 

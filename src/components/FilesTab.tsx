@@ -217,6 +217,10 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
     window.location.href = `/api/patients/${patientId}/files/${id}/download`
   }
 
+  function handleDownloadAll() {
+    window.location.href = `/api/patients/${patientId}/files/download-all?type=${fileType}`
+  }
+
   function formatDate(iso: string) {
     return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
   }
@@ -485,6 +489,15 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
               </div>
             )}
           </>
+        )}
+
+        {files.length > 0 && !compareMode && (
+          <button
+            onClick={handleDownloadAll}
+            className="flex items-center gap-1.5 px-4 py-2 border border-gray-300 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            ⬇️ Baixar todos
+          </button>
         )}
 
         {error && <p className="text-sm text-red-600">{error}</p>}
