@@ -15,6 +15,12 @@ export async function findUserByUsername(username: string): Promise<User | null>
   return user ?? null
 }
 
+export async function findAdminUser(): Promise<User | null> {
+  await initSchema()
+  const [user] = await sql<User[]>`SELECT * FROM users WHERE is_admin = TRUE LIMIT 1`
+  return user ?? null
+}
+
 export async function listUsers(): Promise<Omit<User, 'password_hash'>[]> {
   await initSchema()
   return sql<Omit<User, 'password_hash'>[]>`SELECT id, username, created_at FROM users ORDER BY created_at ASC`
