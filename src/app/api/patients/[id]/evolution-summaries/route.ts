@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import OpenAI, { toFile } from 'openai'
 import { createEvolutionSummary, listEvolutionSummaries, SummaryTopics } from '@/lib/evolution-summaries'
 import { uploadFile } from '@/lib/s3'
 import { randomUUID } from 'crypto'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 export async function GET(
   _req: NextRequest,
@@ -15,6 +17,15 @@ export async function GET(
   return NextResponse.json(summaries)
 }
 
+async function transcribeAudio(buffer: Buffer, mimeType: string, fileName: string): Promise<string> {
+  const file = await toFile(buffer, fileName, { type: mimeType || 'audio/mp4' })
+  const result = await openai.audio.transcriptions.create({
+    file,
+    model: 'whisper-1',
+    language: 'pt',
+  })
+  return result.text.trim()
+}
 
 export async function POST(
   req: NextRequest,
@@ -39,8 +50,21 @@ export async function POST(
     await uploadFile(audioS3Key, audioBuffer, audio.type || 'audio/mp4')
   }
 
+  // Transcrição automática via Whisper se não veio texto mas veio áudio
+  if (!transcription && audioBuffer) {
+    try {
+      transcription = await transcribeAudio(audioBuffer, audio!.type || 'audio/mp4', audio!.name)
+    } catch (err) {
+      console.error('Erro na transcrição automática:', err)
+      return NextResponse.json(
+        { error: 'Não foi possível transcrever o áudio. Cole a transcrição manualmente.' },
+        { status: 422 }
+      )
+    }
+  }
+
   if (!transcription) {
-    return NextResponse.json({ error: 'Cole a transcrição da consulta para continuar.' }, { status: 400 })
+    return NextResponse.json({ error: 'Envie um áudio ou cole a transcrição para continuar.' }, { status: 400 })
   }
 
   // Extrai os 10 tópicos com Claude
