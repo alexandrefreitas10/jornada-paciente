@@ -15,6 +15,55 @@ export async function GET(
   return NextResponse.json(summaries)
 }
 
+const AUDIO_MIME_TO_FORMAT: Record<string, string> = {
+  'audio/mpeg': 'mp3',
+  'audio/mp3': 'mp3',
+  'audio/mp4': 'mp4',
+  'audio/x-m4a': 'mp4',
+  'audio/m4a': 'mp4',
+  'audio/wav': 'wav',
+  'audio/wave': 'wav',
+  'audio/ogg': 'ogg',
+  'audio/flac': 'flac',
+  'audio/webm': 'webm',
+}
+
+function audioFormat(mimeType: string, fileName: string): string {
+  if (AUDIO_MIME_TO_FORMAT[mimeType]) return AUDIO_MIME_TO_FORMAT[mimeType]
+  const ext = fileName.split('.').pop()?.toLowerCase()
+  if (ext === 'm4a') return 'mp4'
+  if (ext && AUDIO_MIME_TO_FORMAT[`audio/${ext}`]) return AUDIO_MIME_TO_FORMAT[`audio/${ext}`]
+  return 'mp4'
+}
+
+async function transcribeAudio(buffer: Buffer, mimeType: string, fileName: string): Promise<string> {
+  const format = audioFormat(mimeType, fileName)
+  const base64 = buffer.toString('base64')
+
+  const msg = await client.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 4096,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: 'Transcreva o áudio abaixo na íntegra, em português brasileiro. Retorne APENAS o texto transcrito, sem comentários, sem introdução, sem formatação extra.',
+          },
+          {
+            type: 'input_audio',
+            format,
+            data: base64,
+          } as Parameters<typeof client.messages.create>[0]['messages'][0]['content'][1],
+        ],
+      },
+    ],
+  })
+
+  return (msg.content[0] as { type: string; text: string }).text.trim()
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -22,25 +71,40 @@ export async function POST(
   const { id } = await params
 
   const formData = await req.formData()
-  const transcription = formData.get('transcription') as string | null
+  let transcription = (formData.get('transcription') as string | null)?.trim() ?? ''
   const audio = formData.get('audio') as File | null
 
-  if (!transcription?.trim()) {
-    return NextResponse.json({ error: 'Transcrição obrigatória para gerar o resumo' }, { status: 400 })
-  }
-
-  // Upload de áudio para S3 (opcional)
+  // Upload de áudio para S3 (se enviado)
   let audioS3Key: string | null = null
   let audioName: string | null = null
+  let audioBuffer: Buffer | null = null
+
   if (audio && audio.size > 0) {
-    const buffer = Buffer.from(await audio.arrayBuffer())
-    const ext = audio.name.split('.').pop() ?? 'mp3'
+    audioBuffer = Buffer.from(await audio.arrayBuffer())
+    const ext = audio.name.split('.').pop() ?? 'mp4'
     audioS3Key = `patients/${id}/consultas/${randomUUID()}.${ext}`
     audioName = audio.name
-    await uploadFile(audioS3Key, buffer, audio.type || 'audio/mpeg')
+    await uploadFile(audioS3Key, audioBuffer, audio.type || 'audio/mp4')
   }
 
-  // Processa com Claude para extrair os 10 tópicos
+  // Se não veio transcrição manual mas veio áudio, transcrever automaticamente
+  if (!transcription && audioBuffer) {
+    try {
+      transcription = await transcribeAudio(audioBuffer, audio!.type || 'audio/mp4', audio!.name)
+    } catch (err) {
+      console.error('Erro na transcrição automática:', err)
+      return NextResponse.json(
+        { error: 'Não foi possível transcrever o áudio automaticamente. Cole a transcrição manualmente.' },
+        { status: 422 }
+      )
+    }
+  }
+
+  if (!transcription) {
+    return NextResponse.json({ error: 'Envie um áudio ou cole a transcrição para continuar.' }, { status: 400 })
+  }
+
+  // Extrai os 10 tópicos com Claude
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 2048,
@@ -84,7 +148,7 @@ ${transcription}`,
 
   const created = await createEvolutionSummary(
     Number(id),
-    transcription.trim(),
+    transcription,
     summary,
     audioS3Key,
     audioName,
