@@ -1,6 +1,9 @@
 import { NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createMeasurement, MeasurementInput } from '@/lib/measurements'
+import { uploadFile } from '@/lib/s3'
+import { createPatientFile } from '@/lib/patient-files'
+import { randomUUID } from 'crypto'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -31,7 +34,8 @@ export async function POST(
   }
 
   const arrayBuffer = await photo.arrayBuffer()
-  const base64 = Buffer.from(arrayBuffer).toString('base64')
+  const buffer = Buffer.from(arrayBuffer)
+  const base64 = buffer.toString('base64')
   const mediaType = (photo.type || 'image/jpeg') as
     | 'image/jpeg'
     | 'image/png'
@@ -106,6 +110,16 @@ Ignore linhas completamente vazias. Retorne somente o array JSON, sem texto adic
       return createMeasurement(Number(id), input)
     })
   )
+
+  // Salva a foto original no S3 para consulta futura
+  try {
+    const ext = photo.name.split('.').pop() ?? 'jpg'
+    const s3Key = `patients/${id}/evolution/${randomUUID()}.${ext}`
+    await uploadFile(s3Key, buffer, mediaType)
+    await createPatientFile(Number(id), 'evolution', s3Key, photo.name)
+  } catch (err) {
+    console.error('Erro ao salvar foto de evolução no S3:', err)
+  }
 
   return Response.json(created, { status: 201 })
 }

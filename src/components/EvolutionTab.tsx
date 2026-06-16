@@ -4,9 +4,17 @@ import { useState, useRef } from 'react'
 import { Measurement, MeasurementInput } from '@/lib/measurements'
 import { MeasurementChart } from './MeasurementChart'
 
+interface EvolutionPhoto {
+  id: number
+  original_name: string
+  url: string
+  created_at: string
+}
+
 interface Props {
   patientId: number
   initialMeasurements: Measurement[]
+  initialEvolutionPhotos: EvolutionPhoto[]
 }
 
 const emptyInput = (): MeasurementInput => ({
@@ -18,8 +26,9 @@ const emptyInput = (): MeasurementInput => ({
   tirzepatide_dose: null,
 })
 
-export function EvolutionTab({ patientId, initialMeasurements }: Props) {
+export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionPhotos }: Props) {
   const [measurements, setMeasurements] = useState<Measurement[]>(initialMeasurements)
+  const [evolutionPhotos, setEvolutionPhotos] = useState<EvolutionPhoto[]>(initialEvolutionPhotos)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -49,6 +58,12 @@ export function EvolutionTab({ patientId, initialMeasurements }: Props) {
       setMeasurements((prev) =>
         [...prev, ...newItems].sort((a, b) => (a.week ?? 999) - (b.week ?? 999))
       )
+      // Recarrega lista de fotos para incluir a recém-salva
+      const photosRes = await fetch(`/api/patients/${patientId}/files?type=evolution`)
+      if (photosRes.ok) {
+        const photos: EvolutionPhoto[] = await photosRes.json()
+        setEvolutionPhotos(photos)
+      }
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Erro desconhecido')
     } finally {
@@ -338,6 +353,46 @@ export function EvolutionTab({ patientId, initialMeasurements }: Props) {
         <p className="text-sm text-gray-400 text-center py-8">
           Nenhum registro ainda. Envie uma foto ou adicione manualmente.
         </p>
+      )}
+
+      {/* Fotos de tabela armazenadas */}
+      {evolutionPhotos.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-semibold text-gray-700">Fotos de tabela enviadas</h4>
+            <a
+              href={`/api/patients/${patientId}/files/download-all?type=evolution`}
+              className="text-xs text-violet-600 hover:text-violet-800 font-medium"
+            >
+              ⬇️ Baixar todas
+            </a>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {evolutionPhotos.map((f) => (
+              <div key={f.id} className="rounded-xl overflow-hidden border border-gray-200">
+                <a href={f.url} target="_blank" rel="noopener noreferrer">
+                  <img
+                    src={f.url}
+                    alt={f.original_name}
+                    className="w-full h-32 object-cover hover:opacity-90 transition-opacity"
+                  />
+                </a>
+                <div className="p-2 bg-white flex items-center justify-between gap-1">
+                  <p className="text-xs text-gray-500 truncate">
+                    {new Date(f.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                  </p>
+                  <a
+                    href={`/api/patients/${patientId}/files/${f.id}/download`}
+                    className="text-xs text-violet-600 hover:text-violet-800 shrink-0"
+                    title="Baixar"
+                  >
+                    ⬇️
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   )

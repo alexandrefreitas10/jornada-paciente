@@ -55,6 +55,7 @@ export async function GET(
     bioimpedance: 'bioimpedancia',
     exam: 'exames',
     diet: 'dietas',
+    evolution: 'evolucao',
   }
 
   return new NextResponse(zip, {
