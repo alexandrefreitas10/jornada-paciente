@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { getPatient } from '@/lib/patients'
 import { listMeasurements } from '@/lib/measurements'
 import { listPatientFiles } from '@/lib/patient-files'
+import { listEvolutionSummaries } from '@/lib/evolution-summaries'
 import { getSignedDownloadUrl } from '@/lib/s3'
 import { PatientDetailClient } from '@/components/PatientDetailClient'
 
@@ -11,7 +12,7 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
   const { id } = await params
   const patientId = Number(id)
 
-  const [patient, measurements, photos, bioimpedances, exams, diets, evolutionPhotos] = await Promise.all([
+  const [patient, measurements, photos, bioimpedances, exams, diets, evolutionPhotos, summaries] = await Promise.all([
     getPatient(patientId),
     listMeasurements(patientId),
     listPatientFiles(patientId, 'photo'),
@@ -19,6 +20,7 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
     listPatientFiles(patientId, 'exam'),
     listPatientFiles(patientId, 'diet'),
     listPatientFiles(patientId, 'evolution'),
+    listEvolutionSummaries(patientId),
   ])
 
   if (!patient) notFound()
@@ -43,6 +45,7 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
       initialExams={initialExams}
       initialDiets={initialDiets}
       initialEvolutionPhotos={initialEvolutionPhotos}
+      initialSummaries={summaries}
     />
   )
 }

@@ -12,6 +12,7 @@ import { DeleteButton } from './DeleteButton'
 import { EvolutionTab } from './EvolutionTab'
 import { FilesTab } from './FilesTab'
 import { ExamsTab } from './ExamsTab'
+import { EvolucaoResumoTab } from './EvolucaoResumoTab'
 
 const AVATAR_COLORS = [
   'bg-violet-500', 'bg-blue-500', 'bg-emerald-500',
@@ -21,7 +22,7 @@ function avatarColor(name: string) {
   return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]
 }
 
-type Tab = 'tasks' | 'evolution' | 'photos' | 'bioimpedance' | 'exams' | 'diet'
+type Tab = 'tasks' | 'evolution' | 'photos' | 'bioimpedance' | 'exams' | 'diet' | 'resumo'
 
 interface FileRecord {
   id: number
@@ -33,6 +34,29 @@ interface FileRecord {
   created_by?: string | null
 }
 
+interface SummaryTopics {
+  objetivos_principais: string
+  tratamentos_anteriores: string
+  queixas_principais: string
+  qualidade_sono: string
+  intestino: string
+  libido: string
+  padrao_alimentar: string
+  atividade_fisica: string
+  doencas_previas_cirurgias: string
+  medicacao_suplementos: string
+}
+
+interface EvolutionSummary {
+  id: number
+  patient_id: number
+  audio_s3_key: string | null
+  audio_name: string | null
+  transcription: string
+  summary: SummaryTopics
+  created_at: string
+}
+
 interface Props {
   patient: PatientDetail
   initialMeasurements: Measurement[]
@@ -41,9 +65,10 @@ interface Props {
   initialExams: FileRecord[]
   initialDiets: FileRecord[]
   initialEvolutionPhotos: FileRecord[]
+  initialSummaries: EvolutionSummary[]
 }
 
-export function PatientDetailClient({ patient, initialMeasurements, initialPhotos, initialBioimpedances, initialExams, initialDiets, initialEvolutionPhotos }: Props) {
+export function PatientDetailClient({ patient, initialMeasurements, initialPhotos, initialBioimpedances, initialExams, initialDiets, initialEvolutionPhotos, initialSummaries }: Props) {
   const [completedKeys, setCompletedKeys] = useState<string[]>(patient.completed_task_keys)
   const [editOpen, setEditOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<Tab>('tasks')
@@ -74,6 +99,7 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
     { key: 'bioimpedance', label: 'Bioimpedância' },
     { key: 'exams', label: 'Exames' },
     { key: 'diet', label: 'Dietas' },
+    { key: 'resumo', label: 'Resumo de Evolução' },
   ]
 
   return (
@@ -157,6 +183,9 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
         )}
         {activeTab === 'diet' && (
           <FilesTab patientId={patient.id} fileType="diet" initialFiles={initialDiets} />
+        )}
+        {activeTab === 'resumo' && (
+          <EvolucaoResumoTab patientId={patient.id} initialSummaries={initialSummaries} />
         )}
       </div>
 

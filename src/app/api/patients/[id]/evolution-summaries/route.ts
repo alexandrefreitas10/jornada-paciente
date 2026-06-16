@@ -1,0 +1,94 @@
+import { NextRequest, NextResponse } from 'next/server'
+import Anthropic from '@anthropic-ai/sdk'
+import { createEvolutionSummary, listEvolutionSummaries, SummaryTopics } from '@/lib/evolution-summaries'
+import { uploadFile } from '@/lib/s3'
+import { randomUUID } from 'crypto'
+
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params
+  const summaries = await listEvolutionSummaries(Number(id))
+  return NextResponse.json(summaries)
+}
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params
+
+  const formData = await req.formData()
+  const transcription = formData.get('transcription') as string | null
+  const audio = formData.get('audio') as File | null
+
+  if (!transcription?.trim()) {
+    return NextResponse.json({ error: 'Transcrição obrigatória para gerar o resumo' }, { status: 400 })
+  }
+
+  // Upload de áudio para S3 (opcional)
+  let audioS3Key: string | null = null
+  let audioName: string | null = null
+  if (audio && audio.size > 0) {
+    const buffer = Buffer.from(await audio.arrayBuffer())
+    const ext = audio.name.split('.').pop() ?? 'mp3'
+    audioS3Key = `patients/${id}/consultas/${randomUUID()}.${ext}`
+    audioName = audio.name
+    await uploadFile(audioS3Key, buffer, audio.type || 'audio/mpeg')
+  }
+
+  // Processa com Claude para extrair os 10 tópicos
+  const message = await client.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 2048,
+    messages: [
+      {
+        role: 'user',
+        content: `Você é um assistente médico especializado em nutrição e saúde. Analise a transcrição abaixo de uma consulta e extraia informações para cada um dos 10 tópicos. Seja objetivo e conciso. Se não houver informação sobre um tópico, responda "Não mencionado".
+
+Retorne APENAS um JSON válido com exatamente estas chaves:
+{
+  "objetivos_principais": "...",
+  "tratamentos_anteriores": "...",
+  "queixas_principais": "...",
+  "qualidade_sono": "...",
+  "intestino": "...",
+  "libido": "...",
+  "padrao_alimentar": "...",
+  "atividade_fisica": "...",
+  "doencas_previas_cirurgias": "...",
+  "medicacao_suplementos": "..."
+}
+
+TRANSCRIÇÃO:
+${transcription}`,
+      },
+    ],
+  })
+
+  const rawText = (message.content[0] as { type: string; text: string }).text.trim()
+  const jsonMatch = rawText.match(/\{[\s\S]*\}/)
+
+  let summary: SummaryTopics
+  try {
+    summary = JSON.parse(jsonMatch ? jsonMatch[0] : rawText)
+  } catch {
+    return NextResponse.json(
+      { error: 'Não foi possível processar a transcrição. Tente novamente.' },
+      { status: 422 }
+    )
+  }
+
+  const created = await createEvolutionSummary(
+    Number(id),
+    transcription.trim(),
+    summary,
+    audioS3Key,
+    audioName,
+  )
+
+  return NextResponse.json(created, { status: 201 })
+}

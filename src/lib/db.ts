@@ -72,6 +72,19 @@ export async function initSchema() {
     WHERE week IS NOT NULL;
   `).catch(() => {})
 
+  // Tabela de resumos de consulta com IA
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS evolution_summaries (
+      id SERIAL PRIMARY KEY,
+      patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      audio_s3_key TEXT,
+      audio_name TEXT,
+      transcription TEXT NOT NULL,
+      summary JSONB NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `).catch(() => {})
+
   // Adiciona coluna is_admin aos usuários
   await sql.unsafe(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE`).catch(() => {})
 
