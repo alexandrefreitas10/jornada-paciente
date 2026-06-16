@@ -94,17 +94,19 @@ function NovaConsultaForm({ patientId, onCreated }: { patientId: number; onCreat
   const [error, setError] = useState<string | null>(null)
   const [recording, setRecording] = useState(false)
   const audioInputRef = useRef<HTMLInputElement>(null)
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null)
 
   function startRecording() {
-    const SR = (window as typeof window & { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition ?? window.SpeechRecognition
+    const w = window as typeof window & { SpeechRecognition?: new () => SpeechRecognition; webkitSpeechRecognition?: new () => SpeechRecognition }
+    const SR = w.SpeechRecognition ?? w.webkitSpeechRecognition
     if (!SR) { alert('Seu navegador não suporta gravação. Use o Chrome.'); return }
     const rec = new SR()
     rec.lang = 'pt-BR'
     rec.continuous = true
     rec.interimResults = false
     rec.onresult = (e) => {
-      const text = Array.from(e.results).map(r => r[0].transcript).join(' ')
+      const text = Array.from(e.results).map((r: SpeechRecognitionResult) => r[0].transcript).join(' ')
       setTranscription(prev => prev + (prev ? ' ' : '') + text)
     }
     rec.onerror = () => { setRecording(false) }
