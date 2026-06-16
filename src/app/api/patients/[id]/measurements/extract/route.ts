@@ -1,8 +1,8 @@
 import { NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createMeasurement, listMeasurements, MeasurementInput } from '@/lib/measurements'
-import { uploadFile } from '@/lib/s3'
-import { createPatientFile } from '@/lib/patient-files'
+import { uploadFile, deleteFile } from '@/lib/s3'
+import { createPatientFile, listPatientFiles, deletePatientFile } from '@/lib/patient-files'
 import { randomUUID } from 'crypto'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -118,8 +118,13 @@ Ignore linhas completamente vazias. Retorne somente o array JSON, sem texto adic
     newRows.map(input => createMeasurement(Number(id), input))
   )
 
-  // Salva a foto original no S3 para consulta futura
+  // Substitui a foto de tabela anterior pela nova (mantém só a mais recente)
   try {
+    const previous = await listPatientFiles(Number(id), 'evolution')
+    await Promise.all(previous.map(async (f) => {
+      await deleteFile(f.s3_key).catch(() => {})
+      await deletePatientFile(f.id)
+    }))
     const ext = photo.name.split('.').pop() ?? 'jpg'
     const s3Key = `patients/${id}/evolution/${randomUUID()}.${ext}`
     await uploadFile(s3Key, buffer, mediaType)
