@@ -88,6 +88,9 @@ export async function initSchema() {
   // Adiciona coluna is_admin aos usuários
   await sql.unsafe(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE`).catch(() => {})
 
+  // Soft delete em pacientes
+  await sql.unsafe(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`).catch(() => {})
+
   // Usuário administrador principal
   await sql.unsafe(`UPDATE users SET is_admin = TRUE WHERE username = '038.069.291-06'`).catch(() => {})
 }

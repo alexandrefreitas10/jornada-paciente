@@ -32,7 +32,25 @@
       "mcp__Claude_in_Chrome__tabs_context_mcp",
       "mcp__Claude_in_Chrome__navigate",
       "mcp__Claude_in_Chrome__get_page_text",
-      "Bash(npm uninstall *)"
+      "Bash(npm uninstall *)",
+      "Bash(git push *)",
+      "WebFetch(domain:jornada-paciente.onrender.com)",
+      "Bash(findstr /i \"recharts anthropic\")",
+      "Bash(node -e \"require\\('recharts'\\); require\\('@anthropic-ai/sdk'\\); console.log\\('OK'\\)\")",
+      "Bash(mkdir -p \"C:\\\\Users\\\\alexa\\\\Projeto Curso IA\\\\src\\\\app\\\\api\\\\patients\\\\[id]\\\\measurements\\\\[mid]\")",
+      "Bash(mkdir -p \"C:\\\\Users\\\\alexa\\\\Projeto Curso IA\\\\src\\\\app\\\\api\\\\patients\\\\[id]\\\\measurements\\\\extract\")",
+      "Bash(mkdir -p \"C:\\\\Users\\\\alexa\\\\Projeto Curso IA\\\\src\\\\app\\\\api\\\\patients\\\\[id]\\\\files\")",
+      "Bash(findstr \"paths\\\\|baseUrl\\\\|@/\")",
+      "Bash(Get-Content \"C:\\\\Users\\\\alexa\\\\Projeto Curso IA\\\\tsconfig.json\")",
+      "Bash(Select-String \"paths|baseUrl|@/\")",
+      "Bash(magick --version)",
+      "Bash(convert --version)",
+      "Bash(ls \"C:\\\\Users\\\\alexa\\\\Downloads\\\\\"*.png 2>/dev/null | head -20)",
+      "Bash(cp \"C:\\\\Users\\\\alexa\\\\Downloads\\\\logo.png\" \"C:\\\\Users\\\\alexa\\\\Projeto Curso IA\\\\public\\\\logo.png\")",
+      "PowerShell($desktop = [Environment]::GetFolderPath\\(\"Desktop\"\\); Write-Output $desktop; New-Item -ItemType Directory -Path \"$desktop\\\\GS-Performance\\\\docs\\\\superpowers\\\\specs\" -Force)",
+      "PowerShell(Set-Location \"C:\\\\Users\\\\alexa\\\\OneDrive\\\\Desktop\\\\GS-Performance\"; Get-ChildItem -Force \"temp-gs\" | ForEach-Object { Move-Item $_.FullName \".\" -Force }; Remove-Item \"temp-gs\" -Force 2>&1)",
+      "PowerShell(Set-Location \"C:\\\\Users\\\\alexa\\\\OneDrive\\\\Desktop\\\\GS-Performance\"; if \\(!\\(Test-Path \"src\"\\)\\) { New-Item -ItemType Directory \"src\" }; if \\(Test-Path \"app\"\\) { Move-Item \"app\" \"src/app\" }; ls src)",
+      "PowerShell([Convert]::ToBase64String\\([System.Security.Cryptography.RandomNumberGenerator]::GetBytes\\(32\\)\\))"
     ]
   }
 }

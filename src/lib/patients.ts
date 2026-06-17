@@ -32,8 +32,22 @@ export async function listPatients(): Promise<PatientListItem[]> {
     SELECT p.*, COUNT(tc.id)::int as completed_count
     FROM patients p
     LEFT JOIN task_completions tc ON tc.patient_id = p.id
+    WHERE p.deleted_at IS NULL
     GROUP BY p.id
     ORDER BY p.created_at DESC
+  `
+  return rows
+}
+
+export async function listDeletedPatients(): Promise<PatientListItem[]> {
+  await initSchema()
+  const rows = await sql<PatientListItem[]>`
+    SELECT p.*, COUNT(tc.id)::int as completed_count
+    FROM patients p
+    LEFT JOIN task_completions tc ON tc.patient_id = p.id
+    WHERE p.deleted_at IS NOT NULL
+    GROUP BY p.id
+    ORDER BY p.deleted_at DESC
   `
   return rows
 }
@@ -76,5 +90,9 @@ export async function updatePatient(id: number, input: PatientInput): Promise<vo
 }
 
 export async function deletePatient(id: number): Promise<void> {
-  await sql`DELETE FROM patients WHERE id = ${id}`
+  await sql`UPDATE patients SET deleted_at = NOW() WHERE id = ${id}`
+}
+
+export async function restorePatient(id: number): Promise<void> {
+  await sql`UPDATE patients SET deleted_at = NULL WHERE id = ${id}`
 }

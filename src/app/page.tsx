@@ -3,6 +3,7 @@ import { listPatients } from '@/lib/patients'
 import { NewPatientButton } from '@/components/NewPatientButton'
 import { PatientSearch } from '@/components/PatientSearch'
 import { RelatorioUltimaSemana } from '@/components/RelatorioUltimaSemana'
+import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,7 +17,12 @@ export default async function HomePage() {
           <h1 className="text-2xl font-bold text-gray-900">Jornada do Paciente</h1>
           <p className="text-sm text-gray-500 mt-1">{patients.length} paciente{patients.length !== 1 ? 's' : ''} cadastrado{patients.length !== 1 ? 's' : ''}</p>
         </div>
-        <NewPatientButton />
+        <div className="flex items-center gap-2">
+          <Link href="/lixeira" className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 rounded-lg hover:bg-gray-100 transition-colors">
+            🗑️ Lixeira
+          </Link>
+          <NewPatientButton />
+        </div>
       </div>
       <div className="mb-6">
         <RelatorioUltimaSemana />
