@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { RelatorioUltimaSemana } from '@/components/RelatorioUltimaSemana'
 
-type Tab = 'cards' | 'itens' | 'semana' | 'inativos'
+type Tab = 'cards' | 'itens' | 'semana' | 'inativos' | 'concluidos'
 
 interface PatientOption { id: number; name: string }
 
@@ -257,14 +257,71 @@ function ItensSent({ patients }: { patients: PatientOption[] }) {
   )
 }
 
-// ── Aba: Sem atualização na evolução ────────────────────────────────────────
+// ── Aba: Concluídos (100%) ───────────────────────────────────────────────────
 
-const PRESET_OPTIONS = [
-  { label: '7 dias', days: 7 },
-  { label: '14 dias', days: 14 },
-  { label: '30 dias', days: 30 },
-  { label: '60 dias', days: 60 },
-]
+function Concluidos() {
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState<{
+    total: number
+    patients: { id: number; name: string; start_date: string; duration: string; completed_count: number }[]
+  } | null>(null)
+
+  async function handleSearch(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    const res = await fetch('/api/relatorio/concluidos')
+    setResult(await res.json())
+    setLoading(false)
+  }
+
+  return (
+    <div className="space-y-5">
+      <form onSubmit={handleSearch} className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
+        <div>
+          <h2 className="text-sm font-semibold text-gray-700">Tratamentos concluídos (100%)</h2>
+          <p className="text-xs text-gray-400 mt-1">Pacientes com todas as tarefas marcadas</p>
+        </div>
+        <button type="submit" disabled={loading}
+          className="w-full py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors">
+          {loading ? 'Buscando...' : '🎯 Buscar concluídos'}
+        </button>
+      </form>
+
+      {result && (
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+            <span className="text-sm font-semibold text-gray-700">Concluídos</span>
+            <span className="text-sm font-bold text-emerald-600">{result.total} paciente{result.total !== 1 ? 's' : ''}</span>
+          </div>
+          {result.patients.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-6">Nenhum paciente com 100% concluído</p>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {result.patients.map(p => (
+                <div key={p.id} className="px-5 py-3 flex items-center justify-between gap-3">
+                  <div>
+                    <a href={`/pacientes/${p.id}`} className="text-sm font-medium text-gray-900 hover:text-violet-700 transition-colors">
+                      {p.name}
+                    </a>
+                    {p.start_date && (
+                      <p className="text-xs text-gray-400">
+                        Início: {new Date(p.start_date).toLocaleDateString('pt-BR')}
+                        {p.duration && ` · ${p.duration} sem.`}
+                      </p>
+                    )}
+                  </div>
+                  <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full font-medium shrink-0">✓ 100%</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Aba: Sem atualização na evolução ────────────────────────────────────────
 
 const CONTENT_TYPES = [
   { key: 'evolution', label: 'Evolução' },
@@ -279,27 +336,18 @@ type ContentType = typeof CONTENT_TYPES[number]['key']
 
 function SemAtualizacao() {
   const [contentType, setContentType] = useState<ContentType>('evolution')
-  const [preset, setPreset] = useState<number>(7)
-  const [customDate, setCustomDate] = useState('')
-  const [useCustom, setUseCustom] = useState(false)
+  const [from, setFrom] = useState(firstOfMonth)
+  const [to, setTo] = useState(today)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<{
     total: number
     patients: { id: number; name: string; duration: string; last_update: string | null }[]
   } | null>(null)
 
-  function getSinceDate() {
-    if (useCustom && customDate) return customDate
-    const d = new Date()
-    d.setDate(d.getDate() - preset)
-    return d.toISOString().slice(0, 10)
-  }
-
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    const since = getSinceDate()
-    const res = await fetch(`/api/relatorio/sem-atualizacao?since=${since}&type=${contentType}`)
+    const res = await fetch(`/api/relatorio/sem-atualizacao?since=${from}&to=${to}&type=${contentType}`)
     setResult(await res.json())
     setLoading(false)
   }
@@ -332,48 +380,24 @@ function SemAtualizacao() {
           </div>
         </div>
 
-        {/* Prazo */}
+        {/* Período */}
         <div>
-          <label className="text-xs text-gray-500 mb-2 block">Prazo sem atualização</label>
-          <div className="flex flex-wrap gap-2 mb-3">
-            {PRESET_OPTIONS.map(o => (
-              <button
-                key={o.days}
-                type="button"
-                onClick={() => { setPreset(o.days); setUseCustom(false) }}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                  !useCustom && preset === o.days
-                    ? 'bg-violet-600 text-white border-violet-600'
-                    : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                {o.label}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setUseCustom(true)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                useCustom
-                  ? 'bg-violet-600 text-white border-violet-600'
-                  : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              Data específica
-            </button>
+          <label className="text-xs text-gray-500 mb-2 block">Período de início e fim</label>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">De</label>
+              <input type="date" value={from} onChange={e => { setFrom(e.target.value); setResult(null) }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Até</label>
+              <input type="date" value={to} onChange={e => { setTo(e.target.value); setResult(null) }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            </div>
           </div>
-          {useCustom && (
-            <input
-              type="date"
-              value={customDate}
-              onChange={e => setCustomDate(e.target.value)}
-              required={useCustom}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
-            />
-          )}
         </div>
 
-        <button type="submit" disabled={loading || (useCustom && !customDate)}
+        <button type="submit" disabled={loading || !from || !to}
           className="w-full py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
           {loading ? 'Buscando...' : 'Buscar'}
         </button>
@@ -425,6 +449,7 @@ export function RelatoriosClient({ patients }: { patients: PatientOption[] }) {
     { key: 'cards', label: 'Cards criados' },
     { key: 'itens', label: 'Itens enviados' },
     { key: 'inativos', label: 'Sem atualização' },
+    { key: 'concluidos', label: 'Concluídos' },
     { key: 'semana', label: 'Última semana' },
   ]
 
@@ -450,6 +475,7 @@ export function RelatoriosClient({ patients }: { patients: PatientOption[] }) {
       {tab === 'cards' && <CardsCreated />}
       {tab === 'itens' && <ItensSent patients={patients} />}
       {tab === 'inativos' && <SemAtualizacao />}
+      {tab === 'concluidos' && <Concluidos />}
       {tab === 'semana' && (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
           <RelatorioUltimaSemana />
