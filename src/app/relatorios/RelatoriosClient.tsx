@@ -263,7 +263,7 @@ function Concluidos() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<{
     total: number
-    patients: { id: number; name: string; start_date: string; duration: string; completed_count: number }[]
+    patients: { id: number; name: string; start_date: string; duration: string; completed_count: number; treatment_done: boolean }[]
   } | null>(null)
 
   async function handleSearch(e: React.FormEvent) {
@@ -278,8 +278,8 @@ function Concluidos() {
     <div className="space-y-5">
       <form onSubmit={handleSearch} className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
         <div>
-          <h2 className="text-sm font-semibold text-gray-700">Tratamentos concluídos (100%)</h2>
-          <p className="text-xs text-gray-400 mt-1">Pacientes com todas as tarefas marcadas</p>
+          <h2 className="text-sm font-semibold text-gray-700">Tratamentos concluídos</h2>
+          <p className="text-xs text-gray-400 mt-1">Pacientes com prazo encerrado ou todas as tarefas marcadas</p>
         </div>
         <button type="submit" disabled={loading}
           className="w-full py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors">
@@ -294,7 +294,7 @@ function Concluidos() {
             <span className="text-sm font-bold text-emerald-600">{result.total} paciente{result.total !== 1 ? 's' : ''}</span>
           </div>
           {result.patients.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-6">Nenhum paciente com 100% concluído</p>
+            <p className="text-sm text-gray-400 text-center py-6">Nenhum paciente concluído</p>
           ) : (
             <div className="divide-y divide-gray-100">
               {result.patients.map(p => (
@@ -303,14 +303,20 @@ function Concluidos() {
                     <a href={`/pacientes/${p.id}`} className="text-sm font-medium text-gray-900 hover:text-violet-700 transition-colors">
                       {p.name}
                     </a>
-                    {p.start_date && (
-                      <p className="text-xs text-gray-400">
-                        Início: {new Date(p.start_date).toLocaleDateString('pt-BR')}
-                        {p.duration && ` · ${p.duration} sem.`}
-                      </p>
+                    <p className="text-xs text-gray-400">
+                      {p.start_date && `Início: ${new Date(p.start_date).toLocaleDateString('pt-BR')}`}
+                      {p.duration && ` · ${p.duration} sem.`}
+                      {' · '}{p.completed_count} tarefas
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    {p.treatment_done && (
+                      <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full font-medium">✓ Prazo encerrado</span>
+                    )}
+                    {p.completed_count >= 19 && (
+                      <span className="text-xs px-2 py-0.5 bg-violet-100 text-violet-700 rounded-full font-medium">✓ 100% tarefas</span>
                     )}
                   </div>
-                  <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full font-medium shrink-0">✓ 100%</span>
                 </div>
               ))}
             </div>
