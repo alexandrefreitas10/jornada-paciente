@@ -16,6 +16,7 @@ interface Props {
   patientId: number
   initialMeasurements: Measurement[]
   initialEvolutionPhotos: EvolutionPhoto[]
+  initialPrescriptions: EvolutionPhoto[]
 }
 
 const emptyInput = (): MeasurementInput => ({
@@ -27,17 +28,21 @@ const emptyInput = (): MeasurementInput => ({
   tirzepatide_dose: null,
 })
 
-export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionPhotos }: Props) {
+export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionPhotos, initialPrescriptions }: Props) {
   const [measurements, setMeasurements] = useState<Measurement[]>(initialMeasurements)
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null)
   const [evolutionPhotos, setEvolutionPhotos] = useState<EvolutionPhoto[]>(initialEvolutionPhotos)
+  const [prescriptions, setPrescriptions] = useState<EvolutionPhoto[]>(initialPrescriptions)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [uploadingPrescription, setUploadingPrescription] = useState(false)
+  const [prescriptionError, setPrescriptionError] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editValues, setEditValues] = useState<MeasurementInput>(emptyInput())
   const [addingNew, setAddingNew] = useState(false)
   const [newValues, setNewValues] = useState<MeasurementInput>(emptyInput())
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const prescriptionInputRef = useRef<HTMLInputElement>(null)
 
   async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -71,6 +76,30 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  async function handlePrescriptionChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingPrescription(true)
+    setPrescriptionError(null)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('type', 'prescription')
+      const res = await fetch(`/api/patients/${patientId}/files`, { method: 'POST', body: formData })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Erro ao enviar prescrição')
+      }
+      const created: EvolutionPhoto = await res.json()
+      setPrescriptions(prev => [created, ...prev])
+    } catch (err) {
+      setPrescriptionError(err instanceof Error ? err.message : 'Erro desconhecido')
+    } finally {
+      setUploadingPrescription(false)
+      if (prescriptionInputRef.current) prescriptionInputRef.current.value = ''
     }
   }
 
@@ -138,44 +167,39 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
           onCancel={() => setPendingDeleteId(null)}
         />
       )}
-      {/* Upload de foto */}
-      <div className="flex items-center gap-3">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={handlePhotoChange}
-        />
+      {/* Upload de foto da tabela + prescrição */}
+      <div className="flex flex-wrap items-center gap-3">
+        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
           className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {uploading ? (
-            <>
-              <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8v8H4z"
-                />
-              </svg>
-              Extraindo dados...
-            </>
-          ) : (
-            <>📷 Enviar foto da tabela</>
-          )}
+            <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg> Extraindo dados...</>
+          ) : <>📷 Enviar foto da tabela</>}
         </button>
+
+        <input ref={prescriptionInputRef} type="file" accept="image/*" className="hidden" onChange={handlePrescriptionChange} />
+        <button
+          onClick={() => prescriptionInputRef.current?.click()}
+          disabled={uploadingPrescription}
+          title="Adicionar prescrição finalizada"
+          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {uploadingPrescription ? (
+            <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg> Enviando...</>
+          ) : <>📋 Prescrição finalizada</>}
+        </button>
+
         {uploadError && <p className="text-sm text-red-600">{uploadError}</p>}
+        {prescriptionError && <p className="text-sm text-red-600">{prescriptionError}</p>}
       </div>
 
       {/* Tabela de registros */}
@@ -362,6 +386,40 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
         <p className="text-sm text-gray-400 text-center py-8">
           Nenhum registro ainda. Envie uma foto ou adicione manualmente.
         </p>
+      )}
+
+      {/* Prescrições finalizadas */}
+      {prescriptions.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-semibold text-gray-700">📋 Prescrições finalizadas</h4>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {prescriptions.map((f) => (
+              <div key={f.id} className="rounded-xl overflow-hidden border border-emerald-200">
+                <a href={f.url} target="_blank" rel="noopener noreferrer">
+                  <img
+                    src={f.url}
+                    alt={f.original_name}
+                    className="w-full h-32 object-cover hover:opacity-90 transition-opacity"
+                  />
+                </a>
+                <div className="p-2 bg-emerald-50 flex items-center justify-between gap-1">
+                  <p className="text-xs text-gray-500 truncate">
+                    {new Date(f.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                  </p>
+                  <a
+                    href={`/api/patients/${patientId}/files/${f.id}/download`}
+                    className="text-xs text-emerald-600 hover:text-emerald-800 shrink-0"
+                    title="Baixar"
+                  >
+                    ⬇️
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Fotos de tabela armazenadas */}

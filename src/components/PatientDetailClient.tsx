@@ -65,10 +65,11 @@ interface Props {
   initialExams: FileRecord[]
   initialDiets: FileRecord[]
   initialEvolutionPhotos: FileRecord[]
+  initialPrescriptions: FileRecord[]
   initialSummaries: EvolutionSummary[]
 }
 
-export function PatientDetailClient({ patient, initialMeasurements, initialPhotos, initialBioimpedances, initialExams, initialDiets, initialEvolutionPhotos, initialSummaries }: Props) {
+export function PatientDetailClient({ patient, initialMeasurements, initialPhotos, initialBioimpedances, initialExams, initialDiets, initialEvolutionPhotos, initialPrescriptions, initialSummaries }: Props) {
   const [completedKeys, setCompletedKeys] = useState<string[]>(patient.completed_task_keys)
   const [editOpen, setEditOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<Tab>('tasks')
@@ -170,7 +171,7 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
           ))
         )}
         {activeTab === 'evolution' && (
-          <EvolutionTab patientId={patient.id} initialMeasurements={initialMeasurements} initialEvolutionPhotos={initialEvolutionPhotos} />
+          <EvolutionTab patientId={patient.id} initialMeasurements={initialMeasurements} initialEvolutionPhotos={initialEvolutionPhotos} initialPrescriptions={initialPrescriptions} />
         )}
         {activeTab === 'photos' && (
           <FilesTab patientId={patient.id} fileType="photo" initialFiles={initialPhotos} />
