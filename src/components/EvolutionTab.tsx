@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Measurement, MeasurementInput } from '@/lib/measurements'
 import { MeasurementChart } from './MeasurementChart'
 import { AdminPasswordModal } from './AdminPasswordModal'
@@ -37,12 +37,25 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadingPrescription, setUploadingPrescription] = useState(false)
   const [prescriptionError, setPrescriptionError] = useState<string | null>(null)
+  const [showPhotoMenu, setShowPhotoMenu] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editValues, setEditValues] = useState<MeasurementInput>(emptyInput())
   const [addingNew, setAddingNew] = useState(false)
   const [newValues, setNewValues] = useState<MeasurementInput>(emptyInput())
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
   const prescriptionInputRef = useRef<HTMLInputElement>(null)
+  const photoMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (photoMenuRef.current && !photoMenuRef.current.contains(e.target as Node)) {
+        setShowPhotoMenu(false)
+      }
+    }
+    if (showPhotoMenu) document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showPhotoMenu])
 
   async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -169,19 +182,42 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
       )}
       {/* Upload de foto da tabela + prescrição */}
       <div className="flex flex-wrap items-center gap-3">
-        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-          className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {uploading ? (
-            <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-            </svg> Extraindo dados...</>
-          ) : <>📷 Enviar foto da tabela</>}
-        </button>
+        {/* inputs hidden */}
+        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={e => { setShowPhotoMenu(false); handlePhotoChange(e) }} />
+        <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { setShowPhotoMenu(false); handlePhotoChange(e) }} />
+
+        {/* Botão foto da tabela com menu */}
+        <div className="relative" ref={photoMenuRef}>
+          <button
+            onClick={() => setShowPhotoMenu(v => !v)}
+            disabled={uploading}
+            className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {uploading ? (
+              <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg> Extraindo dados...</>
+            ) : <>📷 Enviar foto da tabela ▾</>}
+          </button>
+
+          {showPhotoMenu && !uploading && (
+            <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-10 overflow-hidden min-w-[200px]">
+              <button
+                onClick={() => { setShowPhotoMenu(false); fileInputRef.current?.click() }}
+                className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+              >
+                🖼️ Escolher da galeria
+              </button>
+              <button
+                onClick={() => { setShowPhotoMenu(false); cameraInputRef.current?.click() }}
+                className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 border-t border-gray-100"
+              >
+                📸 Tirar foto agora
+              </button>
+            </div>
+          )}
+        </div>
 
         <input ref={prescriptionInputRef} type="file" accept="image/*" className="hidden" onChange={handlePrescriptionChange} />
         <button
