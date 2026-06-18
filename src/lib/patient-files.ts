@@ -1,6 +1,6 @@
 import sql, { initSchema } from './db'
 
-export type FileType = 'photo' | 'bioimpedance' | 'exam' | 'diet' | 'evolution'
+export type FileType = 'photo' | 'bioimpedance' | 'exam' | 'diet' | 'evolution' | 'prescription'
 
 export interface PatientFile {
   id: number
