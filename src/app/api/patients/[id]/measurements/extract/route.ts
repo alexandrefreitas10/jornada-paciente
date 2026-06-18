@@ -49,7 +49,7 @@ export async function POST(
     | 'image/webp'
 
   const message = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+    model: 'claude-opus-4-8',
     max_tokens: 2048,
     messages: [
       {
@@ -92,6 +92,7 @@ Retorne somente o array JSON, sem texto adicional, sem markdown, sem explicaçõ
   })
 
   const rawText = (message.content[0] as { type: string; text: string }).text.trim()
+  console.log('[extract] resposta bruta do Claude:', rawText.slice(0, 500))
 
   // Remove markdown code blocks if present
   const text = rawText
