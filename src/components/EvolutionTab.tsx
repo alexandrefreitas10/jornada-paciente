@@ -38,6 +38,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
   const [uploadingPrescription, setUploadingPrescription] = useState(false)
   const [prescriptionError, setPrescriptionError] = useState<string | null>(null)
   const [showPhotoMenu, setShowPhotoMenu] = useState(false)
+  const [showPrescriptionMenu, setShowPrescriptionMenu] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editValues, setEditValues] = useState<MeasurementInput>(emptyInput())
   const [addingNew, setAddingNew] = useState(false)
@@ -45,17 +46,22 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const prescriptionInputRef = useRef<HTMLInputElement>(null)
+  const prescriptionCameraRef = useRef<HTMLInputElement>(null)
   const photoMenuRef = useRef<HTMLDivElement>(null)
+  const prescriptionMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (photoMenuRef.current && !photoMenuRef.current.contains(e.target as Node)) {
         setShowPhotoMenu(false)
       }
+      if (prescriptionMenuRef.current && !prescriptionMenuRef.current.contains(e.target as Node)) {
+        setShowPrescriptionMenu(false)
+      }
     }
-    if (showPhotoMenu) document.addEventListener('mousedown', handleClickOutside)
+    if (showPhotoMenu || showPrescriptionMenu) document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [showPhotoMenu])
+  }, [showPhotoMenu, showPrescriptionMenu])
 
   async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -219,20 +225,40 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
           )}
         </div>
 
-        <input ref={prescriptionInputRef} type="file" accept="image/*" className="hidden" onChange={handlePrescriptionChange} />
-        <button
-          onClick={() => prescriptionInputRef.current?.click()}
-          disabled={uploadingPrescription}
-          title="Adicionar prescrição finalizada"
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {uploadingPrescription ? (
-            <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-            </svg> Enviando...</>
-          ) : <>📋 Prescrição finalizada</>}
-        </button>
+        <input ref={prescriptionInputRef} type="file" accept="image/*" className="hidden" onChange={e => { setShowPrescriptionMenu(false); handlePrescriptionChange(e) }} />
+        <input ref={prescriptionCameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { setShowPrescriptionMenu(false); handlePrescriptionChange(e) }} />
+
+        <div className="relative" ref={prescriptionMenuRef}>
+          <button
+            onClick={() => setShowPrescriptionMenu(v => !v)}
+            disabled={uploadingPrescription}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {uploadingPrescription ? (
+              <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg> Enviando...</>
+            ) : <>📋 Prescrição finalizada ▾</>}
+          </button>
+
+          {showPrescriptionMenu && !uploadingPrescription && (
+            <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-10 overflow-hidden min-w-[200px]">
+              <button
+                onClick={() => { setShowPrescriptionMenu(false); prescriptionInputRef.current?.click() }}
+                className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+              >
+                🖼️ Escolher da galeria
+              </button>
+              <button
+                onClick={() => { setShowPrescriptionMenu(false); prescriptionCameraRef.current?.click() }}
+                className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 border-t border-gray-100"
+              >
+                📸 Tirar foto agora
+              </button>
+            </div>
+          )}
+        </div>
 
         {uploadError && <p className="text-sm text-red-600">{uploadError}</p>}
         {prescriptionError && <p className="text-sm text-red-600">{prescriptionError}</p>}
