@@ -39,6 +39,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
   const [uploadingPrescription, setUploadingPrescription] = useState(false)
   const [prescriptionError, setPrescriptionError] = useState<string | null>(null)
   const [cropFile, setCropFile] = useState<File | null>(null)
+  const [pendingDeleteTable, setPendingDeleteTable] = useState(false)
   const [showPhotoMenu, setShowPhotoMenu] = useState(false)
   const [showPrescriptionMenu, setShowPrescriptionMenu] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -71,6 +72,13 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
     if (fileInputRef.current) fileInputRef.current.value = ''
     if (cameraInputRef.current) cameraInputRef.current.value = ''
     setCropFile(file)
+  }
+
+  async function handleDeleteTable() {
+    await fetch(`/api/patients/${patientId}/measurements`, { method: 'DELETE' })
+    setMeasurements([])
+    setEvolutionPhotos([])
+    setPendingDeleteTable(false)
   }
 
   async function handleCropConfirm(blob: Blob) {
@@ -198,6 +206,12 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
           file={cropFile}
           onConfirm={handleCropConfirm}
           onCancel={() => setCropFile(null)}
+        />
+      )}
+      {pendingDeleteTable && (
+        <AdminPasswordModal
+          onConfirm={handleDeleteTable}
+          onCancel={() => setPendingDeleteTable(false)}
         />
       )}
       {/* Upload de foto da tabela + prescrição */}
@@ -524,13 +538,22 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
                   <p className="text-xs text-gray-500 truncate">
                     {new Date(f.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                   </p>
-                  <a
-                    href={`/api/patients/${patientId}/files/${f.id}/download`}
-                    className="text-xs text-violet-600 hover:text-violet-800 shrink-0"
-                    title="Baixar"
-                  >
-                    ⬇️
-                  </a>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <a
+                      href={`/api/patients/${patientId}/files/${f.id}/download`}
+                      className="text-xs text-violet-600 hover:text-violet-800"
+                      title="Baixar"
+                    >
+                      ⬇️
+                    </a>
+                    <button
+                      onClick={() => setPendingDeleteTable(true)}
+                      className="text-xs text-gray-400 hover:text-red-500"
+                      title="Excluir tabela e medições"
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}

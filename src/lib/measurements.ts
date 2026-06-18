@@ -93,3 +93,8 @@ export async function deleteMeasurement(id: number): Promise<void> {
   await initSchema()
   await sql`DELETE FROM weekly_measurements WHERE id = ${id}`
 }
+
+export async function deleteAllMeasurements(patientId: number): Promise<void> {
+  await initSchema()
+  await sql`DELETE FROM weekly_measurements WHERE patient_id = ${patientId}`
+}
