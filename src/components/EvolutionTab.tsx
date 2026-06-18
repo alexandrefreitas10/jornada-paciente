@@ -18,6 +18,7 @@ interface Props {
   initialMeasurements: Measurement[]
   initialEvolutionPhotos: EvolutionPhoto[]
   initialPrescriptions: EvolutionPhoto[]
+  currentUserName: string
 }
 
 const emptyInput = (): MeasurementInput => ({
@@ -29,7 +30,8 @@ const emptyInput = (): MeasurementInput => ({
   tirzepatide_dose: null,
 })
 
-export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionPhotos, initialPrescriptions }: Props) {
+export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionPhotos, initialPrescriptions, currentUserName }: Props) {
+  const canDeleteTableFree = currentUserName.toLowerCase() === 'carlos'
   const [measurements, setMeasurements] = useState<Measurement[]>(initialMeasurements)
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null)
   const [evolutionPhotos, setEvolutionPhotos] = useState<EvolutionPhoto[]>(initialEvolutionPhotos)
@@ -547,7 +549,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
                       ⬇️
                     </a>
                     <button
-                      onClick={() => setPendingDeleteTable(true)}
+                      onClick={() => canDeleteTableFree ? handleDeleteTable() : setPendingDeleteTable(true)}
                       className="text-xs text-gray-400 hover:text-red-500"
                       title="Excluir tabela e medições"
                     >

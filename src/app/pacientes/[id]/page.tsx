@@ -5,12 +5,15 @@ import { listPatientFiles } from '@/lib/patient-files'
 import { listEvolutionSummaries } from '@/lib/evolution-summaries'
 import { getSignedDownloadUrl } from '@/lib/s3'
 import { PatientDetailClient } from '@/components/PatientDetailClient'
+import { auth } from '@/auth'
 
 export const dynamic = 'force-dynamic'
 
 export default async function PatientPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const patientId = Number(id)
+  const session = await auth()
+  const currentUserName = session?.user?.name ?? ''
 
   const [patient, measurements, photos, bioimpedances, exams, diets, evolutionPhotos, prescriptions, summaries] = await Promise.all([
     getPatient(patientId),
@@ -49,6 +52,7 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
       initialEvolutionPhotos={initialEvolutionPhotos}
       initialPrescriptions={initialPrescriptions}
       initialSummaries={summaries}
+      currentUserName={currentUserName}
     />
   )
 }
