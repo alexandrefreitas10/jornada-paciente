@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import sharp from 'sharp'
 import { createMeasurement, listMeasurements, MeasurementInput } from '@/lib/measurements'
 import { uploadFile, deleteFile } from '@/lib/s3'
 import { createPatientFile, listPatientFiles, deletePatientFile } from '@/lib/patient-files'
@@ -34,7 +35,9 @@ export async function POST(
   }
 
   const arrayBuffer = await photo.arrayBuffer()
-  const buffer = Buffer.from(arrayBuffer)
+  const rawBuffer = Buffer.from(arrayBuffer)
+  // Auto-rotate based on EXIF orientation (fixes sideways mobile camera photos)
+  const buffer = await sharp(rawBuffer).rotate().toBuffer()
   const base64 = buffer.toString('base64')
   const mediaType = (photo.type || 'image/jpeg') as
     | 'image/jpeg'
