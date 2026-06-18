@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Measurement, MeasurementInput } from '@/lib/measurements'
 import { MeasurementChart } from './MeasurementChart'
 import { AdminPasswordModal } from './AdminPasswordModal'
+import { ImageCropModal } from './ImageCropModal'
 
 interface EvolutionPhoto {
   id: number
@@ -37,6 +38,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadingPrescription, setUploadingPrescription] = useState(false)
   const [prescriptionError, setPrescriptionError] = useState<string | null>(null)
+  const [cropFile, setCropFile] = useState<File | null>(null)
   const [showPhotoMenu, setShowPhotoMenu] = useState(false)
   const [showPrescriptionMenu, setShowPrescriptionMenu] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -63,14 +65,21 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showPhotoMenu, showPrescriptionMenu])
 
-  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    if (fileInputRef.current) fileInputRef.current.value = ''
+    if (cameraInputRef.current) cameraInputRef.current.value = ''
+    setCropFile(file)
+  }
+
+  async function handleCropConfirm(blob: Blob) {
+    setCropFile(null)
     setUploading(true)
     setUploadError(null)
     try {
       const formData = new FormData()
-      formData.append('photo', file)
+      formData.append('photo', blob, 'tabela.jpg')
       const res = await fetch(`/api/patients/${patientId}/measurements/extract`, {
         method: 'POST',
         body: formData,
@@ -84,7 +93,6 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
       setMeasurements((prev) =>
         [...prev, ...newItems].sort((a, b) => (a.week ?? 999) - (b.week ?? 999))
       )
-      // Recarrega lista de fotos para incluir a recém-salva
       const photosRes = await fetch(`/api/patients/${patientId}/files?type=evolution`)
       if (photosRes.ok) {
         const photos: EvolutionPhoto[] = await photosRes.json()
@@ -94,7 +102,6 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
       setUploadError(err instanceof Error ? err.message : 'Erro desconhecido')
     } finally {
       setUploading(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
@@ -184,6 +191,13 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
         <AdminPasswordModal
           onConfirm={() => handleDelete(pendingDeleteId)}
           onCancel={() => setPendingDeleteId(null)}
+        />
+      )}
+      {cropFile && (
+        <ImageCropModal
+          file={cropFile}
+          onConfirm={handleCropConfirm}
+          onCancel={() => setCropFile(null)}
         />
       )}
       {/* Upload de foto da tabela + prescrição */}
