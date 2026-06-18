@@ -49,8 +49,8 @@ export async function POST(
     | 'image/webp'
 
   const message = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 1024,
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 2048,
     messages: [
       {
         role: 'user',
@@ -61,18 +61,30 @@ export async function POST(
           },
           {
             type: 'text',
-            text: `Esta imagem contém uma tabela de acompanhamento de paciente com várias semanas. Extraia TODAS as linhas que tiverem pelo menos um dado preenchido e retorne APENAS um array JSON válido. Cada item do array deve ter estes campos (use null quando não estiver presente):
+            text: `Esta imagem contém uma tabela de acompanhamento de paciente com colunas para semana, data, peso, circunferências e dose de medicação.
+
+Extraia TODAS as linhas que tiverem pelo menos um dado preenchido e retorne APENAS um array JSON válido com os campos abaixo.
+
+REGRAS IMPORTANTES:
+- Os campos "weight", "abdominal_circumference", "waist_circumference" e "tirzepatide_dose" devem ser SEMPRE números decimais ou null — NUNCA texto.
+- Se uma célula dessas colunas contiver texto (como "levou", "não", "sim", ou qualquer palavra), coloque null nesse campo.
+- Somente extraia números para campos numéricos.
+- O campo "date" pode ser string (ex: "15/05/26") ou null.
+- O campo "week" deve ser inteiro (ex: 1 para "1ª SEMANA") ou null.
+
+Formato esperado:
 [
   {
-    "week": <número inteiro da semana, ex: 1 para "1ª SEMANA">,
-    "date": <data como string, ex: "15/05/26">,
-    "weight": <peso em kg como número decimal, ex: 54.8>,
-    "abdominal_circumference": <circunferência do abdômen em cm como número decimal>,
-    "waist_circumference": <circunferência da cintura em cm como número decimal>,
-    "tirzepatide_dose": <dose em mg como número decimal, ex: 4>
+    "week": 1,
+    "date": "15/05/26",
+    "weight": 54.8,
+    "abdominal_circumference": 82.0,
+    "waist_circumference": 75.5,
+    "tirzepatide_dose": 4
   }
 ]
-Ignore linhas completamente vazias. Retorne somente o array JSON, sem texto adicional, sem markdown.`,
+
+Retorne somente o array JSON, sem texto adicional, sem markdown, sem explicações.`,
           },
         ],
       },
