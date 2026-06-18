@@ -92,7 +92,6 @@ Retorne somente o array JSON, sem texto adicional, sem markdown, sem explicaçõ
   })
 
   const rawText = (message.content[0] as { type: string; text: string }).text.trim()
-  console.log('[extract] resposta bruta do Claude:', rawText.slice(0, 500))
 
   // Remove markdown code blocks if present
   const text = rawText
