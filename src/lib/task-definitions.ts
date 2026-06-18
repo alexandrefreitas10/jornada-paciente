@@ -57,6 +57,7 @@ export const TASK_PHASES: TaskPhase[] = [
     label: 'Nutrição',
     icon: '🥗',
     tasks: [
+      { key: 'nao_vai_nutri', label: 'Não vai para nutri' },
       { key: 'enviado_nutri', label: 'Enviado para nutri' },
       { key: 'agendado_nutri', label: 'Agendado com a nutri' },
       { key: 'dieta_recebida', label: 'Dieta recebida' },
