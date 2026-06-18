@@ -6,6 +6,9 @@ import { uploadFile, deleteFile } from '@/lib/s3'
 import { createPatientFile, listPatientFiles, deletePatientFile } from '@/lib/patient-files'
 import { randomUUID } from 'crypto'
 
+export const maxDuration = 60
+export const dynamic = 'force-dynamic'
+
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 function toNum(v: unknown): number | null {

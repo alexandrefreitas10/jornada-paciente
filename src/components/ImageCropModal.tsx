@@ -101,26 +101,25 @@ export function ImageCropModal({ file, onConfirm, onCancel }: Props) {
     if (!imgRef.current) return
     const img = imgRef.current
     const sel = selection
-    const offscreen = document.createElement('canvas')
+    const MAX_PX = 2400 // cap longest side to keep file < ~3MB
+
+    let srcX = 0, srcY = 0, srcW = img.naturalWidth, srcH = img.naturalHeight
     if (sel && sel.w > 4 && sel.h > 4) {
-      // crop
-      offscreen.width = Math.round(sel.w * scaleRef.current.x)
-      offscreen.height = Math.round(sel.h * scaleRef.current.y)
-      offscreen.getContext('2d')!.drawImage(
-        img,
-        sel.x * scaleRef.current.x, sel.y * scaleRef.current.y,
-        sel.w * scaleRef.current.x, sel.h * scaleRef.current.y,
-        0, 0, offscreen.width, offscreen.height
-      )
-    } else {
-      // no crop, use full image
-      offscreen.width = img.naturalWidth
-      offscreen.height = img.naturalHeight
-      offscreen.getContext('2d')!.drawImage(img, 0, 0)
+      srcX = Math.round(sel.x * scaleRef.current.x)
+      srcY = Math.round(sel.y * scaleRef.current.y)
+      srcW = Math.round(sel.w * scaleRef.current.x)
+      srcH = Math.round(sel.h * scaleRef.current.y)
     }
+
+    const scale = Math.min(1, MAX_PX / Math.max(srcW, srcH))
+    const offscreen = document.createElement('canvas')
+    offscreen.width = Math.round(srcW * scale)
+    offscreen.height = Math.round(srcH * scale)
+    offscreen.getContext('2d')!.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, offscreen.width, offscreen.height)
+
     offscreen.toBlob(blob => {
       if (blob) onConfirm(blob)
-    }, 'image/png')
+    }, 'image/jpeg', 0.92)
   }, [selection, onConfirm])
 
   return (
