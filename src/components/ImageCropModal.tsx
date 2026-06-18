@@ -120,7 +120,7 @@ export function ImageCropModal({ file, onConfirm, onCancel }: Props) {
     }
     offscreen.toBlob(blob => {
       if (blob) onConfirm(blob)
-    }, 'image/jpeg', 0.92)
+    }, 'image/png')
   }, [selection, onConfirm])
 
   return (
