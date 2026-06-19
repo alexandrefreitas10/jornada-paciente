@@ -35,7 +35,6 @@ export function TermsTab({ patientId }: Props) {
   const [creating, setCreating] = useState(false)
   const [title, setTitle] = useState('')
   const [file, setFile] = useState<File | null>(null)
-  const [fieldsText, setFieldsText] = useState('')
   const [saving, setSaving] = useState(false)
   const [sending, setSending] = useState<number | null>(null)
   const [copiedId, setCopiedId] = useState<number | null>(null)
@@ -55,13 +54,11 @@ export function TermsTab({ patientId }: Props) {
       const fd = new FormData()
       fd.append('title', title)
       fd.append('file', file)
-      const fields = fieldsText.split('\n').map(f => f.trim()).filter(Boolean)
-      fd.append('fields', JSON.stringify(fields))
       const res = await fetch(`/api/patients/${patientId}/terms`, { method: 'POST', body: fd })
       if (res.ok) {
         const term: Term = await res.json()
         setTerms(prev => [term, ...prev])
-        setTitle(''); setFile(null); setFieldsText(''); setCreating(false)
+        setTitle(''); setFile(null); setCreating(false)
         if (fileRef.current) fileRef.current.value = ''
       }
     } finally {
@@ -135,19 +132,6 @@ export function TermsTab({ patientId }: Props) {
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300"
           />
           <div>
-            <label className="block text-xs text-gray-500 mb-1">
-              Campos para preenchimento pelo paciente
-              <span className="text-gray-400 font-normal"> (um por linha, ex: Nome completo)</span>
-            </label>
-            <textarea
-              value={fieldsText}
-              onChange={e => setFieldsText(e.target.value)}
-              placeholder={"Nome completo\nCPF\nData de nascimento"}
-              rows={3}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300 resize-none"
-            />
-          </div>
-          <div>
             <label className="block text-xs text-gray-500 mb-1">Arquivo (PDF ou Word)</label>
             <input
               ref={fileRef}
@@ -167,7 +151,7 @@ export function TermsTab({ patientId }: Props) {
               {saving ? 'Enviando…' : 'Salvar'}
             </button>
             <button
-              onClick={() => { setCreating(false); setTitle(''); setFile(null); setFieldsText('') }}
+              onClick={() => { setCreating(false); setTitle(''); setFile(null) }}
               className="px-4 py-2 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50"
             >
               Cancelar
