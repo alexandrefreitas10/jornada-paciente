@@ -188,7 +188,7 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
                   <p className="text-sm font-semibold text-gray-700">Preencha os espaços do documento</p>
                   <p className="text-xs text-gray-400 mt-0.5">Campos opcionais — preencha apenas os que existem no seu documento.</p>
                 </div>
-                {['Nome completo', 'CPF', 'Data de nascimento', 'E-mail', 'Telefone', 'Endereço'].map(field => (
+                {['CPF', 'Data de nascimento', 'E-mail', 'Telefone'].map(field => (
                   <div key={field}>
                     <label className="block text-xs font-medium text-gray-500 mb-1">{field}</label>
                     <input
