@@ -7,6 +7,7 @@ interface Term {
   title: string
   file_name: string | null
   file_mime: string | null
+  fields: string[]
   status: string
   signer_name: string | null
 }
@@ -16,7 +17,8 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
   const [term, setTerm] = useState<Term | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [name, setName] = useState('')
-  const [filledFile, setFilledFile] = useState<File | null>(null)
+  const [freeText, setFreeText] = useState('')
+  const [filledFields, setFilledFields] = useState<Record<string, string>>({})
   const [step, setStep] = useState<'loading' | 'view' | 'sign' | 'done' | 'already'>('loading')
   const [submitting, setSubmitting] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -75,11 +77,16 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
     if (!pixels.some(p => p !== 0)) { alert('Por favor, desenhe sua assinatura.'); return }
     const signatureData = c.toDataURL('image/png')
     setSubmitting(true)
+
+    // Build filledFields: named fields + free text
+    const allFields: Record<string, string> = { ...filledFields }
+    if (freeText.trim()) allFields['Informações adicionais'] = freeText.trim()
+
     try {
       const fd = new FormData()
       fd.append('signerName', name)
       fd.append('signatureData', signatureData)
-      if (filledFile) fd.append('filledFile', filledFile)
+      fd.append('filledFields', JSON.stringify(allFields))
       const res = await fetch(`/api/terms/sign/${token}`, { method: 'POST', body: fd })
       if (res.ok) { setStep('done') }
       else { const e = await res.json(); alert(e.error || 'Erro ao assinar.') }
@@ -90,6 +97,8 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
 
   const isPdf = term?.file_mime === 'application/pdf'
   const fileUrl = `/api/terms/sign/${token}/file`
+  const signedFileUrl = `/api/terms/sign/${token}/file?signed=1`
+  const hasNamedFields = (term?.fields?.length ?? 0) > 0
 
   if (error) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
@@ -109,7 +118,7 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
         <p className="text-4xl">✅</p>
         <p className="text-lg font-semibold text-gray-800">Termo já assinado</p>
         <p className="text-sm text-gray-500">Assinado por <strong>{term?.signer_name}</strong>.</p>
-        <a href={fileUrl} className="inline-block mt-4 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">⬇️ Baixar documento</a>
+        <a href={signedFileUrl} className="inline-block mt-4 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">⬇️ Baixar comprovante</a>
       </div>
     </div>
   )
@@ -120,7 +129,7 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
         <p className="text-5xl">✅</p>
         <p className="text-xl font-bold text-gray-800">Assinado com sucesso!</p>
         <p className="text-sm text-gray-500">Obrigado, <strong>{name}</strong>. Sua assinatura foi registrada.</p>
-        <a href={fileUrl} className="inline-block mt-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">⬇️ Baixar documento</a>
+        <a href={signedFileUrl} className="inline-block mt-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">⬇️ Baixar comprovante assinado</a>
       </div>
     </div>
   )
@@ -143,10 +152,10 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
                   <p className="text-4xl">📄</p>
                   <p className="text-sm text-gray-600 font-medium">{term?.file_name}</p>
                   <p className="text-xs text-gray-400 px-2">
-                    Baixe o documento, preencha com os seus dados e salve no seu celular. Depois volte aqui para enviar o documento preenchido e assinar.
+                    Leia o documento antes de assinar. Você pode baixá-lo para visualizar no celular.
                   </p>
                   <a href={fileUrl} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
-                    ⬇️ Baixar e preencher
+                    ⬇️ Baixar documento
                   </a>
                 </div>
               )}
@@ -157,34 +166,61 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
             )}
 
             <button onClick={() => setStep('sign')} className="w-full py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors">
-              Preenchi o documento — ir para assinatura →
+              Preencher e assinar →
             </button>
           </>
         )}
 
         {step === 'sign' && (
           <>
-            <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
-              {/* Upload do documento preenchido */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-5">
+
+              {/* Named fields (if admin defined them) */}
+              {hasNamedFields && (
+                <div className="space-y-4">
+                  <div>
+                    <h2 className="text-sm font-semibold text-gray-700">Preencha os campos do documento</h2>
+                    <p className="text-xs text-gray-400 mt-0.5">Correspondem aos espaços em branco (___) do documento.</p>
+                  </div>
+                  {term!.fields.map(field => (
+                    <div key={field}>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{field}</label>
+                      <input
+                        type="text"
+                        value={filledFields[field] ?? ''}
+                        onChange={e => setFilledFields(prev => ({ ...prev, [field]: e.target.value }))}
+                        placeholder={`Digite ${field.toLowerCase()}`}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                      />
+                    </div>
+                  ))}
+                  <hr className="border-gray-100" />
+                </div>
+              )}
+
+              {/* Free text — always shown */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Documento preenchido <span className="text-gray-400 font-normal">(opcional)</span>
+                  {hasNamedFields ? 'Observações adicionais' : 'Informações para preencher no documento'}
+                  <span className="text-gray-400 font-normal text-xs ml-1">(opcional)</span>
                 </label>
-                <p className="text-xs text-gray-400 mb-2">Se você preencheu o documento, envie a versão preenchida aqui.</p>
-                <input
-                  type="file"
-                  accept=".pdf,.doc,.docx"
-                  onChange={e => setFilledFile(e.target.files?.[0] ?? null)}
-                  className="block w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700"
+                {!hasNamedFields && (
+                  <p className="text-xs text-gray-400 mb-2">Preencha aqui os espaços em branco (___) do documento, identificando cada informação.</p>
+                )}
+                <textarea
+                  value={freeText}
+                  onChange={e => setFreeText(e.target.value)}
+                  placeholder={hasNamedFields ? 'Alguma observação?' : 'Ex:\nNome completo: João da Silva\nCPF: 000.000.000-00\nData de nascimento: 01/01/1990'}
+                  rows={hasNamedFields ? 2 : 5}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
                 />
-                {filledFile && <p className="text-xs text-green-600 mt-1">✅ {filledFile.name}</p>}
               </div>
 
               <hr className="border-gray-100" />
 
               {/* Nome */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nome completo</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nome completo <span className="text-red-400">*</span></label>
                 <input
                   type="text"
                   value={name}
@@ -197,7 +233,7 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
               {/* Assinatura */}
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-sm font-medium text-gray-700">Assinatura</label>
+                  <label className="text-sm font-medium text-gray-700">Assinatura <span className="text-red-400">*</span></label>
                   <button onClick={clearCanvas} className="text-xs text-gray-400 hover:text-gray-600">Limpar</button>
                 </div>
                 <canvas
@@ -209,7 +245,7 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
                   onMouseDown={onStart} onMouseMove={onMove} onMouseUp={onEnd} onMouseLeave={onEnd}
                   onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd}
                 />
-                <p className="text-xs text-gray-400 mt-1 text-center">Desenhe sua assinatura com o dedo</p>
+                <p className="text-xs text-gray-400 mt-1 text-center">Desenhe sua assinatura com o dedo ou mouse</p>
               </div>
             </div>
 

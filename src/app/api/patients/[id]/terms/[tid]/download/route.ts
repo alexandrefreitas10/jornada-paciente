@@ -9,6 +9,14 @@ export async function GET(
   const { tid } = await params
   const term = await getTermById(Number(tid))
   if (!term?.file_s3_key) return NextResponse.json({ error: 'Arquivo não encontrado' }, { status: 404 })
-  const url = await getSignedDownloadUrl(term.file_s3_key)
+
+  // Prefer the signed version (with embedded signature) when available
+  const key = term.signed_file_s3_key ?? term.file_s3_key
+  const isSignedDocx = term.signed_file_s3_key?.endsWith('.docx')
+  const fileName = isSignedDocx
+    ? (term.file_name?.replace(/\.[^.]+$/, '') ?? 'termo') + '_assinado.docx'
+    : term.file_name ?? 'documento'
+
+  const url = await getSignedDownloadUrl(key)
   return NextResponse.redirect(url)
 }

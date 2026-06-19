@@ -45,6 +45,9 @@ export async function POST(
   const buffer = Buffer.from(await file.arrayBuffer())
   await uploadFile(s3Key, buffer, file.type as never)
 
-  const term = await createPatientTerm(Number(id), title, createdBy, s3Key, file.name, file.type)
+  const fieldsRaw = (formData.get('fields') as string | null) ?? '[]'
+  const fields: string[] = JSON.parse(fieldsRaw).filter((f: string) => f.trim())
+
+  const term = await createPatientTerm(Number(id), title, createdBy, s3Key, file.name, file.type, fields)
   return Response.json(term, { status: 201 })
 }

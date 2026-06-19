@@ -8,6 +8,9 @@ export interface PatientTerm {
   file_s3_key: string | null
   file_name: string | null
   file_mime: string | null
+  fields: string[]
+  filled_fields: Record<string, string>
+  signed_file_s3_key: string | null
   status: 'draft' | 'sent' | 'signed'
   created_by: string
   created_at: string
@@ -32,11 +35,12 @@ export async function createPatientTerm(
   fileS3Key: string,
   fileName: string,
   fileMime: string,
+  fields: string[] = [],
 ): Promise<PatientTerm> {
   await initSchema()
   const [row] = await sql<PatientTerm[]>`
-    INSERT INTO patient_terms (patient_id, title, content, file_s3_key, file_name, file_mime, created_by)
-    VALUES (${patientId}, ${title}, '', ${fileS3Key}, ${fileName}, ${fileMime}, ${createdBy})
+    INSERT INTO patient_terms (patient_id, title, content, file_s3_key, file_name, file_mime, created_by, fields)
+    VALUES (${patientId}, ${title}, '', ${fileS3Key}, ${fileName}, ${fileMime}, ${createdBy}, ${JSON.stringify(fields)})
     RETURNING *
   `
   return row
@@ -66,11 +70,16 @@ export async function getTermByToken(token: string): Promise<PatientTerm | null>
   return row ?? null
 }
 
-export async function signTerm(token: string, signerName: string, signatureData: string): Promise<PatientTerm> {
+export async function signTerm(
+  token: string, signerName: string, signatureData: string,
+  filledFields: Record<string, string> = {}, signedFileS3Key: string | null = null
+): Promise<PatientTerm> {
   await initSchema()
   const [row] = await sql<PatientTerm[]>`
     UPDATE patient_terms
-    SET status = 'signed', signed_at = NOW(), signer_name = ${signerName}, signature_data = ${signatureData}
+    SET status = 'signed', signed_at = NOW(), signer_name = ${signerName},
+        signature_data = ${signatureData}, filled_fields = ${JSON.stringify(filledFields)},
+        signed_file_s3_key = ${signedFileS3Key}
     WHERE sign_token = ${token}
     RETURNING *
   `
@@ -78,13 +87,17 @@ export async function signTerm(token: string, signerName: string, signatureData:
 }
 
 export async function signTermWithFile(
-  token: string, signerName: string, signatureData: string, filledS3Key: string, filledFileName: string
+  token: string, signerName: string, signatureData: string,
+  filledS3Key: string, filledFileName: string,
+  filledFields: Record<string, string> = {}, signedFileS3Key: string | null = null
 ): Promise<PatientTerm> {
   await initSchema()
   const [row] = await sql<PatientTerm[]>`
     UPDATE patient_terms
-    SET status = 'signed', signed_at = NOW(), signer_name = ${signerName}, signature_data = ${signatureData},
-        file_s3_key = ${filledS3Key}, file_name = ${filledFileName}
+    SET status = 'signed', signed_at = NOW(), signer_name = ${signerName},
+        signature_data = ${signatureData}, filled_fields = ${JSON.stringify(filledFields)},
+        file_s3_key = ${filledS3Key}, file_name = ${filledFileName},
+        signed_file_s3_key = ${signedFileS3Key}
     WHERE sign_token = ${token}
     RETURNING *
   `

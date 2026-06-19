@@ -32,6 +32,12 @@ export async function getSignedDownloadUrl(key: string, expiresIn = 300): Promis
   return getSignedUrl(s3, new GetObjectCommand({ Bucket: BUCKET, Key: key }), { expiresIn })
 }
 
+export async function downloadFile(key: string): Promise<Buffer> {
+  const res = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: key }))
+  const bytes = await res.Body!.transformToByteArray()
+  return Buffer.from(bytes)
+}
+
 export async function getFileStream(key: string): Promise<{ body: ReadableStream; contentType: string }> {
   const res = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: key }))
   return {
