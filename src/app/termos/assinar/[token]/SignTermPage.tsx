@@ -9,7 +9,6 @@ interface Term {
   file_mime: string | null
   status: string
   signer_name: string | null
-  signed_at: string | null
 }
 
 export function SignTermPage({ params }: { params: Promise<{ token: string }> }) {
@@ -17,6 +16,7 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
   const [term, setTerm] = useState<Term | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [name, setName] = useState('')
+  const [filledFile, setFilledFile] = useState<File | null>(null)
   const [step, setStep] = useState<'loading' | 'view' | 'sign' | 'done' | 'already'>('loading')
   const [submitting, setSubmitting] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -51,8 +51,8 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
     const c = canvasRef.current!
     drawing.current = true
     const p = getPos(e, c)
-    c.getContext('2d')!.beginPath()
-    c.getContext('2d')!.moveTo(p.x, p.y)
+    const ctx = c.getContext('2d')!
+    ctx.beginPath(); ctx.moveTo(p.x, p.y)
   }
 
   function onMove(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
@@ -62,11 +62,8 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
     const ctx = c.getContext('2d')!
     const p = getPos(e, c)
     ctx.lineTo(p.x, p.y)
-    ctx.strokeStyle = '#1e3a5f'
-    ctx.lineWidth = 2.5
-    ctx.lineCap = 'round'
-    ctx.lineJoin = 'round'
-    ctx.stroke()
+    ctx.strokeStyle = '#1e3a5f'; ctx.lineWidth = 2.5
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke()
   }
 
   function onEnd() { drawing.current = false }
@@ -79,11 +76,11 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
     const signatureData = c.toDataURL('image/png')
     setSubmitting(true)
     try {
-      const res = await fetch(`/api/terms/sign/${token}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signerName: name, signatureData }),
-      })
+      const fd = new FormData()
+      fd.append('signerName', name)
+      fd.append('signatureData', signatureData)
+      if (filledFile) fd.append('filledFile', filledFile)
+      const res = await fetch(`/api/terms/sign/${token}`, { method: 'POST', body: fd })
       if (res.ok) { setStep('done') }
       else { const e = await res.json(); alert(e.error || 'Erro ao assinar.') }
     } finally {
@@ -112,9 +109,7 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
         <p className="text-4xl">✅</p>
         <p className="text-lg font-semibold text-gray-800">Termo já assinado</p>
         <p className="text-sm text-gray-500">Assinado por <strong>{term?.signer_name}</strong>.</p>
-        <a href={fileUrl} className="inline-block mt-4 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">
-          ⬇️ Baixar documento
-        </a>
+        <a href={fileUrl} className="inline-block mt-4 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">⬇️ Baixar documento</a>
       </div>
     </div>
   )
@@ -125,9 +120,7 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
         <p className="text-5xl">✅</p>
         <p className="text-xl font-bold text-gray-800">Assinado com sucesso!</p>
         <p className="text-sm text-gray-500">Obrigado, <strong>{name}</strong>. Sua assinatura foi registrada.</p>
-        <a href={fileUrl} className="inline-block mt-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">
-          ⬇️ Baixar documento
-        </a>
+        <a href={fileUrl} className="inline-block mt-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">⬇️ Baixar documento</a>
       </div>
     </div>
   )
@@ -142,41 +135,29 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
 
         {step === 'view' && (
           <>
-            {/* Visualizador / download */}
             <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
               {isPdf ? (
-                <iframe
-                  src={fileUrl}
-                  className="w-full"
-                  style={{ height: '60vh', minHeight: 300 }}
-                  title="Documento"
-                />
+                <iframe src={fileUrl} className="w-full" style={{ height: '65vh', minHeight: 300 }} title="Documento" />
               ) : (
                 <div className="p-6 text-center space-y-3">
                   <p className="text-4xl">📄</p>
                   <p className="text-sm text-gray-600 font-medium">{term?.file_name}</p>
-                  <p className="text-xs text-gray-400">Baixe o documento, leia com atenção e volte aqui para assinar.</p>
-                  <a
-                    href={fileUrl}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
-                  >
-                    ⬇️ Baixar documento
+                  <p className="text-xs text-gray-400 px-2">
+                    Baixe o documento, preencha com os seus dados e salve no seu celular. Depois volte aqui para enviar o documento preenchido e assinar.
+                  </p>
+                  <a href={fileUrl} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
+                    ⬇️ Baixar e preencher
                   </a>
                 </div>
               )}
             </div>
 
             {isPdf && (
-              <a href={fileUrl} className="block text-center text-sm text-blue-600 hover:underline">
-                ⬇️ Baixar PDF
-              </a>
+              <a href={fileUrl} className="block text-center text-sm text-blue-600 hover:underline">⬇️ Baixar PDF</a>
             )}
 
-            <button
-              onClick={() => setStep('sign')}
-              className="w-full py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors"
-            >
-              Li o documento e desejo assinar →
+            <button onClick={() => setStep('sign')} className="w-full py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors">
+              Preenchi o documento — ir para assinatura →
             </button>
           </>
         )}
@@ -184,6 +165,24 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
         {step === 'sign' && (
           <>
             <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
+              {/* Upload do documento preenchido */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Documento preenchido <span className="text-gray-400 font-normal">(opcional)</span>
+                </label>
+                <p className="text-xs text-gray-400 mb-2">Se você preencheu o documento, envie a versão preenchida aqui.</p>
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx"
+                  onChange={e => setFilledFile(e.target.files?.[0] ?? null)}
+                  className="block w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700"
+                />
+                {filledFile && <p className="text-xs text-green-600 mt-1">✅ {filledFile.name}</p>}
+              </div>
+
+              <hr className="border-gray-100" />
+
+              {/* Nome */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nome completo</label>
                 <input
@@ -195,6 +194,7 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
                 />
               </div>
 
+              {/* Assinatura */}
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-sm font-medium text-gray-700">Assinatura</label>
@@ -206,29 +206,17 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
                   height={160}
                   className="w-full border-2 border-dashed border-gray-300 rounded-xl bg-gray-50 cursor-crosshair"
                   style={{ touchAction: 'none' }}
-                  onMouseDown={onStart}
-                  onMouseMove={onMove}
-                  onMouseUp={onEnd}
-                  onMouseLeave={onEnd}
-                  onTouchStart={onStart}
-                  onTouchMove={onMove}
-                  onTouchEnd={onEnd}
+                  onMouseDown={onStart} onMouseMove={onMove} onMouseUp={onEnd} onMouseLeave={onEnd}
+                  onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd}
                 />
                 <p className="text-xs text-gray-400 mt-1 text-center">Desenhe sua assinatura com o dedo</p>
               </div>
             </div>
 
-            <button
-              onClick={handleSubmit}
-              disabled={submitting}
-              className="w-full py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors"
-            >
+            <button onClick={handleSubmit} disabled={submitting} className="w-full py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors">
               {submitting ? 'Enviando…' : '✅ Confirmar assinatura'}
             </button>
-
-            <button onClick={() => setStep('view')} className="w-full py-2 text-sm text-gray-500 hover:text-gray-700">
-              ← Ver documento novamente
-            </button>
+            <button onClick={() => setStep('view')} className="w-full py-2 text-sm text-gray-500 hover:text-gray-700">← Ver documento novamente</button>
           </>
         )}
       </div>

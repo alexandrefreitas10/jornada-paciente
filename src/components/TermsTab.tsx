@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { AdminPasswordModal } from './AdminPasswordModal'
 
 interface Term {
   id: number
@@ -38,6 +39,7 @@ export function TermsTab({ patientId }: Props) {
   const [sending, setSending] = useState<number | null>(null)
   const [copiedId, setCopiedId] = useState<number | null>(null)
   const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -79,9 +81,9 @@ export function TermsTab({ patientId }: Props) {
   }
 
   async function handleDelete(id: number) {
-    if (!confirm('Excluir este termo?')) return
     await fetch(`/api/patients/${patientId}/terms/${id}`, { method: 'DELETE' })
     setTerms(prev => prev.filter(t => t.id !== id))
+    setPendingDeleteId(null)
   }
 
   function getLink(token: string) {
@@ -104,6 +106,12 @@ export function TermsTab({ patientId }: Props) {
 
   return (
     <div className="space-y-4">
+      {pendingDeleteId !== null && (
+        <AdminPasswordModal
+          onConfirm={() => handleDelete(pendingDeleteId)}
+          onCancel={() => setPendingDeleteId(null)}
+        />
+      )}
       {!creating && (
         <button
           onClick={() => setCreating(true)}
@@ -243,15 +251,13 @@ export function TermsTab({ patientId }: Props) {
                     </button>
                   )}
 
-                  {/* Excluir */}
-                  {term.status !== 'signed' && (
-                    <button
-                      onClick={() => handleDelete(term.id)}
-                      className="px-3 py-1.5 text-xs text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50"
-                    >
-                      🗑️ Excluir
-                    </button>
-                  )}
+                  {/* Excluir (sempre, com senha admin) */}
+                  <button
+                    onClick={() => setPendingDeleteId(term.id)}
+                    className="px-3 py-1.5 text-xs text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50"
+                  >
+                    🗑️ Excluir
+                  </button>
                 </div>
               </div>
             )}

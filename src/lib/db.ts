@@ -111,6 +111,7 @@ export async function initSchema() {
   await sql.unsafe(`ALTER TABLE patient_terms ADD COLUMN IF NOT EXISTS file_s3_key TEXT`).catch(() => {})
   await sql.unsafe(`ALTER TABLE patient_terms ADD COLUMN IF NOT EXISTS file_name TEXT`).catch(() => {})
   await sql.unsafe(`ALTER TABLE patient_terms ADD COLUMN IF NOT EXISTS file_mime TEXT`).catch(() => {})
+  await sql.unsafe(`ALTER TABLE patient_terms ADD COLUMN IF NOT EXISTS original_s3_key TEXT`).catch(() => {})
 
   // Tabela de observações por aba
   await sql.unsafe(`

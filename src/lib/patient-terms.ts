@@ -54,6 +54,12 @@ export async function generateSignToken(termId: number): Promise<PatientTerm> {
   return row
 }
 
+export async function getTermById(id: number): Promise<PatientTerm | null> {
+  await initSchema()
+  const [row] = await sql<PatientTerm[]>`SELECT * FROM patient_terms WHERE id = ${id}`
+  return row ?? null
+}
+
 export async function getTermByToken(token: string): Promise<PatientTerm | null> {
   await initSchema()
   const [row] = await sql<PatientTerm[]>`SELECT * FROM patient_terms WHERE sign_token = ${token}`
@@ -65,6 +71,20 @@ export async function signTerm(token: string, signerName: string, signatureData:
   const [row] = await sql<PatientTerm[]>`
     UPDATE patient_terms
     SET status = 'signed', signed_at = NOW(), signer_name = ${signerName}, signature_data = ${signatureData}
+    WHERE sign_token = ${token}
+    RETURNING *
+  `
+  return row
+}
+
+export async function signTermWithFile(
+  token: string, signerName: string, signatureData: string, filledS3Key: string, filledFileName: string
+): Promise<PatientTerm> {
+  await initSchema()
+  const [row] = await sql<PatientTerm[]>`
+    UPDATE patient_terms
+    SET status = 'signed', signed_at = NOW(), signer_name = ${signerName}, signature_data = ${signatureData},
+        file_s3_key = ${filledS3Key}, file_name = ${filledFileName}
     WHERE sign_token = ${token}
     RETURNING *
   `
