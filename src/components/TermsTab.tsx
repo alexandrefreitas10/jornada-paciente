@@ -74,9 +74,17 @@ export function TermsTab({ patientId }: Props) {
       const res = await fetch(`/api/patients/${patientId}/terms`, { method: 'POST', body: fd })
       if (res.ok) {
         const term: Term = await res.json()
-        setTerms(prev => [term, ...prev])
-        setExpandedId(term.id)
         resetForm()
+        // Para termos de texto, gera o link automaticamente
+        if (!file) {
+          const sendRes = await fetch(`/api/patients/${patientId}/terms/${term.id}/send`, { method: 'POST' })
+          const updated: Term = sendRes.ok ? await sendRes.json() : term
+          setTerms(prev => [updated, ...prev])
+          setExpandedId(updated.id)
+        } else {
+          setTerms(prev => [term, ...prev])
+          setExpandedId(term.id)
+        }
       }
     } finally {
       setSaving(false)
