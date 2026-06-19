@@ -138,7 +138,7 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
             <DeleteButton patientId={patient.id} patientName={patient.name} />
           </div>
         </div>
-        <ProgressBar completed={completedKeys.length} total={19} />
+        <ProgressBar completed={completedKeys.length} total={20} />
       </div>
 
       {/* Abas */}

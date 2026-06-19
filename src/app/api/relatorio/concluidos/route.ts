@@ -36,7 +36,7 @@ export async function GET() {
       }
       return { ...p, treatment_done: treatmentDone }
     })
-    .filter(p => p.completed_count >= 19 || p.treatment_done)
+    .filter(p => p.completed_count >= 20 || p.treatment_done)
 
   return NextResponse.json({ total: result.length, patients: result })
 }

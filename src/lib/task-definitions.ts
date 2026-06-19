@@ -41,6 +41,7 @@ export const TASK_PHASES: TaskPhase[] = [
       { key: 'fotos_grupo', label: 'Envio de fotos no grupo' },
       { key: 'bioimpedancia_grupo', label: 'Envio da bioimpedância no grupo' },
       { key: 'termos_assinados', label: 'Termos assinados' },
+      { key: 'envio_pdf_parceiros', label: 'Envio do PDF com parceiros' },
     ],
   },
   {
