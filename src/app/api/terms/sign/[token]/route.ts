@@ -54,7 +54,7 @@ async function generateSignedFile(
     } else if (sourceS3Key && WORD_MIMES.includes(sourceMime ?? '')) {
       // Embed signature block into the Word document
       const original = await downloadFile(sourceS3Key)
-      fileBytes = await embedSignatureInDocx(original, signerName, signedAt, signatureData)
+      fileBytes = await embedSignatureInDocx(original, signerName, signedAt, signatureData, filledFields)
       mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       ext = 'docx'
       nameSuffix = '_assinado.docx'

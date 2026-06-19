@@ -18,7 +18,7 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
   const [term, setTerm] = useState<Term | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [name, setName] = useState('')
-  const [freeText, setFreeText] = useState('')
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>({})
   const [step, setStep] = useState<'loading' | 'view' | 'sign' | 'done' | 'already'>('loading')
   const [submitting, setSubmitting] = useState(false)
   const [isEmpty, setIsEmpty] = useState(true)
@@ -72,7 +72,9 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
     setSubmitting(true)
 
     const allFields: Record<string, string> = {}
-    if (freeText.trim()) allFields['Informacoes adicionais'] = freeText.trim()
+    for (const [k, v] of Object.entries(fieldValues)) {
+      if (v.trim()) allFields[k] = v.trim()
+    }
 
     try {
       const fd = new FormData()
@@ -180,22 +182,24 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
           <>
             <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-5">
 
-              {/* Free text for blanks */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Informações para preencher no documento
-                  <span className="text-gray-400 font-normal text-xs ml-1">(opcional)</span>
-                </label>
-                <p className="text-xs text-gray-400 mb-2">
-                  Preencha aqui os espaços em branco (___) do documento.
-                </p>
-                <textarea
-                  value={freeText}
-                  onChange={e => setFreeText(e.target.value)}
-                  placeholder={"Ex:\nNome completo: João da Silva\nCPF: 000.000.000-00\nData de nascimento: 01/01/1990"}
-                  rows={4}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
-                />
+              {/* Named fields for document blanks */}
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm font-semibold text-gray-700">Preencha os espaços do documento</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Campos opcionais — preencha apenas os que existem no seu documento.</p>
+                </div>
+                {['Nome completo', 'CPF', 'Data de nascimento', 'E-mail', 'Telefone', 'Endereço'].map(field => (
+                  <div key={field}>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">{field}</label>
+                    <input
+                      type="text"
+                      value={fieldValues[field] ?? ''}
+                      onChange={e => setFieldValues(prev => ({ ...prev, [field]: e.target.value }))}
+                      placeholder={`Digite ${field.toLowerCase()}`}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    />
+                  </div>
+                ))}
               </div>
 
               <hr className="border-gray-100" />

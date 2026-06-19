@@ -1,21 +1,52 @@
 import JSZip from 'jszip'
 
-// 1 inch = 914400 EMUs (English Metric Units used by Office XML)
-const SIG_W_EMU = 2743200  // ~3 inches wide
-const SIG_H_EMU = 877824   // maintains 500:160 canvas aspect ratio
+// EMUs: 1 inch = 914400. Signature image ~2 inches wide, ~0.65 inch tall
+const SIG_W_EMU = 1828800  // 2 inches
+const SIG_H_EMU = 585216   // maintains 500:160 canvas ratio
 
-function sigXml(rId: string, signerName: string, dateStr: string): string {
+function escXml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+function fieldParagraphs(filledFields: Record<string, string>): string {
+  const entries = Object.entries(filledFields).filter(([, v]) => v?.trim())
+  if (entries.length === 0) return ''
+  return entries.map(([key, value]) => `
+<w:p>
+  <w:r>
+    <w:rPr><w:b/><w:sz w:val="18"/></w:rPr>
+    <w:t xml:space="preserve">${escXml(key)}: </w:t>
+  </w:r>
+  <w:r>
+    <w:rPr><w:sz w:val="18"/></w:rPr>
+    <w:t>${escXml(value)}</w:t>
+  </w:r>
+</w:p>`).join('')
+}
+
+function sigXml(rId: string, signerName: string, dateStr: string, filledFields: Record<string, string>): string {
   return `
 <w:p>
-  <w:pPr><w:pBdr><w:top w:val="single" w:sz="6" w:space="1" w:color="CCCCCC"/></w:pBdr></w:pPr>
+  <w:pPr>
+    <w:pBdr>
+      <w:top w:val="single" w:sz="6" w:space="4" w:color="AAAAAA"/>
+    </w:pBdr>
+    <w:spacing w:before="200"/>
+  </w:pPr>
 </w:p>
 <w:p>
   <w:r>
-    <w:rPr><w:b/><w:sz w:val="20"/></w:rPr>
-    <w:t xml:space="preserve">Assinado eletronicamente por: </w:t>
+    <w:rPr><w:b/><w:sz w:val="20"/><w:color w:val="1e3a5f"/></w:rPr>
+    <w:t>Documento assinado eletronicamente</w:t>
+  </w:r>
+</w:p>
+<w:p>
+  <w:r>
+    <w:rPr><w:b/><w:sz w:val="18"/></w:rPr>
+    <w:t xml:space="preserve">Assinado por: </w:t>
   </w:r>
   <w:r>
-    <w:rPr><w:b/><w:sz w:val="20"/></w:rPr>
+    <w:rPr><w:sz w:val="18"/></w:rPr>
     <w:t>${escXml(signerName)}</w:t>
   </w:r>
 </w:p>
@@ -25,7 +56,9 @@ function sigXml(rId: string, signerName: string, dateStr: string): string {
     <w:t>${escXml('Data: ' + dateStr)}</w:t>
   </w:r>
 </w:p>
+${fieldParagraphs(filledFields)}
 <w:p>
+  <w:pPr><w:spacing w:before="100"/></w:pPr>
   <w:r>
     <w:drawing>
       <wp:inline distT="0" distB="0" distL="0" distR="0"
@@ -60,24 +93,21 @@ function sigXml(rId: string, signerName: string, dateStr: string): string {
 </w:p>`
 }
 
-function escXml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-}
-
 export async function embedSignatureInDocx(
   docxBytes: Buffer,
   signerName: string,
   signedAt: string,
   signatureDataUrl: string,
+  filledFields: Record<string, string> = {},
 ): Promise<Buffer> {
   const zip = await JSZip.loadAsync(docxBytes)
 
-  // 1. Add the signature PNG to word/media/
+  // 1. Add signature PNG to word/media/
   const base64 = signatureDataUrl.replace(/^data:image\/png;base64,/, '')
   const sigPngBytes = Buffer.from(base64, 'base64')
   zip.file('word/media/signature_assinatura.png', sigPngBytes)
 
-  // 2. Add relationship entry to word/_rels/document.xml.rels
+  // 2. Add relationship to word/_rels/document.xml.rels
   const relsPath = 'word/_rels/document.xml.rels'
   const relsXml = await zip.file(relsPath)!.async('string')
   const rId = 'rIdAssinatura9001'
@@ -85,17 +115,16 @@ export async function embedSignatureInDocx(
   const updatedRels = relsXml.replace('</Relationships>', `${newRel}</Relationships>`)
   zip.file(relsPath, updatedRels)
 
-  // 3. Inject signature XML before </w:body> in word/document.xml
+  // 3. Inject signature block before </w:body>
   const docPath = 'word/document.xml'
   const docXml = await zip.file(docPath)!.async('string')
   const dateStr = new Date(signedAt).toLocaleString('pt-BR', {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo',
   })
-  const injection = sigXml(rId, signerName, dateStr)
+  const injection = sigXml(rId, signerName, dateStr, filledFields)
   const updatedDoc = docXml.replace('</w:body>', `${injection}</w:body>`)
   zip.file(docPath, updatedDoc)
 
-  const result = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
-  return result
+  return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
 }
