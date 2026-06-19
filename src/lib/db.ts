@@ -88,6 +88,18 @@ export async function initSchema() {
   // Adiciona coluna is_admin aos usuários
   await sql.unsafe(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE`).catch(() => {})
 
+  // Tabela de observações por aba
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS patient_tab_notes (
+      id SERIAL PRIMARY KEY,
+      patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      tab TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_by TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(() => {})
+
   // Soft delete em pacientes
   await sql.unsafe(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`).catch(() => {})
 

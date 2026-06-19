@@ -5,6 +5,7 @@ import { Measurement, MeasurementInput } from '@/lib/measurements'
 import { MeasurementChart } from './MeasurementChart'
 import { AdminPasswordModal } from './AdminPasswordModal'
 import { ImageCropModal } from './ImageCropModal'
+import { NotesSection } from './NotesSection'
 
 interface EvolutionPhoto {
   id: number
@@ -562,6 +563,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
           </div>
         </div>
       )}
+      <NotesSection patientId={patientId} tab="evolution" />
     </div>
   )
 }

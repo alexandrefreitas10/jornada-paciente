@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { AdminPasswordModal } from './AdminPasswordModal'
+import { NotesSection } from './NotesSection'
 
 interface FileRecord {
   id: number
@@ -601,6 +602,7 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
           })}
         </div>
       )}
+      <NotesSection patientId={patientId} tab={fileType} />
     </div>
   )
 }

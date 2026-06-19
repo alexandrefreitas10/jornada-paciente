@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { AdminPasswordModal } from './AdminPasswordModal'
+import { NotesSection } from './NotesSection'
 
 interface ExamFile {
   id: number
@@ -224,6 +225,7 @@ export function ExamsTab({ patientId, initialFiles }: Props) {
           )}
         </div>
       )}
+      <NotesSection patientId={patientId} tab="exam" />
     </div>
   )
 }
