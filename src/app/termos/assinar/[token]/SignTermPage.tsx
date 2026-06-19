@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useEffect, useRef, useState, use } from 'react'
 import SignaturePad from 'signature_pad'

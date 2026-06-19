@@ -1,4 +1,4 @@
-﻿import { NextRequest } from 'next/server'
+import { NextRequest } from 'next/server'
 import { getTermByToken, signTerm, signTermWithFile } from '@/lib/patient-terms'
 import { uploadFile, downloadFile } from '@/lib/s3'
 import { embedSignatureInPdf, buildSignatureCertificate, generatePdfFromText } from '@/lib/pdf-sign'
