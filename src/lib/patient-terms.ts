@@ -28,6 +28,21 @@ export async function listPatientTerms(patientId: number): Promise<PatientTerm[]
   `
 }
 
+export async function createTextTerm(
+  patientId: number,
+  title: string,
+  createdBy: string,
+  content: string,
+): Promise<PatientTerm> {
+  await initSchema()
+  const [row] = await sql<PatientTerm[]>`
+    INSERT INTO patient_terms (patient_id, title, content, created_by)
+    VALUES (${patientId}, ${title}, ${content}, ${createdBy})
+    RETURNING *
+  `
+  return row
+}
+
 export async function createPatientTerm(
   patientId: number,
   title: string,
