@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useRef } from 'react'
 import { AdminPasswordModal } from './AdminPasswordModal'
@@ -8,6 +8,7 @@ interface Term {
   title: string
   file_name: string | null
   file_mime: string | null
+  content: string | null
   status: 'draft' | 'sent' | 'signed'
   created_by: string
   created_at: string
@@ -23,18 +24,22 @@ interface Props { patientId: number }
 const STATUS: Record<string, { label: string; color: string }> = {
   draft:  { label: 'Rascunho',    color: 'bg-gray-100 text-gray-600' },
   sent:   { label: 'Aguardando',  color: 'bg-blue-100 text-blue-700' },
-  signed: { label: '✅ Assinado', color: 'bg-green-100 text-green-700' },
+  signed: { label: 'Assinado', color: 'bg-green-100 text-green-700' },
 }
 
 function fmt(iso: string) {
   return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
+type Mode = 'file' | 'text'
+
 export function TermsTab({ patientId }: Props) {
   const [terms, setTerms] = useState<Term[]>([])
   const [creating, setCreating] = useState(false)
+  const [mode, setMode] = useState<Mode>('file')
   const [title, setTitle] = useState('')
   const [file, setFile] = useState<File | null>(null)
+  const [content, setContent] = useState('')
   const [saving, setSaving] = useState(false)
   const [sending, setSending] = useState<number | null>(null)
   const [copiedId, setCopiedId] = useState<number | null>(null)
@@ -47,19 +52,30 @@ export function TermsTab({ patientId }: Props) {
       .then(r => r.json()).then(setTerms).catch(() => {})
   }, [patientId])
 
+  function resetForm() {
+    setTitle(''); setFile(null); setContent(''); setCreating(false); setMode('file')
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
   async function handleCreate() {
-    if (!title.trim() || !file) return
+    if (!title.trim()) return
+    if (mode === 'file' && !file) return
+    if (mode === 'text' && !content.trim()) return
+
     setSaving(true)
     try {
       const fd = new FormData()
       fd.append('title', title)
-      fd.append('file', file)
+      if (mode === 'file' && file) {
+        fd.append('file', file)
+      } else {
+        fd.append('content', content)
+      }
       const res = await fetch(`/api/patients/${patientId}/terms`, { method: 'POST', body: fd })
       if (res.ok) {
         const term: Term = await res.json()
         setTerms(prev => [term, ...prev])
-        setTitle(''); setFile(null); setCreating(false)
-        if (fileRef.current) fileRef.current.value = ''
+        resetForm()
       }
     } finally {
       setSaving(false)
@@ -100,15 +116,17 @@ export function TermsTab({ patientId }: Props) {
   function shareWhatsApp(term: Term) {
     if (!term.sign_token) return
     const link = getLink(term.sign_token)
-    const msg = encodeURIComponent(`Olá! Por favor, acesse o link abaixo para ler e assinar o termo "${term.title}":\n\n${link}`)
+    const msg = encodeURIComponent(`Ola! Por favor, acesse o link abaixo para ler e assinar o termo "${term.title}":\n\n${link}`)
     window.open(`https://wa.me/?text=${msg}`, '_blank')
   }
+
+  const canSave = title.trim() && (mode === 'file' ? !!file : content.trim().length > 0)
 
   return (
     <div className="space-y-4">
       {pendingDeleteId !== null && (
         <AdminPasswordModal
-          onConfirm={() => handleDelete(pendingDeleteId)}
+          onConfirm={() => handleDelete(pendingDeleteId!)}
           onCancel={() => setPendingDeleteId(null)}
         />
       )}
@@ -124,6 +142,22 @@ export function TermsTab({ patientId }: Props) {
       {creating && (
         <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-3 shadow-sm">
           <h3 className="text-sm font-semibold text-gray-700">Novo termo</h3>
+
+          <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+            <button
+              onClick={() => setMode('file')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${mode === 'file' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              Arquivo (PDF/Word)
+            </button>
+            <button
+              onClick={() => setMode('text')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${mode === 'text' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              Escrever texto
+            </button>
+          </div>
+
           <input
             type="text"
             value={title}
@@ -131,27 +165,58 @@ export function TermsTab({ patientId }: Props) {
             placeholder="Nome do termo (ex: Termo de Consentimento)"
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300"
           />
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Arquivo (PDF ou Word)</label>
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-              onChange={e => setFile(e.target.files?.[0] ?? null)}
-              className="block w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100"
-            />
-            {file && <p className="text-xs text-gray-400 mt-1">📄 {file.name}</p>}
-          </div>
+
+          {mode === 'file' && (
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Arquivo (PDF ou Word)</label>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onChange={e => setFile(e.target.files?.[0] ?? null)}
+                className="block w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100"
+              />
+              {file && <p className="text-xs text-gray-400 mt-1">{file.name}</p>}
+            </div>
+          )}
+
+          {mode === 'text' && (
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">
+                Texto do termo — use <code className="bg-gray-100 px-1 rounded font-mono">{'{{'+'NomeDoCampo'+'}}'}</code> para campos que o paciente vai preencher
+              </label>
+              <textarea
+                value={content}
+                onChange={e => setContent(e.target.value)}
+                placeholder={'Exemplo:\n\nEu, {{Nome completo}}, portador do CPF {{CPF}}, declaro que...\n\nData de nascimento: {{Data de nascimento}}'}
+                rows={10}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet-300 resize-y"
+              />
+              {(() => {
+                const fields = [...content.matchAll(/\{\{([^}]+)\}\}/g)].map(m => m[1].trim())
+                const unique = [...new Set(fields)]
+                return unique.length > 0 ? (
+                  <p className="text-xs text-violet-600 mt-1">
+                    Campos detectados:{' '}
+                    {unique.map(f => (
+                      <span key={f} className="inline-block bg-violet-50 border border-violet-200 text-violet-700 px-1.5 py-0.5 rounded mr-1 font-medium">{f}</span>
+                    ))}
+                  </p>
+                ) : null
+              })()}
+            </div>
+          )}
+
           <div className="flex gap-2">
             <button
               onClick={handleCreate}
-              disabled={saving || !title.trim() || !file}
+              disabled={saving || !canSave}
               className="px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50"
             >
-              {saving ? 'Enviando…' : 'Salvar'}
+              {saving ? 'Enviando...' : 'Salvar'}
             </button>
             <button
-              onClick={() => { setCreating(false); setTitle(''); setFile(null) }}
+              onClick={resetForm}
               className="px-4 py-2 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50"
             >
               Cancelar
@@ -167,15 +232,16 @@ export function TermsTab({ patientId }: Props) {
       {terms.map(term => {
         const st = STATUS[term.status] ?? STATUS.draft
         const isExpanded = expandedId === term.id
+        const isTextBased = !!term.content && !term.file_name
 
         return (
           <div key={term.id} className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
             <div className="flex items-start gap-3 p-4">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm">📄</span>
                   <h3 className="text-sm font-semibold text-gray-800">{term.title}</h3>
                   <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${st.color}`}>{st.label}</span>
+                  {isTextBased && <span className="text-xs text-violet-500 font-medium bg-violet-50 px-2 py-0.5 rounded-full">texto</span>}
                 </div>
                 {term.file_name && (
                   <p className="text-xs text-gray-400 mt-0.5">{term.file_name}</p>
@@ -196,13 +262,12 @@ export function TermsTab({ patientId }: Props) {
                 onClick={() => setExpandedId(isExpanded ? null : term.id)}
                 className="text-gray-400 hover:text-gray-600 text-xs shrink-0 mt-1"
               >
-                {isExpanded ? '▲' : '▼'}
+                {isExpanded ? 'fechar' : 'ver'}
               </button>
             </div>
 
             {isExpanded && (
               <div className="px-4 pb-4 pt-2 border-t border-gray-100 space-y-3">
-                {/* Assinatura */}
                 {term.status === 'signed' && term.signature_data && (
                   <div>
                     <p className="text-xs font-medium text-gray-500 mb-1">Assinatura:</p>
@@ -212,51 +277,46 @@ export function TermsTab({ patientId }: Props) {
                 )}
 
                 <div className="flex flex-wrap gap-2">
-                  {/* Download sempre disponível */}
                   <a
                     href={`/api/patients/${patientId}/terms/${term.id}/download`}
                     className="px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center gap-1"
                   >
-                    ⬇️ Baixar arquivo
+                    Baixar arquivo
                   </a>
 
-                  {/* Gerar/reenviar link */}
                   {term.status !== 'signed' && (
                     <button
                       onClick={() => handleSend(term)}
                       disabled={sending === term.id}
                       className="px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
                     >
-                      {sending === term.id ? '…' : term.sign_token ? '🔄 Novo link' : '📤 Gerar link de assinatura'}
+                      {sending === term.id ? '...' : term.sign_token ? 'Novo link' : 'Gerar link de assinatura'}
                     </button>
                   )}
 
-                  {/* Copiar link */}
                   {term.sign_token && term.status !== 'signed' && (
                     <button
                       onClick={() => copyLink(term)}
                       className="px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
                     >
-                      {copiedId === term.id ? '✅ Copiado!' : '🔗 Copiar link'}
+                      {copiedId === term.id ? 'Copiado!' : 'Copiar link'}
                     </button>
                   )}
 
-                  {/* WhatsApp */}
                   {term.sign_token && term.status !== 'signed' && (
                     <button
                       onClick={() => shareWhatsApp(term)}
                       className="px-3 py-1.5 text-xs font-medium bg-green-500 text-white rounded-lg hover:bg-green-600"
                     >
-                      📱 WhatsApp
+                      WhatsApp
                     </button>
                   )}
 
-                  {/* Excluir (sempre, com senha admin) */}
                   <button
                     onClick={() => setPendingDeleteId(term.id)}
                     className="px-3 py-1.5 text-xs text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50"
                   >
-                    🗑️ Excluir
+                    Excluir
                   </button>
                 </div>
               </div>
