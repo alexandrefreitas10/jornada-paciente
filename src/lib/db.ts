@@ -94,7 +94,10 @@ export async function initSchema() {
       id SERIAL PRIMARY KEY,
       patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
       title TEXT NOT NULL,
-      content TEXT NOT NULL,
+      content TEXT DEFAULT '',
+      file_s3_key TEXT,
+      file_name TEXT,
+      file_mime TEXT,
       status TEXT NOT NULL DEFAULT 'draft',
       created_by TEXT NOT NULL,
       created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -105,6 +108,9 @@ export async function initSchema() {
       sign_token TEXT UNIQUE
     )
   `).catch(() => {})
+  await sql.unsafe(`ALTER TABLE patient_terms ADD COLUMN IF NOT EXISTS file_s3_key TEXT`).catch(() => {})
+  await sql.unsafe(`ALTER TABLE patient_terms ADD COLUMN IF NOT EXISTS file_name TEXT`).catch(() => {})
+  await sql.unsafe(`ALTER TABLE patient_terms ADD COLUMN IF NOT EXISTS file_mime TEXT`).catch(() => {})
 
   // Tabela de observações por aba
   await sql.unsafe(`

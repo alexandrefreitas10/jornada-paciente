@@ -5,7 +5,10 @@ export interface PatientTerm {
   patient_id: number
   title: string
   content: string
-  status: 'draft' | 'sent' | 'signed' | 'declined'
+  file_s3_key: string | null
+  file_name: string | null
+  file_mime: string | null
+  status: 'draft' | 'sent' | 'signed'
   created_by: string
   created_at: string
   sent_at: string | null
@@ -23,12 +26,17 @@ export async function listPatientTerms(patientId: number): Promise<PatientTerm[]
 }
 
 export async function createPatientTerm(
-  patientId: number, title: string, content: string, createdBy: string
+  patientId: number,
+  title: string,
+  createdBy: string,
+  fileS3Key: string,
+  fileName: string,
+  fileMime: string,
 ): Promise<PatientTerm> {
   await initSchema()
   const [row] = await sql<PatientTerm[]>`
-    INSERT INTO patient_terms (patient_id, title, content, created_by)
-    VALUES (${patientId}, ${title}, ${content}, ${createdBy})
+    INSERT INTO patient_terms (patient_id, title, content, file_s3_key, file_name, file_mime, created_by)
+    VALUES (${patientId}, ${title}, '', ${fileS3Key}, ${fileName}, ${fileMime}, ${createdBy})
     RETURNING *
   `
   return row
@@ -48,9 +56,7 @@ export async function generateSignToken(termId: number): Promise<PatientTerm> {
 
 export async function getTermByToken(token: string): Promise<PatientTerm | null> {
   await initSchema()
-  const [row] = await sql<PatientTerm[]>`
-    SELECT * FROM patient_terms WHERE sign_token = ${token}
-  `
+  const [row] = await sql<PatientTerm[]>`SELECT * FROM patient_terms WHERE sign_token = ${token}`
   return row ?? null
 }
 
@@ -65,7 +71,10 @@ export async function signTerm(token: string, signerName: string, signatureData:
   return row
 }
 
-export async function deletePatientTerm(id: number): Promise<void> {
+export async function deletePatientTerm(id: number): Promise<{ file_s3_key: string | null }> {
   await initSchema()
-  await sql`DELETE FROM patient_terms WHERE id = ${id}`
+  const [row] = await sql<{ file_s3_key: string | null }[]>`
+    DELETE FROM patient_terms WHERE id = ${id} RETURNING file_s3_key
+  `
+  return row
 }

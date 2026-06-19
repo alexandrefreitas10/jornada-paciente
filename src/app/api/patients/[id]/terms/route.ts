@@ -1,6 +1,10 @@
 import { NextRequest } from 'next/server'
 import { auth } from '@/auth'
 import { listPatientTerms, createPatientTerm } from '@/lib/patient-terms'
+import { uploadFile } from '@/lib/s3'
+import { randomUUID } from 'crypto'
+
+export const dynamic = 'force-dynamic'
 
 export async function GET(
   _req: NextRequest,
@@ -18,10 +22,29 @@ export async function POST(
   const { id } = await params
   const session = await auth()
   const createdBy = session?.user?.name ?? 'Desconhecido'
-  const { title, content } = await req.json()
-  if (!title?.trim() || !content?.trim()) {
-    return Response.json({ error: 'Título e conteúdo obrigatórios' }, { status: 400 })
+
+  const formData = await req.formData()
+  const title = (formData.get('title') as string | null)?.trim()
+  const file = formData.get('file') as File | null
+
+  if (!title || !file) {
+    return Response.json({ error: 'Título e arquivo obrigatórios' }, { status: 400 })
   }
-  const term = await createPatientTerm(Number(id), title.trim(), content.trim(), createdBy)
+
+  const allowed = [
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  ]
+  if (!allowed.includes(file.type)) {
+    return Response.json({ error: 'Apenas PDF ou Word são aceitos' }, { status: 400 })
+  }
+
+  const ext = file.name.split('.').pop() ?? 'pdf'
+  const s3Key = `patients/${id}/terms/${randomUUID()}.${ext}`
+  const buffer = Buffer.from(await file.arrayBuffer())
+  await uploadFile(s3Key, buffer, file.type as never)
+
+  const term = await createPatientTerm(Number(id), title, createdBy, s3Key, file.name, file.type)
   return Response.json(term, { status: 201 })
 }
