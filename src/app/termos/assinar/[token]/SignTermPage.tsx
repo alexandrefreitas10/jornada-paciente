@@ -3,6 +3,19 @@
 import { useEffect, useRef, useState, use } from 'react'
 import SignaturePad from 'signature_pad'
 
+function maskCPF(v: string) {
+  return v.replace(/\D/g, '').slice(0, 11)
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+}
+
+function maskDate(v: string) {
+  return v.replace(/\D/g, '').slice(0, 8)
+    .replace(/(\d{2})(\d)/, '$1/$2')
+    .replace(/(\d{2})(\d)/, '$1/$2')
+}
+
 interface Term {
   id: number
   title: string
@@ -192,10 +205,22 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
                   <div key={field}>
                     <label className="block text-xs font-medium text-gray-500 mb-1">{field}</label>
                     <input
-                      type="text"
+                      type={field === 'E-mail' ? 'email' : 'text'}
+                      inputMode={field === 'CPF' || field === 'Telefone' ? 'numeric' : undefined}
                       value={fieldValues[field] ?? ''}
-                      onChange={e => setFieldValues(prev => ({ ...prev, [field]: e.target.value }))}
-                      placeholder={`Digite ${field.toLowerCase()}`}
+                      onChange={e => {
+                        const raw = e.target.value
+                        const masked =
+                          field === 'CPF' ? maskCPF(raw) :
+                          field === 'Data de nascimento' ? maskDate(raw) :
+                          raw
+                        setFieldValues(prev => ({ ...prev, [field]: masked }))
+                      }}
+                      placeholder={
+                        field === 'CPF' ? '000.000.000-00' :
+                        field === 'Data de nascimento' ? 'DD/MM/AAAA' :
+                        `Digite ${field.toLowerCase()}`
+                      }
                       className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                     />
                   </div>
