@@ -1,26 +1,21 @@
+import { auth } from './auth'
 import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
 
-const PUBLIC_PREFIXES = ['/login', '/setup', '/termos/assinar']
-
-export function proxy(req: NextRequest) {
+export default auth((req) => {
+  const isLoggedIn = !!req.auth
   const { pathname } = req.nextUrl
 
-  if (PUBLIC_PREFIXES.some(p => pathname.startsWith(p))) {
-    return NextResponse.next()
-  }
+  const isPublic =
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/setup') ||
+    pathname.startsWith('/termos/assinar')
 
-  // Check for NextAuth session cookie (http or https)
-  const hasSession =
-    req.cookies.has('next-auth.session-token') ||
-    req.cookies.has('__Secure-next-auth.session-token')
-
-  if (!hasSession) {
+  if (!isLoggedIn && !isPublic) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
 
   return NextResponse.next()
-}
+})
 
 export const config = {
   matcher: ['/((?!api/auth|api/terms|_next/static|_next/image|favicon\\.ico|.*\\.png|.*\\.jpg|.*\\.jpeg|.*\\.svg|.*\\.webp|.*\\.ico).*)'],
