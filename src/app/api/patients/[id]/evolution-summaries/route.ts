@@ -5,8 +5,8 @@ import { createEvolutionSummary, listEvolutionSummaries, SummaryTopics } from '@
 import { uploadFile } from '@/lib/s3'
 import { randomUUID } from 'crypto'
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+function getClient() { return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }) }
+function getOpenAI() { return new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) }
 
 export async function GET(
   _req: NextRequest,
@@ -22,7 +22,7 @@ async function transcribeAudio(buffer: Buffer, fileName: string): Promise<string
   const ext = fileName.split('.').pop()?.toLowerCase() ?? 'mp4'
   const safeName = ext === 'm4a' ? fileName.replace(/\.m4a$/i, '.mp4') : fileName
   const file = await toFile(buffer, safeName)
-  const result = await openai.audio.transcriptions.create({
+  const result = await getOpenAI().audio.transcriptions.create({
     file,
     model: 'whisper-1',
     language: 'pt',
@@ -72,7 +72,7 @@ export async function POST(
   }
 
   // Extrai os 10 tópicos com Claude
-  const message = await client.messages.create({
+  const message = await getClient().messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 2048,
     messages: [

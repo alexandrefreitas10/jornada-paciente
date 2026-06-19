@@ -9,7 +9,7 @@ import { randomUUID } from 'crypto'
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+function getClient() { return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }) }
 
 function toNum(v: unknown): number | null {
   if (typeof v === 'number') return v
@@ -48,7 +48,7 @@ export async function POST(
     | 'image/gif'
     | 'image/webp'
 
-  const message = await client.messages.create({
+  const message = await getClient().messages.create({
     model: 'claude-opus-4-8',
     max_tokens: 2048,
     messages: [

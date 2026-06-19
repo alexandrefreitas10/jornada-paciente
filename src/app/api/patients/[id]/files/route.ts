@@ -5,7 +5,7 @@ import { randomUUID } from 'crypto'
 import Anthropic from '@anthropic-ai/sdk'
 import { auth } from '@/auth'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+function getClient() { return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }) }
 
 async function generateExamSummary(buffer: Buffer, mimeType: string, fileName: string): Promise<string> {
   const base64 = buffer.toString('base64')
@@ -33,7 +33,7 @@ async function generateExamSummary(buffer: Buffer, mimeType: string, fileName: s
         },
       ]
 
-  const message = await anthropic.messages.create({
+  const message = await getClient().messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1024,
     messages: [{ role: 'user', content }],
