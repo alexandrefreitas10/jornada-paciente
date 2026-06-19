@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { auth } from '@/auth'
-import { listPatientTerms, createPatientTerm } from '@/lib/patient-terms'
+import { listPatientTerms, createPatientTerm, createTextTerm } from '@/lib/patient-terms'
 import { uploadFile } from '@/lib/s3'
 import { randomUUID } from 'crypto'
 
@@ -25,10 +25,21 @@ export async function POST(
 
   const formData = await req.formData()
   const title = (formData.get('title') as string | null)?.trim()
+  const content = (formData.get('content') as string | null)?.trim()
   const file = formData.get('file') as File | null
 
-  if (!title || !file) {
-    return Response.json({ error: 'Título e arquivo obrigatórios' }, { status: 400 })
+  if (!title) {
+    return Response.json({ error: 'Título obrigatório' }, { status: 400 })
+  }
+
+  // Text-based term (no file)
+  if (content && !file) {
+    const term = await createTextTerm(Number(id), title, createdBy, content)
+    return Response.json(term, { status: 201 })
+  }
+
+  if (!file) {
+    return Response.json({ error: 'Arquivo ou texto obrigatório' }, { status: 400 })
   }
 
   const allowed = [
@@ -45,9 +56,6 @@ export async function POST(
   const buffer = Buffer.from(await file.arrayBuffer())
   await uploadFile(s3Key, buffer, file.type as never)
 
-  const fieldsRaw = (formData.get('fields') as string | null) ?? '[]'
-  const fields: string[] = JSON.parse(fieldsRaw).filter((f: string) => f.trim())
-
-  const term = await createPatientTerm(Number(id), title, createdBy, s3Key, file.name, file.type, fields)
+  const term = await createPatientTerm(Number(id), title, createdBy, s3Key, file.name, file.type)
   return Response.json(term, { status: 201 })
 }
