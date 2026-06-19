@@ -62,30 +62,28 @@ export function TermsTab({ patientId }: Props) {
     if (mode === 'file' && !file) return
     if (mode === 'text' && !content.trim()) return
 
+    const isText = mode === 'text'
     setSaving(true)
     try {
+      // 1. Criar termo
       const fd = new FormData()
       fd.append('title', title)
-      if (mode === 'file' && file) {
-        fd.append('file', file)
-      } else {
-        fd.append('content', content)
-      }
+      if (file) { fd.append('file', file) } else { fd.append('content', content) }
       const res = await fetch(`/api/patients/${patientId}/terms`, { method: 'POST', body: fd })
-      if (res.ok) {
-        const term: Term = await res.json()
-        resetForm()
-        // Para termos de texto, gera o link automaticamente
-        if (!file) {
-          const sendRes = await fetch(`/api/patients/${patientId}/terms/${term.id}/send`, { method: 'POST' })
-          const updated: Term = sendRes.ok ? await sendRes.json() : term
-          setTerms(prev => [updated, ...prev])
-          setExpandedId(updated.id)
-        } else {
-          setTerms(prev => [term, ...prev])
-          setExpandedId(term.id)
-        }
+      if (!res.ok) return
+      const term: Term = await res.json()
+
+      // 2. Para termos de texto: gerar link automaticamente
+      let finalTerm = term
+      if (isText) {
+        const sendRes = await fetch(`/api/patients/${patientId}/terms/${term.id}/send`, { method: 'POST' })
+        if (sendRes.ok) finalTerm = await sendRes.json()
       }
+
+      // 3. Atualizar lista, expandir e só então fechar o formulário
+      setTerms(prev => [finalTerm, ...prev])
+      setExpandedId(finalTerm.id)
+      resetForm()
     } finally {
       setSaving(false)
     }
