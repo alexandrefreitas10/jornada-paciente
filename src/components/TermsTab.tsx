@@ -75,6 +75,7 @@ export function TermsTab({ patientId }: Props) {
       if (res.ok) {
         const term: Term = await res.json()
         setTerms(prev => [term, ...prev])
+        setExpandedId(term.id)
         resetForm()
       }
     } finally {
@@ -277,12 +278,15 @@ export function TermsTab({ patientId }: Props) {
                 )}
 
                 <div className="flex flex-wrap gap-2">
-                  <a
-                    href={`/api/patients/${patientId}/terms/${term.id}/download`}
-                    className="px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center gap-1"
-                  >
-                    Baixar arquivo
-                  </a>
+                  {/* Baixar arquivo: para termos com arquivo, ou termos de texto já assinados */}
+                  {(!isTextBased || term.status === 'signed') && (
+                    <a
+                      href={`/api/patients/${patientId}/terms/${term.id}/download`}
+                      className="px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center gap-1"
+                    >
+                      Baixar {term.status === 'signed' ? 'PDF assinado' : 'arquivo'}
+                    </a>
+                  )}
 
                   {term.status !== 'signed' && (
                     <button
