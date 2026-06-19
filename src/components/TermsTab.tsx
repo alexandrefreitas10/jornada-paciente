@@ -62,31 +62,27 @@ export function TermsTab({ patientId }: Props) {
     if (mode === 'file' && !file) return
     if (mode === 'text' && !content.trim()) return
 
-    const isText = mode === 'text'
     setSaving(true)
-    try {
-      // 1. Criar termo
-      const fd = new FormData()
-      fd.append('title', title)
-      if (file) { fd.append('file', file) } else { fd.append('content', content) }
-      const res = await fetch(`/api/patients/${patientId}/terms`, { method: 'POST', body: fd })
-      if (!res.ok) return
-      const term: Term = await res.json()
+    const fd = new FormData()
+    fd.append('title', title)
+    if (file) { fd.append('file', file) } else { fd.append('content', content) }
 
-      // 2. Para termos de texto: gerar link automaticamente
-      let finalTerm = term
-      if (isText) {
-        const sendRes = await fetch(`/api/patients/${patientId}/terms/${term.id}/send`, { method: 'POST' })
-        if (sendRes.ok) finalTerm = await sendRes.json()
-      }
+    const res = await fetch(`/api/patients/${patientId}/terms`, { method: 'POST', body: fd })
+    const data = await res.json()
+    setSaving(false)
 
-      // 3. Atualizar lista, expandir e só então fechar o formulário
-      setTerms(prev => [finalTerm, ...prev])
-      setExpandedId(finalTerm.id)
-      resetForm()
-    } finally {
-      setSaving(false)
+    if (!res.ok) {
+      alert(data.error || 'Erro ao salvar termo.')
+      return
     }
+
+    const newTerm: Term = data
+    setCreating(false)
+    setTitle(''); setFile(null); setContent(''); setMode('file')
+    if (fileRef.current) fileRef.current.value = ''
+
+    setTerms(prev => [newTerm, ...prev])
+    setExpandedId(newTerm.id)
   }
 
   async function handleSend(term: Term) {
