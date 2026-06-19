@@ -4,7 +4,8 @@ import { NextResponse } from 'next/server'
 export default auth((req) => {
   const isLoggedIn = !!req.auth
   const isAuthRoute = req.nextUrl.pathname.startsWith('/login') ||
-    req.nextUrl.pathname.startsWith('/setup')
+    req.nextUrl.pathname.startsWith('/setup') ||
+    req.nextUrl.pathname.startsWith('/termos/assinar')
 
   if (!isLoggedIn && !isAuthRoute) {
     return NextResponse.redirect(new URL('/login', req.url))
@@ -12,5 +13,5 @@ export default auth((req) => {
 })
 
 export const config = {
-  matcher: ['/((?!api/auth|_next/static|_next/image|favicon.ico|.*\\.png|.*\\.jpg|.*\\.jpeg|.*\\.svg|.*\\.webp|.*\\.ico).*)'],
+  matcher: ['/((?!api/auth|api/terms/sign|_next/static|_next/image|favicon.ico|.*\\.png|.*\\.jpg|.*\\.jpeg|.*\\.svg|.*\\.webp|.*\\.ico).*)'],
 }
