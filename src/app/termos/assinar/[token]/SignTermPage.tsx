@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, use } from 'react'
+import SignaturePad from 'signature_pad'
 
 interface Term {
   id: number
@@ -18,11 +19,11 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
   const [error, setError] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [freeText, setFreeText] = useState('')
-  const [filledFields, setFilledFields] = useState<Record<string, string>>({})
   const [step, setStep] = useState<'loading' | 'view' | 'sign' | 'done' | 'already'>('loading')
   const [submitting, setSubmitting] = useState(false)
+  const [isEmpty, setIsEmpty] = useState(true)
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const drawing = useRef(false)
+  const padRef = useRef<SignaturePad | null>(null)
 
   useEffect(() => {
     fetch(`/api/terms/sign/${token}`)
@@ -35,52 +36,43 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
       .catch(() => setError('Não foi possível carregar o termo.'))
   }, [token])
 
-  function clearCanvas() {
-    const c = canvasRef.current
-    if (!c) return
-    c.getContext('2d')!.clearRect(0, 0, c.width, c.height)
-  }
+  // Initialize SignaturePad when entering sign step
+  useEffect(() => {
+    if (step !== 'sign' || !canvasRef.current) return
 
-  function getPos(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>, c: HTMLCanvasElement) {
-    const rect = c.getBoundingClientRect()
-    const sx = c.width / rect.width, sy = c.height / rect.height
-    const cx = 'touches' in e ? e.touches[0].clientX : e.clientX
-    const cy = 'touches' in e ? e.touches[0].clientY : e.clientY
-    return { x: (cx - rect.left) * sx, y: (cy - rect.top) * sy }
-  }
+    const canvas = canvasRef.current
+    // Resize canvas to match display size (important for retina)
+    const ratio = Math.max(window.devicePixelRatio || 1, 1)
+    canvas.width = canvas.offsetWidth * ratio
+    canvas.height = canvas.offsetHeight * ratio
+    canvas.getContext('2d')!.scale(ratio, ratio)
 
-  function onStart(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
-    const c = canvasRef.current!
-    drawing.current = true
-    const p = getPos(e, c)
-    const ctx = c.getContext('2d')!
-    ctx.beginPath(); ctx.moveTo(p.x, p.y)
-  }
+    const pad = new SignaturePad(canvas, {
+      minWidth: 1,
+      maxWidth: 3,
+      penColor: '#1e3a5f',
+    })
+    pad.addEventListener('endStroke', () => setIsEmpty(pad.isEmpty()))
+    padRef.current = pad
+    setIsEmpty(true)
 
-  function onMove(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
-    if (!drawing.current) return
-    e.preventDefault()
-    const c = canvasRef.current!
-    const ctx = c.getContext('2d')!
-    const p = getPos(e, c)
-    ctx.lineTo(p.x, p.y)
-    ctx.strokeStyle = '#1e3a5f'; ctx.lineWidth = 2.5
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke()
-  }
+    return () => { pad.off() }
+  }, [step])
 
-  function onEnd() { drawing.current = false }
+  function clearPad() {
+    padRef.current?.clear()
+    setIsEmpty(true)
+  }
 
   async function handleSubmit() {
     if (!name.trim()) { alert('Por favor, escreva seu nome completo.'); return }
-    const c = canvasRef.current!
-    const pixels = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data
-    if (!pixels.some(p => p !== 0)) { alert('Por favor, desenhe sua assinatura.'); return }
-    const signatureData = c.toDataURL('image/png')
+    if (!padRef.current || padRef.current.isEmpty()) { alert('Por favor, desenhe sua assinatura.'); return }
+
+    const signatureData = padRef.current.toDataURL('image/png')
     setSubmitting(true)
 
-    // Build filledFields: named fields + free text
-    const allFields: Record<string, string> = { ...filledFields }
-    if (freeText.trim()) allFields['Informações adicionais'] = freeText.trim()
+    const allFields: Record<string, string> = {}
+    if (freeText.trim()) allFields['Informacoes adicionais'] = freeText.trim()
 
     try {
       const fd = new FormData()
@@ -98,27 +90,31 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
   const isPdf = term?.file_mime === 'application/pdf'
   const fileUrl = `/api/terms/sign/${token}/file`
   const signedFileUrl = `/api/terms/sign/${token}/file?signed=1`
-  const hasNamedFields = (term?.fields?.length ?? 0) > 0
 
   if (error) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
-      <div className="text-center"><p className="text-2xl mb-2">⚠️</p><p className="text-gray-600">{error}</p></div>
+      <div className="text-center">
+        <p className="text-3xl mb-3">⚠️</p>
+        <p className="text-gray-600">{error}</p>
+      </div>
     </div>
   )
 
   if (step === 'loading') return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <p className="text-gray-400 text-sm">Carregando…</p>
+      <p className="text-gray-400 text-sm animate-pulse">Carregando…</p>
     </div>
   )
 
   if (step === 'already') return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
-      <div className="text-center space-y-2">
-        <p className="text-4xl">✅</p>
-        <p className="text-lg font-semibold text-gray-800">Termo já assinado</p>
+      <div className="text-center space-y-3">
+        <p className="text-5xl">✅</p>
+        <p className="text-xl font-bold text-gray-800">Termo já assinado</p>
         <p className="text-sm text-gray-500">Assinado por <strong>{term?.signer_name}</strong>.</p>
-        <a href={signedFileUrl} className="inline-block mt-4 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">⬇️ Baixar comprovante</a>
+        <a href={signedFileUrl} className="inline-block mt-4 px-5 py-2.5 bg-gray-800 text-white text-sm rounded-xl hover:bg-gray-700">
+          ⬇️ Baixar comprovante
+        </a>
       </div>
     </div>
   )
@@ -129,7 +125,9 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
         <p className="text-5xl">✅</p>
         <p className="text-xl font-bold text-gray-800">Assinado com sucesso!</p>
         <p className="text-sm text-gray-500">Obrigado, <strong>{name}</strong>. Sua assinatura foi registrada.</p>
-        <a href={signedFileUrl} className="inline-block mt-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">⬇️ Baixar comprovante assinado</a>
+        <a href={signedFileUrl} className="inline-block mt-2 px-5 py-2.5 bg-gray-800 text-white text-sm rounded-xl hover:bg-gray-700">
+          ⬇️ Baixar documento assinado
+        </a>
       </div>
     </div>
   )
@@ -137,24 +135,27 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-lg mx-auto px-4 py-8 space-y-5">
+
+        {/* Header */}
         <div className="text-center space-y-1">
-          <p className="text-xs text-gray-400 uppercase tracking-wide">Termo para assinatura</p>
+          <p className="text-xs text-gray-400 uppercase tracking-widest">Termo para assinatura</p>
           <h1 className="text-xl font-bold text-gray-900">{term?.title}</h1>
         </div>
 
+        {/* STEP: VIEW */}
         {step === 'view' && (
           <>
             <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
               {isPdf ? (
-                <iframe src={fileUrl} className="w-full" style={{ height: '65vh', minHeight: 300 }} title="Documento" />
+                <iframe src={fileUrl} className="w-full" style={{ height: '65vh', minHeight: 320 }} title="Documento" />
               ) : (
-                <div className="p-6 text-center space-y-3">
-                  <p className="text-4xl">📄</p>
-                  <p className="text-sm text-gray-600 font-medium">{term?.file_name}</p>
-                  <p className="text-xs text-gray-400 px-2">
+                <div className="p-8 text-center space-y-4">
+                  <p className="text-5xl">📄</p>
+                  <p className="text-sm font-medium text-gray-700">{term?.file_name}</p>
+                  <p className="text-xs text-gray-400 leading-relaxed">
                     Leia o documento antes de assinar. Você pode baixá-lo para visualizar no celular.
                   </p>
-                  <a href={fileUrl} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
+                  <a href={fileUrl} className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700">
                     ⬇️ Baixar documento
                   </a>
                 </div>
@@ -165,94 +166,91 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
               <a href={fileUrl} className="block text-center text-sm text-blue-600 hover:underline">⬇️ Baixar PDF</a>
             )}
 
-            <button onClick={() => setStep('sign')} className="w-full py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors">
+            <button
+              onClick={() => setStep('sign')}
+              className="w-full py-3.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors"
+            >
               Preencher e assinar →
             </button>
           </>
         )}
 
+        {/* STEP: SIGN */}
         {step === 'sign' && (
           <>
             <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-5">
 
-              {/* Named fields (if admin defined them) */}
-              {hasNamedFields && (
-                <div className="space-y-4">
-                  <div>
-                    <h2 className="text-sm font-semibold text-gray-700">Preencha os campos do documento</h2>
-                    <p className="text-xs text-gray-400 mt-0.5">Correspondem aos espaços em branco (___) do documento.</p>
-                  </div>
-                  {term!.fields.map(field => (
-                    <div key={field}>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">{field}</label>
-                      <input
-                        type="text"
-                        value={filledFields[field] ?? ''}
-                        onChange={e => setFilledFields(prev => ({ ...prev, [field]: e.target.value }))}
-                        placeholder={`Digite ${field.toLowerCase()}`}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                      />
-                    </div>
-                  ))}
-                  <hr className="border-gray-100" />
-                </div>
-              )}
-
-              {/* Free text — always shown */}
+              {/* Free text for blanks */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {hasNamedFields ? 'Observações adicionais' : 'Informações para preencher no documento'}
+                <label className="block text-sm font-semibold text-gray-700 mb-1">
+                  Informações para preencher no documento
                   <span className="text-gray-400 font-normal text-xs ml-1">(opcional)</span>
                 </label>
-                {!hasNamedFields && (
-                  <p className="text-xs text-gray-400 mb-2">Preencha aqui os espaços em branco (___) do documento, identificando cada informação.</p>
-                )}
+                <p className="text-xs text-gray-400 mb-2">
+                  Preencha aqui os espaços em branco (___) do documento.
+                </p>
                 <textarea
                   value={freeText}
                   onChange={e => setFreeText(e.target.value)}
-                  placeholder={hasNamedFields ? 'Alguma observação?' : 'Ex:\nNome completo: João da Silva\nCPF: 000.000.000-00\nData de nascimento: 01/01/1990'}
-                  rows={hasNamedFields ? 2 : 5}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+                  placeholder={"Ex:\nNome completo: João da Silva\nCPF: 000.000.000-00\nData de nascimento: 01/01/1990"}
+                  rows={4}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
                 />
               </div>
 
               <hr className="border-gray-100" />
 
-              {/* Nome */}
+              {/* Full name */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nome completo <span className="text-red-400">*</span></label>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">
+                  Nome completo <span className="text-red-400">*</span>
+                </label>
                 <input
                   type="text"
                   value={name}
                   onChange={e => setName(e.target.value)}
                   placeholder="Digite seu nome completo"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                 />
               </div>
 
-              {/* Assinatura */}
+              {/* Signature pad */}
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-sm font-medium text-gray-700">Assinatura <span className="text-red-400">*</span></label>
-                  <button onClick={clearCanvas} className="text-xs text-gray-400 hover:text-gray-600">Limpar</button>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-semibold text-gray-700">
+                    Assinatura <span className="text-red-400">*</span>
+                  </label>
+                  <button
+                    onClick={clearPad}
+                    className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                  >
+                    Limpar
+                  </button>
                 </div>
-                <canvas
-                  ref={canvasRef}
-                  width={500}
-                  height={160}
-                  className="w-full border-2 border-dashed border-gray-300 rounded-xl bg-gray-50 cursor-crosshair"
-                  style={{ touchAction: 'none' }}
-                  onMouseDown={onStart} onMouseMove={onMove} onMouseUp={onEnd} onMouseLeave={onEnd}
-                  onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd}
-                />
-                <p className="text-xs text-gray-400 mt-1 text-center">Desenhe sua assinatura com o dedo ou mouse</p>
+                <div className="border-2 border-dashed border-gray-300 rounded-xl bg-white overflow-hidden" style={{ height: 160 }}>
+                  <canvas
+                    ref={canvasRef}
+                    className="w-full h-full cursor-crosshair"
+                    style={{ touchAction: 'none' }}
+                  />
+                </div>
+                <p className="text-xs text-gray-400 mt-1.5 text-center">
+                  {isEmpty ? 'Assine dentro da área acima com o dedo ou mouse' : '✓ Assinatura capturada'}
+                </p>
               </div>
             </div>
 
-            <button onClick={handleSubmit} disabled={submitting} className="w-full py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors">
+            <button
+              onClick={handleSubmit}
+              disabled={submitting || isEmpty || !name.trim()}
+              className="w-full py-3.5 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors"
+            >
               {submitting ? 'Enviando…' : '✅ Confirmar assinatura'}
             </button>
-            <button onClick={() => setStep('view')} className="w-full py-2 text-sm text-gray-500 hover:text-gray-700">← Ver documento novamente</button>
+
+            <button onClick={() => setStep('view')} className="w-full py-2 text-sm text-gray-400 hover:text-gray-600">
+              ← Ver documento novamente
+            </button>
           </>
         )}
       </div>
