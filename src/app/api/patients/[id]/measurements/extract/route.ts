@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import sharp from 'sharp'
-import { createMeasurement, listMeasurements, MeasurementInput } from '@/lib/measurements'
+import { createMeasurement, deleteAllMeasurements, MeasurementInput } from '@/lib/measurements'
 import { uploadFile, deleteFile } from '@/lib/s3'
 import { createPatientFile, listPatientFiles, deletePatientFile } from '@/lib/patient-files'
 import { randomUUID } from 'crypto'
@@ -114,9 +114,8 @@ Retorne somente o array JSON, sem texto adicional, sem markdown, sem explicaçõ
     )
   }
 
-  // Busca semanas já existentes para evitar duplicação
-  const existing = await listMeasurements(Number(id))
-  const existingWeeks = new Set(existing.map(m => m.week).filter(w => w !== null))
+  // Nova foto substitui toda a tabela — apaga medições antigas e insere as novas
+  await deleteAllMeasurements(Number(id))
 
   const newRows = extracted
     .map((row) => {
@@ -130,7 +129,6 @@ Retorne somente o array JSON, sem texto adicional, sem markdown, sem explicaçõ
         tirzepatide_dose: toNum(r.tirzepatide_dose),
       } as MeasurementInput
     })
-    .filter(input => input.week == null || !existingWeeks.has(input.week))
 
   const created = await Promise.all(
     newRows.map(input => createMeasurement(Number(id), input))
