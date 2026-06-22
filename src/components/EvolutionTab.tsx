@@ -155,7 +155,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
   async function handleDelete(id: number) {
     await fetch(`/api/patients/${patientId}/measurements/${id}`, { method: 'DELETE' })
     setMeasurements((prev) => prev.filter((m) => m.id !== id))
-    setPendingDeleteId(null)
+    if (pendingDeleteId === id) setPendingDeleteId(null)
   }
 
   async function handleSaveNew() {
@@ -198,7 +198,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
 
   return (
     <div className="space-y-6">
-      {pendingDeleteId !== null && (
+      {pendingDeleteId !== null && !canDeleteTableFree && (
         <AdminPasswordModal
           onConfirm={() => handleDelete(pendingDeleteId)}
           onCancel={() => setPendingDeleteId(null)}
@@ -211,7 +211,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
           onCancel={() => setCropFile(null)}
         />
       )}
-      {pendingDeleteTable && (
+      {pendingDeleteTable && !canDeleteTableFree && (
         <AdminPasswordModal
           onConfirm={handleDeleteTable}
           onCancel={() => setPendingDeleteTable(false)}
@@ -372,7 +372,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
                       ✏️
                     </button>
                     <button
-                      onClick={() => setPendingDeleteId(m.id)}
+                      onClick={() => canDeleteTableFree ? handleDelete(m.id) : setPendingDeleteId(m.id)}
                       className="text-xs text-gray-400 hover:text-red-500"
                       title="Apagar"
                     >
