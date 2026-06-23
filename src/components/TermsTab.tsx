@@ -179,10 +179,10 @@ export function TermsTab({ patientId }: Props) {
                     <button
                       onClick={() => handleDelete(term.id)}
                       disabled={deleting === term.id}
-                      className="text-xs text-gray-400 hover:text-red-500 px-1.5 py-1 rounded hover:bg-red-50 transition-colors disabled:opacity-50"
+                      className="text-xs text-gray-600 hover:text-red-600 px-2 py-1 rounded hover:bg-red-50 transition-colors disabled:opacity-50"
                       title="Excluir"
                     >
-                      {deleting === term.id ? '...' : '🗑'}
+                      {deleting === term.id ? '⏳' : '🗑'}
                     </button>
                   </div>
                 </div>
