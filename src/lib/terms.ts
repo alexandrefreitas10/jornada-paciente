@@ -57,7 +57,7 @@ export async function getTerm(id: number): Promise<Term | null> {
 
 export async function createTerm(input: TermInput): Promise<Term> {
   await initSchema()
-  const [row] = await sql<Term[]>`
+  const [row] = await sql<any>`
     INSERT INTO terms (title, content, file_s3_key, file_name, file_mime, fields, created_by)
     VALUES (
       ${input.title},
@@ -70,10 +70,13 @@ export async function createTerm(input: TermInput): Promise<Term> {
     )
     RETURNING
       id, title, content, file_s3_key, file_name, file_mime,
-      COALESCE(fields, '[]'::jsonb)::text[]::jsonb AS fields,
+      COALESCE(fields, '[]'::jsonb) AS fields,
       created_at, created_by
   `
-  return row
+  return {
+    ...row,
+    fields: Array.isArray(row.fields) ? row.fields : (typeof row.fields === 'string' ? JSON.parse(row.fields) : []),
+  }
 }
 
 export async function deleteTerm(id: number): Promise<void> {
