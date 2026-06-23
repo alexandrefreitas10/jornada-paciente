@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { auth } from '@/auth'
-import { updateMeasurement, deleteMeasurement } from '@/lib/measurements'
+import { updateMeasurement, deleteMeasurement, getMeasurementById } from '@/lib/measurements'
 import { logAudit } from '@/lib/audit'
 
 export async function PUT(
@@ -20,7 +20,8 @@ export async function DELETE(
   const { id, mid } = await params
   const session = await auth()
   const userName = session?.user?.name ?? 'Desconhecido'
+  const measurement = await getMeasurementById(Number(mid))
   await deleteMeasurement(Number(mid))
-  await logAudit({ userName, action: 'DELETE', entityType: 'measurement', entityId: mid, patientId: Number(id) })
+  await logAudit({ userName, action: 'DELETE', entityType: 'measurement', entityId: mid, patientId: Number(id), details: `Semana ${measurement?.week ?? '—'}`, deletedData: measurement ?? undefined })
   return new Response(null, { status: 204 })
 }

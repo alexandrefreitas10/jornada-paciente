@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { auth } from '@/auth'
-import { deletePatientFile } from '@/lib/patient-files'
+import { deletePatientFileAndReturn } from '@/lib/patient-files'
 import { deleteFile } from '@/lib/s3'
 import { logAudit } from '@/lib/audit'
 
@@ -11,8 +11,8 @@ export async function DELETE(
   const { id, fid } = await params
   const session = await auth()
   const userName = session?.user?.name ?? 'Desconhecido'
-  const s3Key = await deletePatientFile(Number(fid))
-  await deleteFile(s3Key)
-  await logAudit({ userName, action: 'DELETE', entityType: 'file', entityId: fid, patientId: Number(id) })
+  const fileRecord = await deletePatientFileAndReturn(Number(fid))
+  if (fileRecord) await deleteFile(fileRecord.s3_key)
+  await logAudit({ userName, action: 'DELETE', entityType: 'file', entityId: fid, patientId: Number(id), details: fileRecord?.original_name, deletedData: fileRecord ?? undefined })
   return new Response(null, { status: 204 })
 }

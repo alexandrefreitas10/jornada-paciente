@@ -89,6 +89,12 @@ export async function updateMeasurement(
   return row
 }
 
+export async function getMeasurementById(id: number): Promise<Measurement | null> {
+  await initSchema()
+  const [row] = await sql<Measurement[]>`SELECT * FROM weekly_measurements WHERE id = ${id}`
+  return row ?? null
+}
+
 export async function deleteMeasurement(id: number): Promise<void> {
   await initSchema()
   await sql`DELETE FROM weekly_measurements WHERE id = ${id}`

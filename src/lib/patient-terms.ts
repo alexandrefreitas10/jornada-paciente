@@ -119,6 +119,12 @@ export async function signTermWithFile(
   return row
 }
 
+export async function getPatientTermById(id: number): Promise<PatientTerm | null> {
+  await initSchema()
+  const [row] = await sql<PatientTerm[]>`SELECT * FROM patient_terms WHERE id = ${id}`
+  return row ?? null
+}
+
 export async function deletePatientTerm(id: number): Promise<{ file_s3_key: string | null }> {
   await initSchema()
   const [row] = await sql<{ file_s3_key: string | null }[]>`

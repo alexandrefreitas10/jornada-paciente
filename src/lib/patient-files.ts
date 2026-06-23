@@ -52,3 +52,11 @@ export async function deletePatientFile(id: number): Promise<string> {
   `
   return row.s3_key
 }
+
+export async function deletePatientFileAndReturn(id: number): Promise<PatientFile | null> {
+  await initSchema()
+  const [row] = await sql<PatientFile[]>`
+    DELETE FROM patient_files WHERE id = ${id} RETURNING *
+  `
+  return row ?? null
+}

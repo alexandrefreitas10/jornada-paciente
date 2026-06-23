@@ -57,6 +57,12 @@ export async function deleteEvolutionSummary(id: number): Promise<void> {
   return row?.audio_s3_key ? undefined : undefined
 }
 
+export async function getEvolutionSummaryById(id: number): Promise<EvolutionSummary | null> {
+  await initSchema()
+  const [row] = await sql<EvolutionSummary[]>`SELECT * FROM evolution_summaries WHERE id = ${id}`
+  return row ?? null
+}
+
 export async function getEvolutionSummaryAudioKey(id: number): Promise<string | null> {
   await initSchema()
   const [row] = await sql<{ audio_s3_key: string | null }[]>`

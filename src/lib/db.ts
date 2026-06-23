@@ -145,6 +145,9 @@ export async function initSchema() {
     )
   `).catch(() => {})
 
+  // Coluna de dados apagados no audit_log (para restauração)
+  await sql.unsafe(`ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS deleted_data JSONB`).catch(() => {})
+
   // Usuário administrador principal
   await sql.unsafe(`UPDATE users SET is_admin = TRUE WHERE username = '038.069.291-06'`).catch(() => {})
 }

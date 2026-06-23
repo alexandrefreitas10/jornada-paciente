@@ -22,13 +22,14 @@ export async function DELETE(
   const { id } = await params
   const session = await auth()
   const userName = session?.user?.name ?? 'Desconhecido'
+  const allMeasurements = await listMeasurements(Number(id))
   await deleteAllMeasurements(Number(id))
   const photos = await listPatientFiles(Number(id), 'evolution')
   await Promise.all(photos.map(async (f) => {
     await deleteFile(f.s3_key).catch(() => {})
     await deletePatientFile(f.id)
   }))
-  await logAudit({ userName, action: 'DELETE_ALL', entityType: 'measurements', patientId: Number(id), details: 'Apagou tabela completa e fotos' })
+  await logAudit({ userName, action: 'DELETE_ALL', entityType: 'measurements', patientId: Number(id), details: `${allMeasurements.length} medições`, deletedData: { rows: allMeasurements } })
   return new Response(null, { status: 204 })
 }
 
