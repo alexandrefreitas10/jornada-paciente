@@ -73,7 +73,7 @@ export function DeletedItemsButton({ patientId, entityTypes, fileType }: Props) 
       const data = await res.json()
       if (!res.ok) { alert(data.error || 'Erro ao restaurar'); return }
       setLogs(prev => prev ? prev.filter(l => l.id !== log.id) : prev)
-      router.refresh()
+      window.location.reload()
     } finally {
       setRestoring(null)
     }
