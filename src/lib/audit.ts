@@ -33,7 +33,7 @@ export async function logAudit(params: {
         ${params.entityId?.toString() ?? null},
         ${params.patientId ?? null},
         ${params.details ?? null},
-        ${params.deletedData ?? null}
+        ${params.deletedData != null ? sql.json(params.deletedData as never) : null}
       )
     `
   } catch (err) {
