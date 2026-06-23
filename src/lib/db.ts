@@ -94,7 +94,7 @@ export async function initSchema() {
       id SERIAL PRIMARY KEY,
       title TEXT NOT NULL,
       content TEXT DEFAULT '',
-      file_data BYTEA,
+      file_s3_key TEXT,
       file_name TEXT,
       file_mime TEXT,
       fields JSONB DEFAULT '[]',
@@ -102,8 +102,9 @@ export async function initSchema() {
       created_by TEXT NOT NULL
     )
   `).catch(() => {})
-  // Migração: se tiver file_s3_key, remover (vamos usar file_data)
-  await sql.unsafe(`ALTER TABLE terms DROP COLUMN IF EXISTS file_s3_key`).catch(() => {})
+  // Migração: remover file_data antigo e garantir file_s3_key
+  await sql.unsafe(`ALTER TABLE terms DROP COLUMN IF EXISTS file_data`).catch(() => {})
+  await sql.unsafe(`ALTER TABLE terms ADD COLUMN IF NOT EXISTS file_s3_key TEXT`).catch(() => {})
 
   // Tabela de termos para assinatura
   await sql.unsafe(`
