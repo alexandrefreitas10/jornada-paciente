@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import sql, { initSchema } from '@/lib/db'
-import { compare } from 'bcrypt'
+import bcrypt from 'bcryptjs'
 
 export async function DELETE(
   req: NextRequest,
@@ -30,7 +30,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
     }
 
-    const passwordMatch = await compare(adminPassword, user.password_hash)
+    const passwordMatch = await bcrypt.compare(adminPassword, user.password_hash)
     if (!passwordMatch) {
       return NextResponse.json({ error: 'Senha incorreta' }, { status: 401 })
     }
