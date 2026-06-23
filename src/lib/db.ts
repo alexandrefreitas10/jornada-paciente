@@ -125,7 +125,7 @@ export async function initSchema() {
       sign_token TEXT UNIQUE
     )
   `).catch(() => {})
-  await sql.unsafe(`ALTER TABLE patient_terms ADD COLUMN IF NOT EXISTS file_s3_key TEXT`).catch(() => {})
+  await sql.unsafe(`ALTER TABLE patient_terms ADD COLUMN IF NOT EXISTS file_data BYTEA`).catch(() => {})
   await sql.unsafe(`ALTER TABLE patient_terms ADD COLUMN IF NOT EXISTS file_name TEXT`).catch(() => {})
   await sql.unsafe(`ALTER TABLE patient_terms ADD COLUMN IF NOT EXISTS file_mime TEXT`).catch(() => {})
   await sql.unsafe(`ALTER TABLE patient_terms ADD COLUMN IF NOT EXISTS original_s3_key TEXT`).catch(() => {})

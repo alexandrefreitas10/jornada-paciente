@@ -8,7 +8,7 @@ interface PatientTerm {
   id: number
   title: string
   content: string
-  file_s3_key: string | null
+  file_data: Buffer | null
   file_name: string | null
   file_mime: string | null
   fields: string[]
@@ -44,14 +44,14 @@ export async function POST(
   await initSchema()
   const [row] = await sql<any>`
     INSERT INTO patient_terms (
-      patient_id, title, content, file_s3_key, file_name, file_mime,
+      patient_id, title, content, file_data, file_name, file_mime,
       fields, status, created_by, sign_token, sent_at
     )
     VALUES (
       ${Number(id)},
       ${template.title},
       ${template.content},
-      ${template.file_s3_key},
+      ${template.file_data},
       ${template.file_name},
       ${template.file_mime},
       ${sql.json(template.fields as never)},
@@ -60,7 +60,7 @@ export async function POST(
       ${signToken},
       NOW()
     )
-    RETURNING id, title, content, file_s3_key, file_name, file_mime,
+    RETURNING id, title, content, file_data, file_name, file_mime,
       COALESCE(fields, '[]'::jsonb) AS fields,
       status, created_at, sent_at, signed_at, signer_name, sign_token
   `
