@@ -176,16 +176,14 @@ export function TermsTab({ patientId }: Props) {
                     <span className={`text-xs font-medium px-2 py-1 rounded-full whitespace-nowrap ${STATUS[term.status].color}`}>
                       {STATUS[term.status].label}
                     </span>
-                    {term.status !== 'signed' && (
-                      <button
-                        onClick={() => handleDelete(term.id)}
-                        disabled={deleting === term.id}
-                        className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded font-medium transition-colors disabled:opacity-50 border border-red-200"
-                        title="Excluir este termo"
-                      >
-                        {deleting === term.id ? '⏳' : '🗑 Excluir'}
-                      </button>
-                    )}
+                    <button
+                      onClick={() => handleDelete(term.id)}
+                      disabled={deleting === term.id}
+                      className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded font-medium transition-colors disabled:opacity-50 border border-red-200"
+                      title="Excluir este termo"
+                    >
+                      {deleting === term.id ? '⏳' : '🗑 Excluir'}
+                    </button>
                   </div>
                 </div>
 
