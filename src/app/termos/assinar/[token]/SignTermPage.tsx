@@ -250,7 +250,7 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
                   <div>
                     <p className="text-sm font-semibold text-gray-700">Preencha os campos do documento</p>
                   </div>
-                  {term.fields.map(field => (
+                  {term.fields.filter(f => f.toLowerCase() !== 'nome completo').map(field => (
                     <div key={field}>
                       <label className="block text-xs font-medium text-gray-500 mb-1">{field}</label>
                       <input
