@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
+import { auth } from '@/auth'
 import { getPatient, updatePatient, deletePatient } from '@/lib/patients'
+import { logAudit } from '@/lib/audit'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -27,6 +29,10 @@ export async function PUT(request: Request, { params }: Params) {
 
 export async function DELETE(_req: Request, { params }: Params) {
   const { id } = await params
+  const session = await auth()
+  const userName = session?.user?.name ?? 'Desconhecido'
+  const patient = await getPatient(Number(id))
   await deletePatient(Number(id))
+  await logAudit({ userName, action: 'DELETE', entityType: 'patient', entityId: id, details: patient?.name })
   return NextResponse.json({ ok: true })
 }

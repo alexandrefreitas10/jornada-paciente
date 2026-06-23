@@ -1,7 +1,9 @@
 import { NextRequest } from 'next/server'
+import { auth } from '@/auth'
 import { listMeasurements, createMeasurement, deleteAllMeasurements } from '@/lib/measurements'
 import { listPatientFiles, deletePatientFile } from '@/lib/patient-files'
 import { deleteFile } from '@/lib/s3'
+import { logAudit } from '@/lib/audit'
 
 export async function GET(
   _req: NextRequest,
@@ -18,12 +20,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
+  const session = await auth()
+  const userName = session?.user?.name ?? 'Desconhecido'
   await deleteAllMeasurements(Number(id))
   const photos = await listPatientFiles(Number(id), 'evolution')
   await Promise.all(photos.map(async (f) => {
     await deleteFile(f.s3_key).catch(() => {})
     await deletePatientFile(f.id)
   }))
+  await logAudit({ userName, action: 'DELETE_ALL', entityType: 'measurements', patientId: Number(id), details: 'Apagou tabela completa e fotos' })
   return new Response(null, { status: 204 })
 }
 

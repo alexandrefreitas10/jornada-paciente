@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { AdminPasswordModal } from './AdminPasswordModal'
 import { NotesSection } from './NotesSection'
 
 interface FileRecord {
@@ -165,7 +164,6 @@ interface Props {
 
 export function FilesTab({ patientId, fileType, initialFiles }: Props) {
   const [files, setFiles] = useState<FileRecord[]>(initialFiles)
-  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -213,7 +211,6 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
   async function handleDelete(id: number) {
     await fetch(`/api/patients/${patientId}/files/${id}`, { method: 'DELETE' })
     setFiles((prev) => prev.filter((f) => f.id !== id))
-    setPendingDeleteId(null)
   }
 
   function handleDownload(id: number) {
@@ -440,12 +437,6 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
   // ── Lista/grade normal ───────────────────────────────────────────────────────
   return (
     <div className="space-y-5">
-      {pendingDeleteId !== null && (
-        <AdminPasswordModal
-          onConfirm={() => handleDelete(pendingDeleteId)}
-          onCancel={() => setPendingDeleteId(null)}
-        />
-      )}
       <div className="flex items-center gap-3 flex-wrap">
         <input ref={fileInputRef} type="file" accept={accept} className="hidden" onChange={handleFileChange} />
         {!compareMode && (
@@ -562,7 +553,7 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
 
                 {!compareMode && (
                   <button
-                    onClick={() => setPendingDeleteId(f.id)}
+                    onClick={() => handleDelete(f.id)}
                     className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                     title="Apagar"
                   >
@@ -594,7 +585,7 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
                 <button onClick={() => handleDownload(f.id)} className="text-xs text-violet-600 hover:text-violet-800 shrink-0" title="Baixar">
                   ⬇️
                 </button>
-                <button onClick={() => setPendingDeleteId(f.id)} className="text-xs text-gray-400 hover:text-red-500 shrink-0" title="Apagar">
+                <button onClick={() => handleDelete(f.id)} className="text-xs text-gray-400 hover:text-red-500 shrink-0" title="Apagar">
                   🗑️
                 </button>
               </div>

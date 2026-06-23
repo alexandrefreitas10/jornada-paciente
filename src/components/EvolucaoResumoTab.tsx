@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { AdminPasswordModal } from './AdminPasswordModal'
 
 interface SummaryTopics {
   objetivos_principais: string
@@ -154,20 +153,11 @@ function SummaryCard({
   onDelete: (id: number) => void
 }) {
   const [showTranscription, setShowTranscription] = useState(false)
-  const [pendingDelete, setPendingDelete] = useState(false)
-
   const visibleTopics = activeFilter ? TOPICS.filter(t => t.key === activeFilter) : TOPICS
   const hasContent = (v: string) => v && v !== 'Não mencionado' && v.trim().length > 0
 
   return (
     <div className="border border-gray-200 rounded-xl overflow-hidden">
-      {pendingDelete && (
-        <AdminPasswordModal
-          onConfirm={() => onDelete(summary.id)}
-          onCancel={() => setPendingDelete(false)}
-        />
-      )}
-
       <div className="bg-gray-50 px-4 py-3 flex items-center justify-between gap-3 border-b border-gray-200">
         <span className="text-sm font-semibold text-gray-800">
           {new Date(summary.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
@@ -177,7 +167,7 @@ function SummaryCard({
             className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
             {showTranscription ? 'Ocultar transcrição' : 'Ver transcrição'}
           </button>
-          <button onClick={() => setPendingDelete(true)}
+          <button onClick={() => onDelete(summary.id)}
             className="text-xs text-red-400 hover:text-red-600 transition-colors" title="Excluir">
             🗑️
           </button>

@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Measurement, MeasurementInput } from '@/lib/measurements'
 import { MeasurementChart } from './MeasurementChart'
-import { AdminPasswordModal } from './AdminPasswordModal'
 import { ImageCropModal } from './ImageCropModal'
 import { NotesSection } from './NotesSection'
 
@@ -32,9 +31,7 @@ const emptyInput = (): MeasurementInput => ({
 })
 
 export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionPhotos, initialPrescriptions, currentUserName }: Props) {
-  const canDeleteTableFree = currentUserName.toLowerCase() === 'carlos'
   const [measurements, setMeasurements] = useState<Measurement[]>(initialMeasurements)
-  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null)
   const [evolutionPhotos, setEvolutionPhotos] = useState<EvolutionPhoto[]>(initialEvolutionPhotos)
   const [prescriptions, setPrescriptions] = useState<EvolutionPhoto[]>(initialPrescriptions)
   const [uploading, setUploading] = useState(false)
@@ -42,7 +39,6 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
   const [uploadingPrescription, setUploadingPrescription] = useState(false)
   const [prescriptionError, setPrescriptionError] = useState<string | null>(null)
   const [cropFile, setCropFile] = useState<File | null>(null)
-  const [pendingDeleteTable, setPendingDeleteTable] = useState(false)
   const [showPhotoMenu, setShowPhotoMenu] = useState(false)
   const [showPrescriptionMenu, setShowPrescriptionMenu] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -78,10 +74,10 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
   }
 
   async function handleDeleteTable() {
+    if (!confirm('Apagar tabela e todas as medições?')) return
     await fetch(`/api/patients/${patientId}/measurements`, { method: 'DELETE' })
     setMeasurements([])
     setEvolutionPhotos([])
-    setPendingDeleteTable(false)
   }
 
   async function handleCropConfirm(blob: Blob) {
@@ -155,7 +151,6 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
   async function handleDelete(id: number) {
     await fetch(`/api/patients/${patientId}/measurements/${id}`, { method: 'DELETE' })
     setMeasurements((prev) => prev.filter((m) => m.id !== id))
-    if (pendingDeleteId === id) setPendingDeleteId(null)
   }
 
   async function handleSaveNew() {
@@ -198,23 +193,11 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
 
   return (
     <div className="space-y-6">
-      {pendingDeleteId !== null && !canDeleteTableFree && (
-        <AdminPasswordModal
-          onConfirm={() => handleDelete(pendingDeleteId)}
-          onCancel={() => setPendingDeleteId(null)}
-        />
-      )}
       {cropFile && (
         <ImageCropModal
           file={cropFile}
           onConfirm={handleCropConfirm}
           onCancel={() => setCropFile(null)}
-        />
-      )}
-      {pendingDeleteTable && !canDeleteTableFree && (
-        <AdminPasswordModal
-          onConfirm={handleDeleteTable}
-          onCancel={() => setPendingDeleteTable(false)}
         />
       )}
       {/* Upload de foto da tabela + prescrição */}
@@ -372,7 +355,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
                       ✏️
                     </button>
                     <button
-                      onClick={() => canDeleteTableFree ? handleDelete(m.id) : setPendingDeleteId(m.id)}
+                      onClick={() => handleDelete(m.id)}
                       className="text-xs text-gray-400 hover:text-red-500"
                       title="Apagar"
                     >
@@ -550,7 +533,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
                       ⬇️
                     </a>
                     <button
-                      onClick={() => canDeleteTableFree ? handleDeleteTable() : setPendingDeleteTable(true)}
+                      onClick={() => handleDeleteTable()}
                       className="text-xs text-gray-400 hover:text-red-500"
                       title="Excluir tabela e medições"
                     >
