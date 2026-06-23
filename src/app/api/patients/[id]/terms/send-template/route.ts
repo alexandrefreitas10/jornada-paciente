@@ -1,24 +1,9 @@
 import { NextRequest } from 'next/server'
 import { auth } from '@/auth'
 import { getTerm } from '@/lib/terms'
+import { PatientTerm } from '@/lib/patient-terms'
 import sql, { initSchema } from '@/lib/db'
 import { randomUUID } from 'crypto'
-
-interface PatientTerm {
-  id: number
-  title: string
-  content: string
-  file_s3_key: string | null
-  file_name: string | null
-  file_mime: string | null
-  fields: string[]
-  status: 'draft' | 'sent' | 'signed'
-  created_at: string
-  sent_at: string | null
-  signed_at: string | null
-  signer_name: string | null
-  sign_token: string | null
-}
 
 export async function POST(
   req: NextRequest,

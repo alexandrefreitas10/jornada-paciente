@@ -13,8 +13,8 @@ export async function GET(
   const key = term?.signed_file_s3_key ?? term?.file_s3_key
   if (!term || !key) return NextResponse.json({ error: 'Arquivo não encontrado' }, { status: 404 })
 
-  const isSignedDocx = term.signed_file_s3_key?.endsWith('.docx')
-  const fileName = term.signed_file_s3_key
+  const isSignedDocx = term?.signed_file_s3_key?.endsWith('.docx')
+  const fileName = term?.signed_file_s3_key
     ? (isSignedDocx
         ? (term.file_name?.replace(/\.[^.]+$/, '') ?? term.title) + '_assinado.docx'
         : (term.file_name?.replace(/\.[^.]+$/, '') ?? term.title) + '_assinado.pdf')
