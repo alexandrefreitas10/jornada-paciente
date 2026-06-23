@@ -50,6 +50,7 @@ export function TermsTab({ patientId }: Props) {
   const [selectedTemplate, setSelectedTemplate] = useState<number | null>(null)
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [deleting, setDeleting] = useState<number | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -95,6 +96,17 @@ export function TermsTab({ patientId }: Props) {
       `Olá! Por favor, acesse o link abaixo para ler e assinar o termo "${term.title}":\n\n${link}`
     )
     window.open(`https://wa.me/?text=${msg}`, '_blank')
+  }
+
+  async function handleDelete(termId: number) {
+    if (!confirm('Excluir este termo?')) return
+    setDeleting(termId)
+    try {
+      await fetch(`/api/patients/${patientId}/terms/${termId}`, { method: 'DELETE' })
+      setTerms(prev => prev.filter(t => t.id !== termId))
+    } finally {
+      setDeleting(null)
+    }
   }
 
   if (loading) {
@@ -186,12 +198,21 @@ export function TermsTab({ patientId }: Props) {
                 )}
 
                 {term.status === 'signed' && term.sign_token && (
-                  <a
-                    href={`/api/terms/sign/${term.sign_token}/file?signed=1`}
-                    className="inline-block text-xs text-violet-600 hover:text-violet-700 px-2 py-1 rounded hover:bg-violet-50 transition-colors"
-                  >
-                    ⬇ Baixar assinado
-                  </a>
+                  <div className="flex gap-2">
+                    <a
+                      href={`/api/terms/sign/${term.sign_token}/file?signed=1`}
+                      className="inline-block text-xs text-violet-600 hover:text-violet-700 px-2 py-1 rounded hover:bg-violet-50 transition-colors"
+                    >
+                      ⬇ Baixar assinado
+                    </a>
+                    <button
+                      onClick={() => handleDelete(term.id)}
+                      disabled={deleting === term.id}
+                      className="text-xs text-gray-400 hover:text-red-500 px-2 py-1 rounded hover:bg-red-50 transition-colors disabled:opacity-50"
+                    >
+                      {deleting === term.id ? '...' : '🗑'}
+                    </button>
+                  </div>
                 )}
               </div>
             ))}
