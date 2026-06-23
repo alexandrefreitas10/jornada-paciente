@@ -6,7 +6,7 @@ import { findUserByUsername } from '@/lib/users'
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ logId: string }> }
 ) {
   try {
     console.log('[permanently-delete] Starting...')
@@ -16,8 +16,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
     }
 
-    const { id } = await params
-    console.log('[permanently-delete] ID:', id)
+    const { logId } = await params
+    console.log('[permanently-delete] LogID:', logId)
     const body = await req.json()
     const { adminPassword } = body
     console.log('[permanently-delete] Has password:', !!adminPassword)
@@ -39,13 +39,13 @@ export async function DELETE(
     }
 
     await initSchema()
-    console.log('[permanently-delete] Deleting audit log:', id)
-    await sql`DELETE FROM audit_logs WHERE id = ${Number(id)}`
+    console.log('[permanently-delete] Deleting audit log:', logId)
+    await sql`DELETE FROM audit_logs WHERE id = ${Number(logId)}`
 
     console.log('[permanently-delete] Done!')
     return NextResponse.json({ ok: true })
   } catch (err) {
-    console.error('[DELETE /api/admin/audit/[id]/permanently-delete]', err)
+    console.error('[DELETE /api/admin/audit/[logId]/permanently-delete]', err)
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }
 }
