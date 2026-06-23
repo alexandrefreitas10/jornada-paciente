@@ -32,11 +32,34 @@ export async function listPatients(): Promise<PatientListItem[]> {
     SELECT p.*, COUNT(tc.id)::int as completed_count
     FROM patients p
     LEFT JOIN task_completions tc ON tc.patient_id = p.id
-    WHERE p.deleted_at IS NULL
+    WHERE p.deleted_at IS NULL AND p.archived_at IS NULL
     GROUP BY p.id
     ORDER BY p.created_at DESC
   `
   return rows
+}
+
+export async function listArchivedPatients(): Promise<PatientListItem[]> {
+  await initSchema()
+  const rows = await sql<PatientListItem[]>`
+    SELECT p.*, COUNT(tc.id)::int as completed_count
+    FROM patients p
+    LEFT JOIN task_completions tc ON tc.patient_id = p.id
+    WHERE p.deleted_at IS NULL AND p.archived_at IS NOT NULL
+    GROUP BY p.id
+    ORDER BY p.archived_at DESC
+  `
+  return rows
+}
+
+export async function archivePatient(id: number): Promise<void> {
+  await initSchema()
+  await sql`UPDATE patients SET archived_at = NOW() WHERE id = ${id}`
+}
+
+export async function unarchivePatient(id: number): Promise<void> {
+  await initSchema()
+  await sql`UPDATE patients SET archived_at = NULL WHERE id = ${id}`
 }
 
 export async function listDeletedPatients(): Promise<PatientListItem[]> {

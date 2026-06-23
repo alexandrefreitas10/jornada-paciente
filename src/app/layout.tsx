@@ -39,6 +39,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <span className="text-gray-300">|</span>
                 <a href="/relatorios" className="hover:text-violet-700 transition-colors">Relatórios</a>
                 <span className="text-gray-300">|</span>
+                <a href="/pacientes-antigos" className="hover:text-violet-700 transition-colors">Pacientes Antigos</a>
+                <span className="text-gray-300">|</span>
                 <span className="truncate max-w-[140px]">{session.user.name}</span>
                 <LogoutButton />
               </div>

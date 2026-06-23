@@ -130,6 +130,8 @@ export async function initSchema() {
 
   // Soft delete em pacientes
   await sql.unsafe(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`).catch(() => {})
+  // Arquivamento de pacientes (saíram do tratamento mas dados preservados)
+  await sql.unsafe(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`).catch(() => {})
 
   // Registro de auditoria de exclusões
   await sql.unsafe(`

@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { ProgressBar } from './ProgressBar'
 import { PatientListItem } from '@/lib/patients'
+import { ArchivePatientButton } from './ArchivePatientButton'
 
 const AVATAR_COLORS = [
   'bg-violet-500', 'bg-blue-500', 'bg-emerald-500',
@@ -30,7 +31,8 @@ export function PatientCard({ patient }: Props) {
   const treatment = treatmentWeeks(patient.start_date, patient.duration)
 
   return (
-    <Link href={`/pacientes/${patient.id}`} className="block">
+    <div className="flex items-center gap-2">
+      <Link href={`/pacientes/${patient.id}`} className="block flex-1 min-w-0">
       <div className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-200 hover:border-violet-300 hover:shadow-sm transition-all">
         <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0 ${avatarColor(patient.name)}`}>
           {patient.name.charAt(0).toUpperCase()}
@@ -64,6 +66,8 @@ export function PatientCard({ patient }: Props) {
           <ProgressBar completed={patient.completed_count} total={19} />
         </div>
       </div>
-    </Link>
+      </Link>
+      <ArchivePatientButton patientId={patient.id} patientName={patient.name} />
+    </div>
   )
 }
