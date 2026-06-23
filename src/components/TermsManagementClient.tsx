@@ -21,6 +21,7 @@ export function TermsManagementClient({ initialTerms }: Props) {
   const [fieldInput, setFieldInput] = useState('')
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState<number | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
@@ -32,6 +33,7 @@ export function TermsManagementClient({ initialTerms }: Props) {
     setFieldInput('')
     setMode('text')
     setCreating(false)
+    setError(null)
     if (fileRef.current) fileRef.current.value = ''
   }
 
@@ -46,9 +48,19 @@ export function TermsManagementClient({ initialTerms }: Props) {
   }
 
   async function handleCreate() {
-    if (!title.trim()) return
-    if (mode === 'text' && !content.trim()) return
-    if (mode === 'file' && !file) return
+    setError(null)
+    if (!title.trim()) {
+      setError('Título é obrigatório')
+      return
+    }
+    if (mode === 'text' && !content.trim()) {
+      setError('Conteúdo é obrigatório')
+      return
+    }
+    if (mode === 'file' && !file) {
+      setError('Arquivo é obrigatório')
+      return
+    }
 
     setSaving(true)
     const fd = new FormData()
@@ -62,13 +74,17 @@ export function TermsManagementClient({ initialTerms }: Props) {
 
     try {
       const res = await fetch('/api/terms', { method: 'POST', body: fd })
+      const data = await res.json()
       if (!res.ok) {
-        alert((await res.json()).error || 'Erro ao criar termo')
+        setError(data.error || 'Erro ao criar termo')
         return
       }
-      const newTerm: Term = await res.json()
+      const newTerm: Term = data
       setTerms(prev => [newTerm, ...prev])
+      alert(`✓ Termo "${title}" salvo com sucesso!`)
       resetForm()
+    } catch (err) {
+      setError('Erro ao salvar termo: ' + String(err))
     } finally {
       setSaving(false)
     }
@@ -99,6 +115,12 @@ export function TermsManagementClient({ initialTerms }: Props) {
       {creating && (
         <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-3 shadow-sm">
           <h3 className="text-sm font-semibold text-gray-700">Novo template de termo</h3>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-700">
+              {error}
+            </div>
+          )}
 
           <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
             {(['text', 'file'] as const).map(m => (
