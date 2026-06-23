@@ -5,6 +5,7 @@ import { Measurement, MeasurementInput } from '@/lib/measurements'
 import { MeasurementChart } from './MeasurementChart'
 import { ImageCropModal } from './ImageCropModal'
 import { NotesSection } from './NotesSection'
+import { DeletedItemsButton } from './DeletedItemsButton'
 
 interface EvolutionPhoto {
   id: number
@@ -202,6 +203,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
       )}
       {/* Upload de foto da tabela + prescrição */}
       <div className="flex flex-wrap items-center gap-3">
+        <DeletedItemsButton patientId={patientId} entityTypes={['measurement', 'measurements']} />
         {/* inputs hidden */}
         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={e => { setShowPhotoMenu(false); handlePhotoChange(e) }} />
         <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { setShowPhotoMenu(false); handlePhotoChange(e) }} />

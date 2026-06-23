@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { NotesSection } from './NotesSection'
+import { DeletedItemsButton } from './DeletedItemsButton'
 
 interface ExamFile {
   id: number
@@ -103,6 +104,7 @@ export function ExamsTab({ patientId, initialFiles }: Props) {
         <div className="space-y-4">
           {/* Upload */}
           <div className="flex items-center gap-3 flex-wrap">
+            <DeletedItemsButton patientId={patientId} entityTypes={['file']} fileType="exam" />
             <input
               ref={fileInputRef}
               type="file"

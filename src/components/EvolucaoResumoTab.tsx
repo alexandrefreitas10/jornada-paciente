@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { DeletedItemsButton } from './DeletedItemsButton'
 
 interface SummaryTopics {
   objetivos_principais: string
@@ -226,6 +227,7 @@ export function EvolucaoResumoTab({ patientId, initialSummaries }: Props) {
 
   return (
     <div className="space-y-5">
+      <DeletedItemsButton patientId={patientId} entityTypes={['evolution_summary']} />
       {!showForm && (
         <button onClick={() => setShowForm(true)}
           className="w-full py-2.5 border-2 border-dashed border-violet-300 text-violet-600 text-sm font-medium rounded-xl hover:bg-violet-50 transition-colors">

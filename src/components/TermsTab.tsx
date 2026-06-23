@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { DeletedItemsButton } from './DeletedItemsButton'
 
 interface Term {
   id: number
@@ -125,12 +126,15 @@ export function TermsTab({ patientId }: Props) {
   return (
     <div className="space-y-4">
       {!creating && (
-        <button
-          onClick={() => setCreating(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 transition-colors"
-        >
-          + Adicionar termo
-        </button>
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            onClick={() => setCreating(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 transition-colors"
+          >
+            + Adicionar termo
+          </button>
+          <DeletedItemsButton patientId={patientId} entityTypes={['term']} />
+        </div>
       )}
 
       {creating && (

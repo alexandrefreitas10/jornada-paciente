@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { NotesSection } from './NotesSection'
+import { DeletedItemsButton } from './DeletedItemsButton'
 
 interface FileRecord {
   id: number
@@ -438,6 +439,7 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3 flex-wrap">
+        <DeletedItemsButton patientId={patientId} entityTypes={['file']} fileType={fileType} />
         <input ref={fileInputRef} type="file" accept={accept} className="hidden" onChange={handleFileChange} />
         {!compareMode && (
           <button
