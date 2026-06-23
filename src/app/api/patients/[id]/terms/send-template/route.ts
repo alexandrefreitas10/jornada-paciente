@@ -42,7 +42,7 @@ export async function POST(
   const signToken = randomUUID()
 
   await initSchema()
-  const [row] = await sql<PatientTerm[]>`
+  const [row] = await sql<any>`
     INSERT INTO patient_terms (
       patient_id, title, content, file_s3_key, file_name, file_mime,
       fields, status, created_by, sign_token, sent_at
@@ -61,9 +61,13 @@ export async function POST(
       NOW()
     )
     RETURNING id, title, content, file_s3_key, file_name, file_mime,
-      COALESCE(fields, '[]'::jsonb)::text[]::jsonb AS fields,
+      COALESCE(fields, '[]'::jsonb) AS fields,
       status, created_at, sent_at, signed_at, signer_name, sign_token
   `
+  const result: PatientTerm = {
+    ...row,
+    fields: Array.isArray(row.fields) ? row.fields : (typeof row.fields === 'string' ? JSON.parse(row.fields) : []),
+  }
 
-  return Response.json(row, { status: 201 })
+  return Response.json(result, { status: 201 })
 }

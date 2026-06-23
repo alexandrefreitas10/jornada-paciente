@@ -24,27 +24,35 @@ export interface TermInput {
 
 export async function listTerms(): Promise<Term[]> {
   await initSchema()
-  return sql<Term[]>`
+  const rows = await sql<any[]>`
     SELECT
       id, title, content, file_s3_key, file_name, file_mime,
-      COALESCE(fields, '[]'::jsonb)::text[]::jsonb AS fields,
+      COALESCE(fields, '[]'::jsonb) AS fields,
       created_at, created_by
     FROM terms
     ORDER BY created_at DESC
   `
+  return rows.map(r => ({
+    ...r,
+    fields: Array.isArray(r.fields) ? r.fields : (typeof r.fields === 'string' ? JSON.parse(r.fields) : []),
+  }))
 }
 
 export async function getTerm(id: number): Promise<Term | null> {
   await initSchema()
-  const [row] = await sql<Term[]>`
+  const [row] = await sql<any[]>`
     SELECT
       id, title, content, file_s3_key, file_name, file_mime,
-      COALESCE(fields, '[]'::jsonb)::text[]::jsonb AS fields,
+      COALESCE(fields, '[]'::jsonb) AS fields,
       created_at, created_by
     FROM terms
     WHERE id = ${id}
   `
-  return row ?? null
+  if (!row) return null
+  return {
+    ...row,
+    fields: Array.isArray(row.fields) ? row.fields : (typeof row.fields === 'string' ? JSON.parse(row.fields) : []),
+  }
 }
 
 export async function createTerm(input: TermInput): Promise<Term> {
