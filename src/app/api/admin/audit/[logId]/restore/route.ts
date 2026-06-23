@@ -42,6 +42,8 @@ export async function POST(
           file_name: t.file_name ?? null,
           file_mime: t.file_mime ?? null,
           fields: Array.isArray(t.fields) ? t.fields : [],
+          filled_fields: t.filled_fields ?? {},
+          signed_file_s3_key: t.signed_file_s3_key ?? null,
           status: t.status ?? 'draft',
           created_by: t.created_by ?? 'sistema',
           sign_token: t.sign_token,
