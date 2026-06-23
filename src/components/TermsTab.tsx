@@ -44,6 +44,8 @@ export function TermsTab({ patientId }: Props) {
   const [sending, setSending] = useState<number | null>(null)
   const [copiedId, setCopiedId] = useState<number | null>(null)
   const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [pdfFields, setPdfFields] = useState<string[]>([])
+  const [fieldInput, setFieldInput] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -53,7 +55,15 @@ export function TermsTab({ patientId }: Props) {
 
   function resetForm() {
     setTitle(''); setFile(null); setContent(''); setCreating(false); setMode('file')
+    setPdfFields([]); setFieldInput('')
     if (fileRef.current) fileRef.current.value = ''
+  }
+
+  function addField() {
+    const v = fieldInput.trim()
+    if (!v || pdfFields.includes(v)) { setFieldInput(''); return }
+    setPdfFields(prev => [...prev, v])
+    setFieldInput('')
   }
 
   async function handleCreate() {
@@ -64,7 +74,12 @@ export function TermsTab({ patientId }: Props) {
     setSaving(true)
     const fd = new FormData()
     fd.append('title', title)
-    if (file) { fd.append('file', file) } else { fd.append('content', content) }
+    if (file) {
+      fd.append('file', file)
+      if (pdfFields.length > 0) fd.append('fields', JSON.stringify(pdfFields))
+    } else {
+      fd.append('content', content)
+    }
 
     const res = await fetch(`/api/patients/${patientId}/terms`, { method: 'POST', body: fd })
     const data = await res.json()
@@ -176,6 +191,50 @@ export function TermsTab({ patientId }: Props) {
                 className="block w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100"
               />
               {file && <p className="text-xs text-gray-400 mt-1">{file.name}</p>}
+            </div>
+          )}
+
+          {mode === 'file' && (
+            <div className="space-y-2">
+              <label className="block text-xs text-gray-500">
+                Campos que o paciente vai preencher <span className="text-gray-400">(opcional)</span>
+              </label>
+              <div className="flex gap-1 flex-wrap mb-1">
+                {['Nome completo', 'RG', 'Data'].map(s => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => { if (!pdfFields.includes(s)) setPdfFields(prev => [...prev, s]) }}
+                    disabled={pdfFields.includes(s)}
+                    className="text-xs px-2 py-1 rounded-full border border-violet-200 text-violet-600 hover:bg-violet-50 disabled:opacity-30 transition-colors"
+                  >
+                    + {s}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={fieldInput}
+                  onChange={e => setFieldInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addField() } }}
+                  placeholder="Outro campo... (Enter para adicionar)"
+                  className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300"
+                />
+                <button type="button" onClick={addField} className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-sm rounded-lg transition-colors">
+                  +
+                </button>
+              </div>
+              {pdfFields.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {pdfFields.map(f => (
+                    <span key={f} className="flex items-center gap-1 text-xs bg-violet-50 border border-violet-200 text-violet-700 px-2 py-1 rounded-full">
+                      {f}
+                      <button onClick={() => setPdfFields(prev => prev.filter(x => x !== f))} className="text-violet-400 hover:text-violet-700 ml-0.5">×</button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

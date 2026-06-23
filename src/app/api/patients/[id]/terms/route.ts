@@ -27,6 +27,8 @@ export async function POST(
   const title = (formData.get('title') as string | null)?.trim()
   const content = (formData.get('content') as string | null)?.trim()
   const file = formData.get('file') as File | null
+  const fieldsRaw = formData.get('fields') as string | null
+  const fields: string[] = fieldsRaw ? JSON.parse(fieldsRaw) : []
 
   if (!title) {
     return Response.json({ error: 'Título obrigatório' }, { status: 400 })
@@ -56,6 +58,6 @@ export async function POST(
   const buffer = Buffer.from(await file.arrayBuffer())
   await uploadFile(s3Key, buffer, file.type as never)
 
-  const term = await createPatientTerm(Number(id), title, createdBy, s3Key, file.name, file.type)
+  const term = await createPatientTerm(Number(id), title, createdBy, s3Key, file.name, file.type, fields)
   return Response.json(term, { status: 201 })
 }

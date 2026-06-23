@@ -27,6 +27,8 @@ interface Term {
   signer_name: string | null
 }
 
+const DEFAULT_DATE = new Date().toLocaleDateString('pt-BR')
+
 // Parse {{Field}} tokens from text content into segments
 function parseTokens(text: string): Array<{ type: 'text'; value: string } | { type: 'field'; name: string }> {
   const parts: Array<{ type: 'text'; value: string } | { type: 'field'; name: string }> = []
@@ -47,7 +49,7 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
   const [term, setTerm] = useState<Term | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [name, setName] = useState('')
-  const [fieldValues, setFieldValues] = useState<Record<string, string>>({})
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>({ 'Data': DEFAULT_DATE })
   const [step, setStep] = useState<'loading' | 'view' | 'sign' | 'done' | 'already'>('loading')
   const [submitting, setSubmitting] = useState(false)
   const [isEmpty, setIsEmpty] = useState(true)
@@ -242,26 +244,20 @@ export function SignTermPage({ params }: { params: Promise<{ token: string }> })
           <>
             <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-5">
 
-              {/* For file-based terms: fixed fields */}
-              {!isTextBased && (
+              {/* For file-based terms: fields defined by admin */}
+              {!isTextBased && term?.fields && term.fields.length > 0 && (
                 <div className="space-y-3">
                   <div>
-                    <p className="text-sm font-semibold text-gray-700">Preencha os espacos do documento</p>
-                    <p className="text-xs text-gray-400 mt-0.5">Campos opcionais — preencha apenas os que existem no seu documento.</p>
+                    <p className="text-sm font-semibold text-gray-700">Preencha os campos do documento</p>
                   </div>
-                  {['CPF', 'Data de nascimento', 'E-mail', 'Telefone'].map(field => (
+                  {term.fields.map(field => (
                     <div key={field}>
                       <label className="block text-xs font-medium text-gray-500 mb-1">{field}</label>
                       <input
-                        type={field === 'E-mail' ? 'email' : 'text'}
-                        inputMode={field === 'CPF' || field === 'Telefone' ? 'numeric' : undefined}
+                        type="text"
                         value={fieldValues[field] ?? ''}
                         onChange={e => setField(field, e.target.value)}
-                        placeholder={
-                          field === 'CPF' ? '000.000.000-00' :
-                          field === 'Data de nascimento' ? 'DD/MM/AAAA' :
-                          `Digite ${field.toLowerCase()}`
-                        }
+                        placeholder={`Digite ${field.toLowerCase()}`}
                         className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                       />
                     </div>
