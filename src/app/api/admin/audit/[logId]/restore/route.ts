@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuditLog, deleteAuditLog } from '@/lib/audit'
 import { createMeasurement, MeasurementInput } from '@/lib/measurements'
 import { createEvolutionSummary, SummaryTopics } from '@/lib/evolution-summaries'
-import { createTextTerm } from '@/lib/patient-terms'
+import { createTextTerm, restorePatientTerm } from '@/lib/patient-terms'
 import { restorePatient } from '@/lib/patients'
 import { restorePatientFile } from '@/lib/patient-files'
 
@@ -32,11 +32,28 @@ export async function POST(
       const s = data as { transcription: string; summary: SummaryTopics; audio_name: string | null }
       await createEvolutionSummary(log.patient_id, s.transcription, s.summary, null, s.audio_name)
     } else if (log.entity_type === 'term' && log.patient_id) {
-      const t = data as { title: string; content: string; file_s3_key: string | null; created_by: string }
-      if (t.file_s3_key) {
-        return NextResponse.json({ error: 'Termos com arquivo não podem ser restaurados (arquivo S3 apagado)' }, { status: 400 })
+      const t = data as any
+      if (t.sign_token) {
+        // Restaurar termo com dados de assinatura
+        await restorePatientTerm(log.patient_id, {
+          title: t.title,
+          content: t.content ?? '',
+          file_s3_key: t.file_s3_key ?? null,
+          file_name: t.file_name ?? null,
+          file_mime: t.file_mime ?? null,
+          fields: Array.isArray(t.fields) ? t.fields : [],
+          status: t.status ?? 'draft',
+          created_by: t.created_by ?? 'sistema',
+          sign_token: t.sign_token,
+          sent_at: t.sent_at ?? null,
+          signed_at: t.signed_at ?? null,
+          signer_name: t.signer_name ?? null,
+          signature_data: t.signature_data ?? null,
+        })
+      } else {
+        // Restaurar termo de texto simples
+        await createTextTerm(log.patient_id, t.title, t.created_by ?? 'sistema', t.content ?? '')
       }
-      await createTextTerm(log.patient_id, t.title, t.created_by ?? 'sistema', t.content ?? '')
     } else if (log.entity_type === 'patient' && log.entity_id) {
       await restorePatient(Number(log.entity_id))
     } else if (log.entity_type === 'file' && log.entity_id) {
