@@ -74,9 +74,15 @@ export function TermsManagementClient({ initialTerms }: Props) {
 
     try {
       const res = await fetch('/api/terms', { method: 'POST', body: fd })
-      const data = await res.json()
+      let data
+      try {
+        data = await res.json()
+      } catch {
+        setError(`Erro do servidor: ${res.status} ${res.statusText}`)
+        return
+      }
       if (!res.ok) {
-        setError(data.error || 'Erro ao criar termo')
+        setError(data?.error || 'Erro ao criar termo')
         return
       }
       const newTerm: Term = data
