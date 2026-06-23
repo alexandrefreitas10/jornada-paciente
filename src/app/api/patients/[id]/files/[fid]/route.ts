@@ -1,7 +1,6 @@
 import { NextRequest } from 'next/server'
 import { auth } from '@/auth'
-import { deletePatientFileAndReturn } from '@/lib/patient-files'
-import { deleteFile } from '@/lib/s3'
+import { softDeletePatientFile } from '@/lib/patient-files'
 import { logAudit } from '@/lib/audit'
 
 export async function DELETE(
@@ -11,8 +10,8 @@ export async function DELETE(
   const { id, fid } = await params
   const session = await auth()
   const userName = session?.user?.name ?? 'Desconhecido'
-  const fileRecord = await deletePatientFileAndReturn(Number(fid))
-  if (fileRecord) await deleteFile(fileRecord.s3_key)
+  // Soft-delete: mantém o arquivo no S3 para que possa ser restaurado
+  const fileRecord = await softDeletePatientFile(Number(fid))
   await logAudit({ userName, action: 'DELETE', entityType: 'file', entityId: fid, patientId: Number(id), details: fileRecord?.original_name, deletedData: fileRecord ?? undefined })
   return new Response(null, { status: 204 })
 }

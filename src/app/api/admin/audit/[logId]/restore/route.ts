@@ -4,6 +4,7 @@ import { createMeasurement, MeasurementInput } from '@/lib/measurements'
 import { createEvolutionSummary, SummaryTopics } from '@/lib/evolution-summaries'
 import { createTextTerm } from '@/lib/patient-terms'
 import { restorePatient } from '@/lib/patients'
+import { restorePatientFile } from '@/lib/patient-files'
 
 export async function POST(
   _req: NextRequest,
@@ -38,8 +39,8 @@ export async function POST(
       await createTextTerm(log.patient_id, t.title, t.created_by ?? 'sistema', t.content ?? '')
     } else if (log.entity_type === 'patient' && log.entity_id) {
       await restorePatient(Number(log.entity_id))
-    } else if (log.entity_type === 'file') {
-      return NextResponse.json({ error: 'Arquivos físicos não podem ser restaurados' }, { status: 400 })
+    } else if (log.entity_type === 'file' && log.entity_id) {
+      await restorePatientFile(Number(log.entity_id))
     } else {
       return NextResponse.json({ error: 'Tipo não suportado para restauração' }, { status: 400 })
     }

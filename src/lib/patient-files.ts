@@ -17,7 +17,7 @@ export async function listPatientFiles(patientId: number, fileType: FileType): P
   await initSchema()
   return sql<PatientFile[]>`
     SELECT * FROM patient_files
-    WHERE patient_id = ${patientId} AND file_type = ${fileType}
+    WHERE patient_id = ${patientId} AND file_type = ${fileType} AND deleted_at IS NULL
     ORDER BY created_at DESC
   `
 }
@@ -59,4 +59,27 @@ export async function deletePatientFileAndReturn(id: number): Promise<PatientFil
     DELETE FROM patient_files WHERE id = ${id} RETURNING *
   `
   return row ?? null
+}
+
+// Soft-delete: mantém o arquivo no S3 para possível restauração
+export async function softDeletePatientFile(id: number): Promise<PatientFile | null> {
+  await initSchema()
+  const [row] = await sql<PatientFile[]>`
+    UPDATE patient_files SET deleted_at = NOW() WHERE id = ${id} AND deleted_at IS NULL RETURNING *
+  `
+  return row ?? null
+}
+
+export async function restorePatientFile(id: number): Promise<void> {
+  await initSchema()
+  await sql`UPDATE patient_files SET deleted_at = NULL WHERE id = ${id}`
+}
+
+export async function listDeletedPatientFiles(patientId: number): Promise<PatientFile[]> {
+  await initSchema()
+  return sql<PatientFile[]>`
+    SELECT * FROM patient_files
+    WHERE patient_id = ${patientId} AND deleted_at IS NOT NULL
+    ORDER BY deleted_at DESC
+  `
 }

@@ -148,6 +148,9 @@ export async function initSchema() {
   // Coluna de dados apagados no audit_log (para restauração)
   await sql.unsafe(`ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS deleted_data JSONB`).catch(() => {})
 
+  // Soft-delete em arquivos de pacientes (mantém S3 para restauração)
+  await sql.unsafe(`ALTER TABLE patient_files ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`).catch(() => {})
+
   // Usuário administrador principal
   await sql.unsafe(`UPDATE users SET is_admin = TRUE WHERE username = '038.069.291-06'`).catch(() => {})
 }
