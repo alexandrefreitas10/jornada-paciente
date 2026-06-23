@@ -433,6 +433,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
               .filter((m) => m.weight != null)
               .map((m) => ({ semana: m.week ?? '?', valor: Number(m.weight) }))}
             color="#7c3aed"
+            zoomAxis
           />
           <MeasurementChart
             title="Circunferência do Abdômen"
@@ -441,6 +442,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
               .filter((m) => m.abdominal_circumference != null)
               .map((m) => ({ semana: m.week ?? '?', valor: Number(m.abdominal_circumference) }))}
             color="#2563eb"
+            zoomAxis
           />
           <MeasurementChart
             title="Circunferência da Cintura"
@@ -449,6 +451,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
               .filter((m) => m.waist_circumference != null)
               .map((m) => ({ semana: m.week ?? '?', valor: Number(m.waist_circumference) }))}
             color="#059669"
+            zoomAxis
           />
           <MeasurementChart
             title="Dose de Tirzepatida"

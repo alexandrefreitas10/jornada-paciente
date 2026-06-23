@@ -20,10 +20,19 @@ interface Props {
   unit: string
   data: ChartPoint[]
   color?: string
+  zoomAxis?: boolean
 }
 
-export function MeasurementChart({ title, unit, data, color = '#7c3aed' }: Props) {
+export function MeasurementChart({ title, unit, data, color = '#7c3aed', zoomAxis = false }: Props) {
   if (data.length === 0) return null
+
+  const values = data.map(d => d.valor)
+  const dataMin = Math.min(...values)
+  const dataMax = Math.max(...values)
+  const padding = Math.max((dataMax - dataMin) * 0.4, 1)
+  const yDomain: [number, number] | undefined = zoomAxis
+    ? [Math.floor(dataMin - padding), Math.ceil(dataMax + padding)]
+    : undefined
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -39,7 +48,7 @@ export function MeasurementChart({ title, unit, data, color = '#7c3aed' }: Props
             label={{ value: 'Semana', position: 'insideBottom', offset: -2, fontSize: 11 }}
             height={36}
           />
-          <YAxis tick={{ fontSize: 11 }} />
+          <YAxis tick={{ fontSize: 11 }} domain={yDomain} />
           <Tooltip
             formatter={(value) => [`${value} ${unit}`, title]}
             labelFormatter={(label) => `Semana ${label}`}
