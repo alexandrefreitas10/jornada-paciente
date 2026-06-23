@@ -20,7 +20,7 @@ export async function logAudit(params: {
   entityId?: string | number
   patientId?: number
   details?: string
-  deletedData?: Record<string, unknown> | null
+  deletedData?: object | null
 }) {
   try {
     await initSchema()
@@ -33,11 +33,11 @@ export async function logAudit(params: {
         ${params.entityId?.toString() ?? null},
         ${params.patientId ?? null},
         ${params.details ?? null},
-        ${params.deletedData ? JSON.stringify(params.deletedData) : null}
+        ${params.deletedData ?? null}
       )
     `
-  } catch {
-    // log silencioso — nunca bloqueia a operação principal
+  } catch (err) {
+    console.error('[logAudit] erro ao salvar log:', err)
   }
 }
 

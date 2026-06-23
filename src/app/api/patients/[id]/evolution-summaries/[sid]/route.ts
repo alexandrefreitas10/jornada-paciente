@@ -16,6 +16,6 @@ export async function DELETE(
   await deleteEvolutionSummary(Number(sid))
   if (audioKey) await deleteFile(audioKey).catch(() => {})
   const date = summary ? new Date(summary.created_at).toLocaleDateString('pt-BR') : ''
-  await logAudit({ userName, action: 'DELETE', entityType: 'evolution_summary', entityId: sid, patientId: Number(id), details: date, deletedData: summary as unknown as Record<string, unknown> ?? undefined })
+  await logAudit({ userName, action: 'DELETE', entityType: 'evolution_summary', entityId: sid, patientId: Number(id), details: date, deletedData: summary ?? undefined })
   return new Response(null, { status: 204 })
 }

@@ -14,6 +14,6 @@ export async function DELETE(
   const term = await getPatientTermById(Number(tid))
   const { file_s3_key } = await deletePatientTerm(Number(tid))
   if (file_s3_key) await deleteFile(file_s3_key).catch(() => {})
-  await logAudit({ userName, action: 'DELETE', entityType: 'term', entityId: tid, patientId: Number(id), details: term?.title, deletedData: term as unknown as Record<string, unknown> ?? undefined })
+  await logAudit({ userName, action: 'DELETE', entityType: 'term', entityId: tid, patientId: Number(id), details: term?.title, deletedData: term ?? undefined })
   return new Response(null, { status: 204 })
 }
