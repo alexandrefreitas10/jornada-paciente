@@ -15,10 +15,6 @@ const ENTITY_LABELS: Record<string, string> = {
 function canRestore(log: AuditLog): boolean {
   if (log.entity_type === 'file') return !!log.entity_id
   if (!log.deleted_data) return false
-  if (log.entity_type === 'term') {
-    const t = log.deleted_data as { file_s3_key?: string | null }
-    return !t.file_s3_key
-  }
   return true
 }
 
