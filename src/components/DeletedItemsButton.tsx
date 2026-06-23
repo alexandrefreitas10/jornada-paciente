@@ -39,6 +39,9 @@ export function DeletedItemsButton({ patientId, entityTypes, fileType }: Props) 
   const [open, setOpen] = useState(false)
   const [logs, setLogs] = useState<AuditLog[] | null>(null)
   const [restoring, setRestoring] = useState<number | null>(null)
+  const [permanentlyDeleting, setPermanentlyDeleting] = useState<number | null>(null)
+  const [adminPassword, setAdminPassword] = useState('')
+  const [deletingId, setDeletingId] = useState<number | null>(null)
   const router = useRouter()
 
   const load = useCallback(() => {
@@ -79,6 +82,28 @@ export function DeletedItemsButton({ patientId, entityTypes, fileType }: Props) 
     }
   }
 
+  async function handlePermanentlyDelete(log: AuditLog) {
+    if (!adminPassword) {
+      alert('Senha do admin obrigatória')
+      return
+    }
+    setPermanentlyDeleting(log.id)
+    try {
+      const res = await fetch(`/api/admin/audit/${log.id}/permanently-delete`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminPassword }),
+      })
+      const data = await res.json()
+      if (!res.ok) { alert(data.error || 'Erro ao deletar'); return }
+      setLogs(prev => prev ? prev.filter(l => l.id !== log.id) : prev)
+      setAdminPassword('')
+      setDeletingId(null)
+    } finally {
+      setPermanentlyDeleting(null)
+    }
+  }
+
   return (
     <div>
       <button
@@ -97,6 +122,52 @@ export function DeletedItemsButton({ patientId, entityTypes, fileType }: Props) 
           </span>
         )}
       </button>
+
+      {deletingId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 shadow-lg max-w-sm w-full mx-4">
+            <h3 className="text-lg font-bold text-gray-800 mb-4">Deletar permanentemente?</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Esta ação é irreversível. Digite a senha do admin para confirmar.
+            </p>
+            <input
+              type="password"
+              placeholder="Senha do admin"
+              value={adminPassword}
+              onChange={(e) => setAdminPassword(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const log = logs?.find(l => l.id === deletingId)
+                  if (log) handlePermanentlyDelete(log)
+                }
+              }}
+              className="w-full px-4 py-2 border border-gray-200 rounded-lg mb-4 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
+              autoFocus
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setDeletingId(null)
+                  setAdminPassword('')
+                }}
+                className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  const log = logs?.find(l => l.id === deletingId)
+                  if (log) handlePermanentlyDelete(log)
+                }}
+                disabled={permanentlyDeleting === deletingId || !adminPassword}
+                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {permanentlyDeleting === deletingId ? '...' : 'Deletar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {open && (
         <div className="mt-3 border border-orange-100 rounded-xl bg-orange-50/40 overflow-hidden">
@@ -119,17 +190,26 @@ export function DeletedItemsButton({ patientId, entityTypes, fileType }: Props) 
                       👤 {log.user_name} · {fmt(log.created_at)}
                     </p>
                   </div>
-                  {canRestore(log) ? (
+                  <div className="flex items-center gap-2 shrink-0">
+                    {canRestore(log) ? (
+                      <button
+                        onClick={() => handleRestore(log)}
+                        disabled={restoring === log.id}
+                        className="text-xs font-medium text-violet-700 bg-white border border-violet-200 hover:bg-violet-50 px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors"
+                      >
+                        {restoring === log.id ? '...' : '↩ Restaurar'}
+                      </button>
+                    ) : (
+                      <span className="text-xs text-gray-300 italic">Sem restauração</span>
+                    )}
+
                     <button
-                      onClick={() => handleRestore(log)}
-                      disabled={restoring === log.id}
-                      className="shrink-0 text-xs font-medium text-violet-700 bg-white border border-violet-200 hover:bg-violet-50 px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors"
+                      onClick={() => setDeletingId(deletingId === log.id ? null : log.id)}
+                      className="text-xs font-medium text-red-700 bg-white border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors"
                     >
-                      {restoring === log.id ? '...' : '↩ Restaurar'}
+                      🗑 Deletar
                     </button>
-                  ) : (
-                    <span className="shrink-0 text-xs text-gray-300 italic">Sem restauração</span>
-                  )}
+                  </div>
                 </div>
               ))}
             </div>
