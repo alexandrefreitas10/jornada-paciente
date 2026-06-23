@@ -22,6 +22,6 @@ export async function DELETE(
   const userName = session?.user?.name ?? 'Desconhecido'
   const measurement = await getMeasurementById(Number(mid))
   await deleteMeasurement(Number(mid))
-  await logAudit({ userName, action: 'DELETE', entityType: 'measurement', entityId: mid, patientId: Number(id), details: `Semana ${measurement?.week ?? '—'}`, deletedData: measurement as Record<string, unknown> ?? undefined })
+  await logAudit({ userName, action: 'DELETE', entityType: 'measurement', entityId: mid, patientId: Number(id), details: `Semana ${measurement?.week ?? '—'}`, deletedData: measurement as unknown as Record<string, unknown> ?? undefined })
   return new Response(null, { status: 204 })
 }
