@@ -135,31 +135,19 @@ export async function deletePatientTerm(id: number): Promise<{ file_s3_key: stri
 
 export async function restorePatientTerm(
   patientId: number,
-  data: {
-    title: string
-    content: string
-    file_s3_key: string | null
-    file_name: string | null
-    file_mime: string | null
-    fields: string[]
-    status: string
-    created_by: string
-    sign_token: string | null
-    sent_at: string | null
-    signed_at: string | null
-    signer_name: string | null
-    signature_data: string | null
-  }
+  data: any
 ): Promise<PatientTerm> {
   await initSchema()
   const [row] = await sql<PatientTerm[]>`
     INSERT INTO patient_terms (
       patient_id, title, content, file_s3_key, file_name, file_mime, fields,
+      filled_fields, signed_file_s3_key,
       status, created_by, sign_token, sent_at, signed_at, signer_name, signature_data
     )
     VALUES (
       ${patientId}, ${data.title}, ${data.content}, ${data.file_s3_key},
-      ${data.file_name}, ${data.file_mime}, ${JSON.stringify(data.fields)},
+      ${data.file_name}, ${data.file_mime}, ${JSON.stringify(data.fields ?? [])},
+      ${JSON.stringify(data.filled_fields ?? {})}, ${data.signed_file_s3_key ?? null},
       ${data.status}, ${data.created_by}, ${data.sign_token}, ${data.sent_at},
       ${data.signed_at}, ${data.signer_name}, ${data.signature_data}
     )
