@@ -52,6 +52,7 @@ export function ExamsTab({ patientId, initialFiles }: Props) {
   }
 
   async function handleDelete(id: number) {
+    if (!confirm('Excluir este arquivo?')) return
     await fetch(`/api/patients/${patientId}/files/${id}`, { method: 'DELETE' })
     setFiles((prev) => prev.filter((f) => f.id !== id))
   }

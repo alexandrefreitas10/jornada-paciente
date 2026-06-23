@@ -99,6 +99,7 @@ export function TermsTab({ patientId }: Props) {
   }
 
   async function handleDelete(id: number) {
+    if (!confirm('Excluir este termo?')) return
     await fetch(`/api/patients/${patientId}/terms/${id}`, { method: 'DELETE' })
     setTerms(prev => prev.filter(t => t.id !== id))
   }

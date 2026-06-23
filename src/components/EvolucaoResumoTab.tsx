@@ -221,6 +221,7 @@ export function EvolucaoResumoTab({ patientId, initialSummaries }: Props) {
   }
 
   async function handleDelete(id: number) {
+    if (!confirm('Excluir este resumo de consulta?')) return
     await fetch(`/api/patients/${patientId}/evolution-summaries/${id}`, { method: 'DELETE' })
     setSummaries(prev => prev.filter(s => s.id !== id))
   }

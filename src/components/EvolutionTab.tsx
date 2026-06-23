@@ -150,6 +150,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
   }
 
   async function handleDelete(id: number) {
+    if (!confirm('Excluir esta medição?')) return
     await fetch(`/api/patients/${patientId}/measurements/${id}`, { method: 'DELETE' })
     setMeasurements((prev) => prev.filter((m) => m.id !== id))
   }

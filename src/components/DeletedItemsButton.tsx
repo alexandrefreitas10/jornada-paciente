@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { AuditLog } from '@/lib/audit'
 
 const ENTITY_LABELS: Record<string, string> = {
@@ -38,6 +39,7 @@ export function DeletedItemsButton({ patientId, entityTypes, fileType }: Props) 
   const [open, setOpen] = useState(false)
   const [logs, setLogs] = useState<AuditLog[] | null>(null)
   const [restoring, setRestoring] = useState<number | null>(null)
+  const router = useRouter()
 
   const load = useCallback(() => {
     fetch(`/api/patients/${patientId}/audit`)
@@ -71,7 +73,7 @@ export function DeletedItemsButton({ patientId, entityTypes, fileType }: Props) 
       const data = await res.json()
       if (!res.ok) { alert(data.error || 'Erro ao restaurar'); return }
       setLogs(prev => prev ? prev.filter(l => l.id !== log.id) : prev)
-      window.location.reload()
+      router.refresh()
     } finally {
       setRestoring(null)
     }

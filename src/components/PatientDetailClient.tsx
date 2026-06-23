@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { PatientDetail } from '@/lib/patients'
 import { Measurement } from '@/lib/measurements'
@@ -77,6 +77,18 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
   const [activeTab, setActiveTab] = useState<Tab>('tasks')
   const router = useRouter()
 
+  const TAB_KEY = `patient-tab-${patient.id}`
+
+  useEffect(() => {
+    const saved = sessionStorage.getItem(TAB_KEY)
+    if (saved) setActiveTab(saved as Tab)
+  }, [TAB_KEY])
+
+  function handleTabChange(tab: Tab) {
+    setActiveTab(tab)
+    sessionStorage.setItem(TAB_KEY, tab)
+  }
+
   async function handleToggle(taskKey: string, completed: boolean) {
     setCompletedKeys((prev) =>
       completed ? [...prev, taskKey] : prev.filter((k) => k !== taskKey)
@@ -148,7 +160,7 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
         {tabs.map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => handleTabChange(tab.key)}
             className={`px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
               activeTab === tab.key
                 ? 'border-violet-600 text-violet-600'
