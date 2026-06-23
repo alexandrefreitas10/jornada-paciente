@@ -89,16 +89,26 @@ export function DeletedItemsButton({ patientId, entityTypes, fileType }: Props) 
     }
     setPermanentlyDeleting(log.id)
     try {
+      console.log('Deletando permanentemente:', log.id)
       const res = await fetch(`/api/admin/audit/${log.id}/permanently-delete`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ adminPassword }),
       })
+      console.log('Response status:', res.status)
       const data = await res.json()
-      if (!res.ok) { alert(data.error || 'Erro ao deletar'); return }
+      console.log('Response data:', data)
+      if (!res.ok) {
+        alert(data.error || 'Erro ao deletar');
+        return
+      }
       setLogs(prev => prev ? prev.filter(l => l.id !== log.id) : prev)
       setAdminPassword('')
       setDeletingId(null)
+      alert('Item deletado permanentemente')
+    } catch (err) {
+      console.error('Erro ao deletar:', err)
+      alert('Erro: ' + String(err))
     } finally {
       setPermanentlyDeleting(null)
     }
