@@ -61,3 +61,10 @@ export async function getSignedDownloadUrlWithFilename(
     { expiresIn }
   )
 }
+
+export async function uploadTermToS3(buffer: Buffer, fileName: string, contentType: string): Promise<string> {
+  const ext = fileName.split('.').pop() || 'pdf'
+  const key = `terms/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`
+  await uploadFile(key, buffer, contentType)
+  return key
+}

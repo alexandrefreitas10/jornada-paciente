@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { auth } from '@/auth'
 import { listTerms, createTerm } from '@/lib/terms'
+import { uploadTermToS3 } from '@/lib/s3'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,10 +51,11 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer())
+    const s3Key = await uploadTermToS3(buffer, file.name, file.type)
 
     const term = await createTerm({
       title,
-      fileData: buffer,
+      fileS3Key: s3Key,
       fileName: file.name,
       fileMime: file.type,
       fields,
