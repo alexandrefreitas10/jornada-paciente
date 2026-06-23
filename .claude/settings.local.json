@@ -80,7 +80,8 @@
       "Bash(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\alexa\\\\Projeto Curso IA\\\\src\\\\app\\\\api\\\\admin\\\\audit\\\\[logId]\\\\restore\")",
       "Bash(Out-Null)",
       "Bash(mkdir -p \"C:\\\\Users\\\\alexa\\\\Projeto Curso IA\\\\src\\\\app\\\\api\\\\patients\\\\[id]\\\\archive\")",
-      "Bash(mkdir -p \"C:\\\\Users\\\\alexa\\\\Projeto Curso IA\\\\src\\\\app\\\\api\\\\patients\\\\[id]\\\\unarchive\")"
+      "Bash(mkdir -p \"C:\\\\Users\\\\alexa\\\\Projeto Curso IA\\\\src\\\\app\\\\api\\\\patients\\\\[id]\\\\unarchive\")",
+      "Bash(curl -s \"https://agenda-voz-989g.onrender.com/api/reminders/check\")"
     ]
   }
 }

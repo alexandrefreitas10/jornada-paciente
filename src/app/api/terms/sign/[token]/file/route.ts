@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getTermByToken } from '@/lib/patient-terms'
-import { getSignedDownloadUrl } from '@/lib/s3'
 
 export async function GET(
   req: NextRequest,
@@ -9,20 +8,25 @@ export async function GET(
   try {
     const { token } = await params
     const term = await getTermByToken(token)
-    if (!term?.file_s3_key) return NextResponse.json({ error: 'Termo não encontrado' }, { status: 404 })
+    if (!term) return NextResponse.json({ error: 'Termo não encontrado' }, { status: 404 })
 
     // After signing: serve the PDF with embedded signature; before signing: serve original
     const signed = req.nextUrl.searchParams.get('signed') === '1'
-    const key = (signed && term.signed_file_s3_key) ? term.signed_file_s3_key : term.file_s3_key
-    console.log('[download file] token:', token, 'signed:', signed, 'key:', key)
+    const fileData = (signed && term.signed_file_s3_key) ? Buffer.from(term.signed_file_s3_key) : term.file_s3_key
+    const fileName = term.file_name || `termo-${token}.pdf`
+    const mimeType = term.file_mime || 'application/pdf'
 
-    try {
-      const url = await getSignedDownloadUrl(key!)
-      return NextResponse.redirect(url)
-    } catch (err) {
-      console.error('[getSignedDownloadUrl error] key:', key, 'error:', err)
-      return NextResponse.json({ error: 'Erro ao baixar arquivo: ' + String(err) }, { status: 500 })
+    if (!fileData) {
+      return NextResponse.json({ error: 'Arquivo não encontrado' }, { status: 404 })
     }
+
+    return new NextResponse(fileData, {
+      headers: {
+        'Content-Type': mimeType,
+        'Content-Disposition': `inline; filename="${fileName}"`,
+        'Content-Length': fileData.length.toString(),
+      },
+    })
   } catch (err) {
     console.error('[download file error]', err)
     return NextResponse.json({ error: String(err) }, { status: 500 })

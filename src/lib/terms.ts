@@ -4,7 +4,7 @@ export interface Term {
   id: number
   title: string
   content: string
-  file_s3_key: string | null
+  file_data: Buffer | null
   file_name: string | null
   file_mime: string | null
   fields: string[]
@@ -15,7 +15,7 @@ export interface Term {
 export interface TermInput {
   title: string
   content?: string
-  fileS3Key?: string
+  fileData?: Buffer
   fileName?: string
   fileMime?: string
   fields?: string[]
@@ -26,7 +26,7 @@ export async function listTerms(): Promise<Term[]> {
   await initSchema()
   const rows = await sql<any[]>`
     SELECT
-      id, title, content, file_s3_key, file_name, file_mime,
+      id, title, content, file_data, file_name, file_mime,
       COALESCE(fields, '[]'::jsonb) AS fields,
       created_at, created_by
     FROM terms
@@ -42,7 +42,7 @@ export async function getTerm(id: number): Promise<Term | null> {
   await initSchema()
   const [row] = await sql<any[]>`
     SELECT
-      id, title, content, file_s3_key, file_name, file_mime,
+      id, title, content, file_data, file_name, file_mime,
       COALESCE(fields, '[]'::jsonb) AS fields,
       created_at, created_by
     FROM terms
@@ -58,18 +58,18 @@ export async function getTerm(id: number): Promise<Term | null> {
 export async function createTerm(input: TermInput): Promise<Term> {
   await initSchema()
   const [row] = await sql<any>`
-    INSERT INTO terms (title, content, file_s3_key, file_name, file_mime, fields, created_by)
+    INSERT INTO terms (title, content, file_data, file_name, file_mime, fields, created_by)
     VALUES (
       ${input.title},
       ${input.content ?? ''},
-      ${input.fileS3Key ?? null},
+      ${input.fileData ?? null},
       ${input.fileName ?? null},
       ${input.fileMime ?? null},
       ${sql.json((input.fields ?? []) as never)},
       ${input.createdBy}
     )
     RETURNING
-      id, title, content, file_s3_key, file_name, file_mime,
+      id, title, content, file_data, file_name, file_mime,
       COALESCE(fields, '[]'::jsonb) AS fields,
       created_at, created_by
   `

@@ -1,8 +1,6 @@
 import { NextRequest } from 'next/server'
 import { auth } from '@/auth'
 import { listTerms, createTerm } from '@/lib/terms'
-import { uploadFile } from '@/lib/s3'
-import { randomUUID } from 'crypto'
 
 export const dynamic = 'force-dynamic'
 
@@ -51,19 +49,11 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: 'Apenas PDF ou Word são aceitos' }, { status: 400 })
     }
 
-    const ext = file.name.split('.').pop() ?? 'pdf'
-    const s3Key = `terms/${randomUUID()}.${ext}`
     const buffer = Buffer.from(await file.arrayBuffer())
-    try {
-      await uploadFile(s3Key, buffer, file.type as never)
-    } catch (err) {
-      console.error('[uploadFile error]', err)
-      return Response.json({ error: 'Erro ao fazer upload do arquivo: ' + String(err) }, { status: 500 })
-    }
 
     const term = await createTerm({
       title,
-      fileS3Key: s3Key,
+      fileData: buffer,
       fileName: file.name,
       fileMime: file.type,
       fields,
