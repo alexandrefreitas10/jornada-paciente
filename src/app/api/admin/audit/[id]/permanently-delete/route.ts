@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import sql, { initSchema } from '@/lib/db'
 import bcrypt from 'bcryptjs'
+import { findUserByUsername } from '@/lib/users'
 
 export async function DELETE(
   req: NextRequest,
@@ -9,7 +10,7 @@ export async function DELETE(
 ) {
   try {
     const session = await auth()
-    if (!session?.user) {
+    if (!session?.user?.name) {
       return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
     }
 
@@ -20,12 +21,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Senha obrigatória' }, { status: 400 })
     }
 
-    await initSchema()
-
-    const [user] = await sql<any>`
-      SELECT password_hash FROM users WHERE username = ${session.user.name}
-    `
-
+    const user = await findUserByUsername(session.user.name)
     if (!user) {
       return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
     }
@@ -35,6 +31,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Senha incorreta' }, { status: 401 })
     }
 
+    await initSchema()
     await sql`DELETE FROM audit_logs WHERE id = ${Number(id)}`
 
     return NextResponse.json({ ok: true })
