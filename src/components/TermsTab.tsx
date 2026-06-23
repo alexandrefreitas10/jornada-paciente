@@ -165,16 +165,26 @@ export function TermsTab({ patientId }: Props) {
             {terms.map(term => (
               <div key={term.id} className="bg-white border border-gray-200 rounded-lg p-3">
                 <div className="flex items-start justify-between gap-3 mb-2">
-                  <div>
+                  <div className="flex-1">
                     <p className="text-sm font-medium text-gray-800">{term.title}</p>
                     <p className="text-xs text-gray-400 mt-0.5">
                       {fmt(term.created_at)}
                       {term.signed_at && ` · Assinado por ${term.signer_name}`}
                     </p>
                   </div>
-                  <span className={`text-xs font-medium px-2 py-1 rounded-full whitespace-nowrap ${STATUS[term.status].color}`}>
-                    {STATUS[term.status].label}
-                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`text-xs font-medium px-2 py-1 rounded-full whitespace-nowrap ${STATUS[term.status].color}`}>
+                      {STATUS[term.status].label}
+                    </span>
+                    <button
+                      onClick={() => handleDelete(term.id)}
+                      disabled={deleting === term.id}
+                      className="text-xs text-gray-400 hover:text-red-500 px-1.5 py-1 rounded hover:bg-red-50 transition-colors disabled:opacity-50"
+                      title="Excluir"
+                    >
+                      {deleting === term.id ? '...' : '🗑'}
+                    </button>
+                  </div>
                 </div>
 
                 {term.status === 'sent' && term.sign_token && (
@@ -198,21 +208,12 @@ export function TermsTab({ patientId }: Props) {
                 )}
 
                 {term.status === 'signed' && term.sign_token && (
-                  <div className="flex gap-2">
-                    <a
-                      href={`/api/terms/sign/${term.sign_token}/file?signed=1`}
-                      className="inline-block text-xs text-violet-600 hover:text-violet-700 px-2 py-1 rounded hover:bg-violet-50 transition-colors"
-                    >
-                      ⬇ Baixar assinado
-                    </a>
-                    <button
-                      onClick={() => handleDelete(term.id)}
-                      disabled={deleting === term.id}
-                      className="text-xs text-gray-400 hover:text-red-500 px-2 py-1 rounded hover:bg-red-50 transition-colors disabled:opacity-50"
-                    >
-                      {deleting === term.id ? '...' : '🗑'}
-                    </button>
-                  </div>
+                  <a
+                    href={`/api/terms/sign/${term.sign_token}/file?signed=1`}
+                    className="inline-block text-xs text-violet-600 hover:text-violet-700 px-2 py-1 rounded hover:bg-violet-50 transition-colors"
+                  >
+                    ⬇ Baixar assinado
+                  </a>
                 )}
               </div>
             ))}
