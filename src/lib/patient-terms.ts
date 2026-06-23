@@ -5,12 +5,12 @@ export interface PatientTerm {
   patient_id: number
   title: string
   content: string
-  file_data: Buffer | null
+  file_s3_key: string | null
   file_name: string | null
   file_mime: string | null
   fields: string[]
   filled_fields: Record<string, string>
-  signed_file_data: Buffer | null
+  signed_file_s3_key: string | null
   status: 'draft' | 'sent' | 'signed'
   created_by: string
   created_at: string
