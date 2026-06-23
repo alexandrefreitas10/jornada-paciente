@@ -37,6 +37,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <span className="text-gray-300">|</span>
                 <a href="/usuarios" className="hover:text-violet-700 transition-colors">Usuários</a>
                 <span className="text-gray-300">|</span>
+                <a href="/termos" className="hover:text-violet-700 transition-colors">Termos</a>
+                <span className="text-gray-300">|</span>
                 <a href="/relatorios" className="hover:text-violet-700 transition-colors">Relatórios</a>
                 <span className="text-gray-300">|</span>
                 <a href="/pacientes-antigos" className="hover:text-violet-700 transition-colors">Pacientes Antigos</a>

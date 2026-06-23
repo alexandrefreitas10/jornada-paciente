@@ -88,6 +88,21 @@ export async function initSchema() {
   // Adiciona coluna is_admin aos usuários
   await sql.unsafe(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE`).catch(() => {})
 
+  // Tabela de templates de termos (globais)
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS terms (
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      content TEXT DEFAULT '',
+      file_s3_key TEXT,
+      file_name TEXT,
+      file_mime TEXT,
+      fields JSONB DEFAULT '[]',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      created_by TEXT NOT NULL
+    )
+  `).catch(() => {})
+
   // Tabela de termos para assinatura
   await sql.unsafe(`
     CREATE TABLE IF NOT EXISTS patient_terms (
