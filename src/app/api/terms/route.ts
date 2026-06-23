@@ -54,7 +54,12 @@ export async function POST(req: NextRequest) {
     const ext = file.name.split('.').pop() ?? 'pdf'
     const s3Key = `terms/${randomUUID()}.${ext}`
     const buffer = Buffer.from(await file.arrayBuffer())
-    await uploadFile(s3Key, buffer, file.type as never)
+    try {
+      await uploadFile(s3Key, buffer, file.type as never)
+    } catch (err) {
+      console.error('[uploadFile error]', err)
+      return Response.json({ error: 'Erro ao fazer upload do arquivo: ' + String(err) }, { status: 500 })
+    }
 
     const term = await createTerm({
       title,
