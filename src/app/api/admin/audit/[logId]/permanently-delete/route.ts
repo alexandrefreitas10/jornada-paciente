@@ -3,6 +3,7 @@ import { auth } from '@/auth'
 import sql, { initSchema } from '@/lib/db'
 import bcrypt from 'bcryptjs'
 import { findUserByUsername } from '@/lib/users'
+import { deleteFile } from '@/lib/s3'
 
 export async function DELETE(
   req: NextRequest,
@@ -40,6 +41,19 @@ export async function DELETE(
 
     await initSchema()
     console.log('[permanently-delete] Deleting audit log:', logId)
+
+    // Get the log data before deleting to handle file cleanup
+    const [log] = await sql<any>`SELECT * FROM audit_logs WHERE id = ${Number(logId)}`
+
+    // Delete S3 files if applicable
+    if (log && log.deleted_data) {
+      const data = typeof log.deleted_data === 'string' ? JSON.parse(log.deleted_data) : log.deleted_data
+      if (data.file_s3_key && (log.entity_type === 'term' || log.entity_type === 'file')) {
+        console.log('[permanently-delete] Deleting S3 file:', data.file_s3_key)
+        await deleteFile(data.file_s3_key).catch(() => {})
+      }
+    }
+
     await sql`DELETE FROM audit_logs WHERE id = ${Number(logId)}`
 
     console.log('[permanently-delete] Done!')
