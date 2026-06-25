@@ -195,6 +195,7 @@ export async function initSchema() {
       quantity INTEGER NOT NULL,
       lot TEXT,
       expiry_date TEXT,
+      patient_id INTEGER,
       patient_name TEXT,
       observation TEXT,
       nf_s3_key TEXT,
@@ -202,6 +203,7 @@ export async function initSchema() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `).catch(() => {})
+  await sql.unsafe(`ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS patient_id INTEGER`).catch(() => {})
 }
 
 export default sql

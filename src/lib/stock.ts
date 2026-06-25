@@ -20,6 +20,7 @@ export interface StockMovement {
   quantity: number
   lot: string | null
   expiry_date: string | null
+  patient_id: number | null
   patient_name: string | null
   observation: string | null
   nf_s3_key: string | null
@@ -105,12 +106,24 @@ export async function listMovements(type?: 'entrada' | 'saida'): Promise<StockMo
   `
 }
 
+export async function listMovementsByPatient(patientId: number): Promise<StockMovement[]> {
+  await initSchema()
+  return sql<StockMovement[]>`
+    SELECT m.*, i.name AS item_name
+    FROM stock_movements m
+    JOIN stock_items i ON i.id = m.item_id
+    WHERE m.patient_id = ${patientId} AND m.type = 'saida'
+    ORDER BY m.created_at DESC
+  `
+}
+
 export async function createMovement(data: {
   item_id: number
   type: 'entrada' | 'saida'
   quantity: number
   lot?: string | null
   expiry_date?: string | null
+  patient_id?: number | null
   patient_name?: string | null
   observation?: string | null
   nf_s3_key?: string | null
@@ -118,10 +131,10 @@ export async function createMovement(data: {
 }): Promise<StockMovement> {
   await initSchema()
   const [row] = await sql<StockMovement[]>`
-    INSERT INTO stock_movements (item_id, type, quantity, lot, expiry_date, patient_name, observation, nf_s3_key, created_by)
+    INSERT INTO stock_movements (item_id, type, quantity, lot, expiry_date, patient_id, patient_name, observation, nf_s3_key, created_by)
     VALUES (
       ${data.item_id}, ${data.type}, ${data.quantity},
-      ${data.lot ?? null}, ${data.expiry_date ?? null}, ${data.patient_name ?? null},
+      ${data.lot ?? null}, ${data.expiry_date ?? null}, ${data.patient_id ?? null}, ${data.patient_name ?? null},
       ${data.observation ?? null}, ${data.nf_s3_key ?? null}, ${data.created_by ?? null}
     )
     RETURNING *

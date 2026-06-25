@@ -14,13 +14,14 @@ export async function POST(req: NextRequest) {
   const session = await auth()
   const createdBy = session?.user?.name ?? null
   const body = await req.json()
-  const { item_id, type, quantity, lot, expiry_date, patient_name, observation, nf_s3_key } = body
+  const { item_id, type, quantity, lot, expiry_date, patient_id, patient_name, observation, nf_s3_key } = body
   if (!item_id || !type || !quantity) {
     return NextResponse.json({ error: 'item_id, type e quantity são obrigatórios' }, { status: 400 })
   }
   const movement = await createMovement({
     item_id: Number(item_id), type, quantity: Number(quantity),
-    lot, expiry_date, patient_name, observation, nf_s3_key, created_by: createdBy,
+    lot, expiry_date, patient_id: patient_id ? Number(patient_id) : null,
+    patient_name, observation, nf_s3_key, created_by: createdBy,
   })
   return NextResponse.json(movement, { status: 201 })
 }

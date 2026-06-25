@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import QRCode from 'qrcode'
 
 interface StockItem { id: number; name: string; unit: string; quantity: number; notes: string | null; lot: string | null; expiry_date: string | null }
@@ -218,6 +218,13 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   const [editItem, setEditItem] = useState<StockItem | null>(null)
   const [editMov, setEditMov] = useState<StockMovement | null>(null)
   const [search, setSearch] = useState('')
+  const [patients, setPatients] = useState<{ id: number; name: string }[]>([])
+
+  useEffect(() => {
+    fetch('/api/patients').then(r => r.json()).then(data => {
+      setPatients(Array.isArray(data) ? data : [])
+    }).catch(() => {})
+  }, [])
 
   // ── Entrada por NF ──────────────────────────────────────────
   const [nfLoading, setNfLoading] = useState(false)
@@ -294,16 +301,17 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   const [manSaida, setManSaida] = useState(false)
   const [msItemId, setMsItemId] = useState('')
   const [msQty, setMsQty] = useState('1')
-  const [msPatient, setMsPatient] = useState('')
+  const [msPatientId, setMsPatientId] = useState('')
   const [msObs, setMsObs] = useState('')
   const [msSaving, setMsSaving] = useState(false)
 
   async function saveManualSaida() {
     setMsSaving(true)
-    await fetch('/api/estoque/movements', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: Number(msItemId), type: 'saida', quantity: Number(msQty), patient_name: msPatient || null, observation: msObs || null }) })
+    const selPatient = patients.find(p => String(p.id) === msPatientId)
+    await fetch('/api/estoque/movements', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: Number(msItemId), type: 'saida', quantity: Number(msQty), patient_id: msPatientId ? Number(msPatientId) : null, patient_name: selPatient?.name ?? null, observation: msObs || null }) })
     const [ir, mr] = await Promise.all([fetch('/api/estoque/items'), fetch('/api/estoque/movements')])
     setItems(await ir.json()); setMovements(await mr.json())
-    setManSaida(false); setMsItemId(''); setMsQty('1'); setMsPatient(''); setMsObs('')
+    setManSaida(false); setMsItemId(''); setMsQty('1'); setMsPatientId(''); setMsObs('')
     setMsSaving(false)
   }
 
@@ -508,7 +516,10 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
                 </select>
                 <div className="flex gap-2 flex-wrap">
                   <input type="number" min="1" value={msQty} onChange={e => setMsQty(e.target.value)} placeholder="Quantidade *" className="w-28 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
-                  <input value={msPatient} onChange={e => setMsPatient(e.target.value)} placeholder="Paciente (opcional)" className="flex-1 min-w-[140px] border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+                  <select value={msPatientId} onChange={e => setMsPatientId(e.target.value)} className="flex-1 min-w-[160px] border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+                    <option value="">Paciente (opcional)</option>
+                    {patients.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
                   <input value={msObs} onChange={e => setMsObs(e.target.value)} placeholder="Observação" className="flex-1 min-w-[140px] border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
                 </div>
               </div>
