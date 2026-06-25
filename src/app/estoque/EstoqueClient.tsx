@@ -226,11 +226,12 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
     }).catch(() => {})
   }, [])
 
-  // ── Entrada por NF ──────────────────────────────────────────
+  // ── Entrada por NF / Estoque ────────────────────────────────
   const [nfLoading, setNfLoading] = useState(false)
   const [nfItems, setNfItems] = useState<NfItem[]>([])
   const [nfError, setNfError] = useState('')
   const nfInputRef = useRef<HTMLInputElement>(null)
+  const invInputRef = useRef<HTMLInputElement>(null)
 
   async function handleNfUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -243,6 +244,19 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
     else { setNfError('Não foi possível extrair itens. Tente uma imagem mais nítida.') }
     setNfLoading(false)
     if (nfInputRef.current) nfInputRef.current.value = ''
+  }
+
+  async function handleInventoryUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setNfLoading(true); setNfError(''); setNfItems([])
+    const fd = new FormData(); fd.append('file', file)
+    const res = await fetch('/api/estoque/scan-nf?mode=inventory', { method: 'POST', body: fd })
+    const data = await res.json()
+    if (data.items?.length) { setNfItems(data.items) }
+    else { setNfError('Não foi possível extrair itens do estoque. Tente um arquivo mais legível.') }
+    setNfLoading(false)
+    if (invInputRef.current) invInputRef.current.value = ''
   }
 
   async function saveNfItems() {
@@ -397,8 +411,12 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
           {/* Buttons */}
           <div className="flex gap-2 flex-wrap">
             <label className={`flex items-center gap-2 px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg cursor-pointer hover:bg-violet-700 transition-colors ${nfLoading ? 'opacity-50 pointer-events-none' : ''}`}>
-              {nfLoading ? '⏳ Analisando NF...' : '📷 Enviar Nota Fiscal'}
+              {nfLoading ? '⏳ Analisando...' : '📷 Enviar Nota Fiscal'}
               <input ref={nfInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleNfUpload} />
+            </label>
+            <label className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg cursor-pointer hover:bg-blue-700 transition-colors ${nfLoading ? 'opacity-50 pointer-events-none' : ''}`}>
+              {nfLoading ? '⏳ Analisando...' : '📄 Importar Estoque'}
+              <input ref={invInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleInventoryUpload} />
             </label>
             <button onClick={() => setManEntrada(true)} className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">
               ✏️ Entrada Manual
