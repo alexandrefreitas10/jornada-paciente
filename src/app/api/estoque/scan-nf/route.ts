@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
 
   const message = await getClient().messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 4096,
+    max_tokens: 8192,
     messages: [{ role: 'user', content }],
   })
 
@@ -59,23 +59,28 @@ Identifique cada item e retorne APENAS um JSON array com o seguinte formato (sem
 ]
 Se não encontrar lote ou validade, use null. Seja objetivo e liste todos os itens da nota.`
 
-const PROMPT_INVENTORY = `Analise este documento. Pode ser uma planilha, lista, tabela, PDF ou qualquer formato contendo um inventário/estoque de medicamentos ou insumos médicos.
+const PROMPT_INVENTORY = `Este é um documento de lista de contagem/inventário de estoque de medicamentos.
 
-Extraia TODOS os itens encontrados e retorne SOMENTE um JSON array válido, sem nenhum texto antes ou depois:
+A tabela tem colunas: Código | Produto | Lote | Fabricação | Validade | Quantidade Sistema | Quantidade Físico
+
+ATENÇÃO: cada produto aparece em duas linhas — a primeira linha tem só o nome (sem lote/validade/quantidade) e a segunda linha repete o nome e tem os dados reais (lote, validade, quantidade). Ignore as linhas sem lote e sem quantidade. Use APENAS as linhas que possuem valor na coluna "Lote" e "Quantidade Sistema".
+
+Se um mesmo produto tiver múltiplos lotes (várias linhas com dados), crie uma entrada separada para cada lote.
+
+Retorne SOMENTE um JSON array válido, sem nenhum texto antes ou depois:
 [
   {
-    "name": "Nome do medicamento ou insumo",
+    "name": "Nome completo do produto",
     "quantity": 10,
     "unit": "un",
     "lot": "ABC123",
-    "expiry_date": "12/2026"
+    "expiry_date": "MM/YYYY"
   }
 ]
 
 Regras:
-- Inclua todos os itens listados, mesmo que incompletos
-- Se não houver lote, use null
-- Se não houver validade, use null
-- Se não houver unidade, use "un"
-- Se não houver quantidade, use 1
-- Retorne APENAS o array JSON, sem explicações, sem markdown, sem texto extra`
+- Use o valor da coluna "Quantidade Sistema" como quantity
+- Formate a validade como MM/YYYY (ex: "02/2027")
+- Se não houver lote ou quantidade, ignore a linha
+- Unidade padrão: "un"
+- Retorne APENAS o array JSON, sem explicações, sem markdown`
