@@ -17,6 +17,22 @@ interface Props {
   initialFiles: ExamFile[]
 }
 
+function formatSummaryCompact(summary: string): string {
+  const lines = summary.split('\n')
+  const items: string[] = []
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (/^\|[\s\-|]+\|$/.test(trimmed)) continue
+    if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+      const cols = trimmed.split('|').map(c => c.trim()).filter(Boolean)
+      if (cols.length >= 2 && cols[0].toLowerCase() !== 'exame') {
+        items.push(`${cols[0]} | ${cols[1]}`)
+      }
+    }
+  }
+  return items.join('\n')
+}
+
 export function ExamsTab({ patientId, initialFiles }: Props) {
   const [files, setFiles] = useState<ExamFile[]>(initialFiles)
   const [uploading, setUploading] = useState(false)
@@ -211,7 +227,7 @@ export function ExamsTab({ patientId, initialFiles }: Props) {
                 </div>
                 <div className="px-4 py-3">
                   <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-                    {f.summary}
+                    {f.summary ? formatSummaryCompact(f.summary) : ''}
                   </p>
                 </div>
               </div>
