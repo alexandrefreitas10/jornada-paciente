@@ -10,6 +10,7 @@ interface ExamFile {
   url: string
   summary: string | null
   created_at: string
+  created_by: string | null
 }
 
 interface Props {
@@ -174,8 +175,11 @@ export function ExamsTab({ patientId, initialFiles }: Props) {
                     <span className="text-2xl">{isImage ? '🖼️' : '📄'}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-800 truncate">{f.original_name}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         <p className="text-xs text-gray-500">{formatDate(f.created_at)}</p>
+                        {f.created_by && (
+                          <p className="text-xs text-gray-400">por <span className="font-medium text-gray-600">{f.created_by}</span></p>
+                        )}
                         {f.summary && (
                           <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">
                             ✓ Resumo gerado
