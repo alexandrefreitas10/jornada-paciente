@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
 
   const message = await getClient().messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 2048,
+    max_tokens: 4096,
     messages: [{ role: 'user', content }],
   })
 
@@ -59,8 +59,9 @@ Identifique cada item e retorne APENAS um JSON array com o seguinte formato (sem
 ]
 Se não encontrar lote ou validade, use null. Seja objetivo e liste todos os itens da nota.`
 
-const PROMPT_INVENTORY = `Este é um documento ou planilha de estoque atual de medicamentos/insumos médicos.
-Identifique cada item em estoque e retorne APENAS um JSON array com o seguinte formato (sem texto extra, somente o array):
+const PROMPT_INVENTORY = `Analise este documento. Pode ser uma planilha, lista, tabela, PDF ou qualquer formato contendo um inventário/estoque de medicamentos ou insumos médicos.
+
+Extraia TODOS os itens encontrados e retorne SOMENTE um JSON array válido, sem nenhum texto antes ou depois:
 [
   {
     "name": "Nome do medicamento ou insumo",
@@ -70,5 +71,11 @@ Identifique cada item em estoque e retorne APENAS um JSON array com o seguinte f
     "expiry_date": "12/2026"
   }
 ]
-Extraia o nome, a quantidade atual em estoque, a unidade de medida, o lote e a validade de cada item.
-Se não encontrar lote ou validade para algum item, use null. Liste todos os itens presentes no documento.`
+
+Regras:
+- Inclua todos os itens listados, mesmo que incompletos
+- Se não houver lote, use null
+- Se não houver validade, use null
+- Se não houver unidade, use "un"
+- Se não houver quantidade, use 1
+- Retorne APENAS o array JSON, sem explicações, sem markdown, sem texto extra`
