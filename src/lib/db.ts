@@ -173,6 +173,35 @@ export async function initSchema() {
 
   // Usuário administrador principal
   await sql.unsafe(`UPDATE users SET is_admin = TRUE WHERE username = '038.069.291-06'`).catch(() => {})
+
+  // Estoque: itens (catálogo de medicações)
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS stock_items (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      unit TEXT NOT NULL DEFAULT 'un',
+      notes TEXT,
+      created_by TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(() => {})
+
+  // Estoque: movimentações (entradas e saídas)
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS stock_movements (
+      id SERIAL PRIMARY KEY,
+      item_id INTEGER NOT NULL REFERENCES stock_items(id) ON DELETE CASCADE,
+      type TEXT NOT NULL,
+      quantity INTEGER NOT NULL,
+      lot TEXT,
+      expiry_date TEXT,
+      patient_name TEXT,
+      observation TEXT,
+      nf_s3_key TEXT,
+      created_by TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(() => {})
 }
 
 export default sql

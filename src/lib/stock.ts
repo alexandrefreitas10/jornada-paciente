@@ -1,0 +1,142 @@
+import sql, { initSchema } from './db'
+
+export interface StockItem {
+  id: number
+  name: string
+  unit: string
+  notes: string | null
+  created_by: string | null
+  created_at: string
+  quantity: number
+}
+
+export interface StockMovement {
+  id: number
+  item_id: number
+  item_name?: string
+  type: 'entrada' | 'saida'
+  quantity: number
+  lot: string | null
+  expiry_date: string | null
+  patient_name: string | null
+  observation: string | null
+  nf_s3_key: string | null
+  created_by: string | null
+  created_at: string
+}
+
+export async function listStockItems(): Promise<StockItem[]> {
+  await initSchema()
+  return sql<StockItem[]>`
+    SELECT
+      i.*,
+      COALESCE(
+        SUM(CASE WHEN m.type = 'entrada' THEN m.quantity ELSE 0 END) -
+        SUM(CASE WHEN m.type = 'saida'   THEN m.quantity ELSE 0 END),
+        0
+      )::int AS quantity
+    FROM stock_items i
+    LEFT JOIN stock_movements m ON m.item_id = i.id
+    GROUP BY i.id
+    ORDER BY i.name ASC
+  `
+}
+
+export async function getStockItem(id: number): Promise<StockItem | null> {
+  await initSchema()
+  const [row] = await sql<StockItem[]>`
+    SELECT
+      i.*,
+      COALESCE(
+        SUM(CASE WHEN m.type = 'entrada' THEN m.quantity ELSE 0 END) -
+        SUM(CASE WHEN m.type = 'saida'   THEN m.quantity ELSE 0 END),
+        0
+      )::int AS quantity
+    FROM stock_items i
+    LEFT JOIN stock_movements m ON m.item_id = i.id
+    WHERE i.id = ${id}
+    GROUP BY i.id
+  `
+  return row ?? null
+}
+
+export async function createStockItem(
+  name: string, unit: string, notes: string | null, createdBy: string | null
+): Promise<StockItem> {
+  await initSchema()
+  const [row] = await sql<(StockItem & { quantity?: number })[]>`
+    INSERT INTO stock_items (name, unit, notes, created_by)
+    VALUES (${name}, ${unit}, ${notes}, ${createdBy})
+    RETURNING *
+  `
+  return { ...row, quantity: 0 }
+}
+
+export async function updateStockItem(
+  id: number, name: string, unit: string, notes: string | null
+): Promise<StockItem | null> {
+  await initSchema()
+  await sql`UPDATE stock_items SET name = ${name}, unit = ${unit}, notes = ${notes} WHERE id = ${id}`
+  return getStockItem(id)
+}
+
+export async function listMovements(type?: 'entrada' | 'saida'): Promise<StockMovement[]> {
+  await initSchema()
+  if (type) {
+    return sql<StockMovement[]>`
+      SELECT m.*, i.name AS item_name
+      FROM stock_movements m
+      JOIN stock_items i ON i.id = m.item_id
+      WHERE m.type = ${type}
+      ORDER BY m.created_at DESC
+    `
+  }
+  return sql<StockMovement[]>`
+    SELECT m.*, i.name AS item_name
+    FROM stock_movements m
+    JOIN stock_items i ON i.id = m.item_id
+    ORDER BY m.created_at DESC
+  `
+}
+
+export async function createMovement(data: {
+  item_id: number
+  type: 'entrada' | 'saida'
+  quantity: number
+  lot?: string | null
+  expiry_date?: string | null
+  patient_name?: string | null
+  observation?: string | null
+  nf_s3_key?: string | null
+  created_by?: string | null
+}): Promise<StockMovement> {
+  await initSchema()
+  const [row] = await sql<StockMovement[]>`
+    INSERT INTO stock_movements (item_id, type, quantity, lot, expiry_date, patient_name, observation, nf_s3_key, created_by)
+    VALUES (
+      ${data.item_id}, ${data.type}, ${data.quantity},
+      ${data.lot ?? null}, ${data.expiry_date ?? null}, ${data.patient_name ?? null},
+      ${data.observation ?? null}, ${data.nf_s3_key ?? null}, ${data.created_by ?? null}
+    )
+    RETURNING *
+  `
+  return row
+}
+
+export async function updateMovement(
+  id: number,
+  data: { quantity: number; lot?: string | null; expiry_date?: string | null; patient_name?: string | null; observation?: string | null }
+): Promise<StockMovement | null> {
+  await initSchema()
+  const [row] = await sql<StockMovement[]>`
+    UPDATE stock_movements
+    SET quantity = ${data.quantity},
+        lot = ${data.lot ?? null},
+        expiry_date = ${data.expiry_date ?? null},
+        patient_name = ${data.patient_name ?? null},
+        observation = ${data.observation ?? null}
+    WHERE id = ${id}
+    RETURNING *
+  `
+  return row ?? null
+}
