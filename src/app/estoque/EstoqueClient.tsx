@@ -300,6 +300,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   // ── Manual saída ────────────────────────────────────────────
   const [manSaida, setManSaida] = useState(false)
   const [msItemId, setMsItemId] = useState('')
+  const [msItemSearch, setMsItemSearch] = useState('')
   const [msQty, setMsQty] = useState('1')
   const [msPatientId, setMsPatientId] = useState('')
   const [msObs, setMsObs] = useState('')
@@ -311,7 +312,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
     await fetch('/api/estoque/movements', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: Number(msItemId), type: 'saida', quantity: Number(msQty), patient_id: msPatientId ? Number(msPatientId) : null, patient_name: selPatient?.name ?? null, observation: msObs || null }) })
     const [ir, mr] = await Promise.all([fetch('/api/estoque/items'), fetch('/api/estoque/movements')])
     setItems(await ir.json()); setMovements(await mr.json())
-    setManSaida(false); setMsItemId(''); setMsQty('1'); setMsPatientId(''); setMsObs('')
+    setManSaida(false); setMsItemId(''); setMsItemSearch(''); setMsQty('1'); setMsPatientId(''); setMsObs('')
     setMsSaving(false)
   }
 
@@ -510,10 +511,37 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
             <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
               <p className="font-semibold text-gray-800 mb-3">Saída Manual</p>
               <div className="space-y-3">
-                <select value={msItemId} onChange={e => setMsItemId(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
-                  <option value="">Selecione a medicação *</option>
-                  {items.map(i => <option key={i.id} value={i.id}>{i.name} (estoque: {i.quantity} {i.unit})</option>)}
-                </select>
+                {msItemId ? (
+                  <div className="flex items-center gap-2 p-2.5 bg-violet-50 border border-violet-200 rounded-lg">
+                    <span className="text-sm font-medium text-violet-800 flex-1">
+                      {(() => { const i = items.find(x => String(x.id) === msItemId); return i ? `${i.name}${i.lot ? ` — Lote: ${i.lot}` : ''} (estoque: ${i.quantity} ${i.unit})` : '' })()}
+                    </span>
+                    <button onClick={() => { setMsItemId(''); setMsItemSearch('') }} className="text-violet-400 hover:text-violet-600 text-xs">✕</button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+                    <input
+                      value={msItemSearch} onChange={e => setMsItemSearch(e.target.value)}
+                      placeholder="Buscar medicação *"
+                      className="w-full border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                    />
+                    {msItemSearch && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                        {items.filter(i => i.name.toLowerCase().includes(msItemSearch.toLowerCase())).length === 0 ? (
+                          <p className="px-3 py-2 text-xs text-gray-400">Nenhuma medicação encontrada</p>
+                        ) : items.filter(i => i.name.toLowerCase().includes(msItemSearch.toLowerCase())).map(i => (
+                          <button key={i.id} onClick={() => { setMsItemId(String(i.id)); setMsItemSearch('') }}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-violet-50 border-b border-gray-50 last:border-0">
+                            <span className="font-medium text-gray-800">{i.name}</span>
+                            {i.lot && <span className="text-gray-500"> — Lote: {i.lot}</span>}
+                            <span className="text-gray-400 text-xs ml-1">(estoque: {i.quantity} {i.unit})</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="flex gap-2 flex-wrap">
                   <input type="number" min="1" value={msQty} onChange={e => setMsQty(e.target.value)} placeholder="Quantidade *" className="w-28 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
                   <select value={msPatientId} onChange={e => setMsPatientId(e.target.value)} className="flex-1 min-w-[160px] border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
