@@ -444,7 +444,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
                 ) : (
                   <select value={meItemId} onChange={e => setMeItemId(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
                     <option value="">Selecione a medicação *</option>
-                    {items.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                    {items.map(i => <option key={i.id} value={i.id}>{i.name}{i.lot ? ` — Lote: ${i.lot}` : ''}</option>)}
                   </select>
                 )}
                 <div className="flex gap-2 flex-wrap">
