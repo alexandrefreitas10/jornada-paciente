@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import pdfParse from 'pdf-parse'
 
 const getClient = () => new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -9,22 +10,31 @@ export async function POST(req: NextRequest) {
   if (!file) return NextResponse.json({ error: 'Arquivo não enviado' }, { status: 400 })
 
   const mode = req.nextUrl.searchParams.get('mode') ?? 'nf'
-  const prompt = mode === 'inventory' ? PROMPT_INVENTORY : PROMPT_NF
-
   const buffer = Buffer.from(await file.arrayBuffer())
-  const base64 = buffer.toString('base64')
   const mimeType = file.type || 'image/jpeg'
   const isPdf = mimeType === 'application/pdf'
 
-  const content: Anthropic.MessageParam['content'] = isPdf
-    ? [
-        { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } } as Anthropic.DocumentBlockParam,
-        { type: 'text', text: prompt },
-      ]
-    : [
-        { type: 'image', source: { type: 'base64', media_type: mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp', data: base64 } },
-        { type: 'text', text: prompt },
-      ]
+  let content: Anthropic.MessageParam['content']
+
+  if (isPdf && mode === 'inventory') {
+    // Extract text from PDF and send as text — much faster than vision
+    const parsed = await pdfParse(buffer)
+    const pdfText = parsed.text.trim()
+    content = [{ type: 'text', text: `${PROMPT_INVENTORY}\n\n---\nCONTEÚDO DO DOCUMENTO:\n${pdfText}` }]
+  } else if (isPdf) {
+    const base64 = buffer.toString('base64')
+    content = [
+      { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } } as Anthropic.DocumentBlockParam,
+      { type: 'text', text: PROMPT_NF },
+    ]
+  } else {
+    const base64 = buffer.toString('base64')
+    const prompt = mode === 'inventory' ? PROMPT_INVENTORY : PROMPT_NF
+    content = [
+      { type: 'image', source: { type: 'base64', media_type: mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp', data: base64 } },
+      { type: 'text', text: prompt },
+    ]
+  }
 
   const message = await getClient().messages.create({
     model: 'claude-sonnet-4-6',
@@ -34,7 +44,6 @@ export async function POST(req: NextRequest) {
 
   const text = (message.content[0] as { type: string; text: string }).text
 
-  // Parse JSON from response
   const jsonMatch = text.match(/\[[\s\S]*\]/)
   if (!jsonMatch) return NextResponse.json({ items: [], raw: text })
 
@@ -59,13 +68,13 @@ Identifique cada item e retorne APENAS um JSON array com o seguinte formato (sem
 ]
 Se não encontrar lote ou validade, use null. Seja objetivo e liste todos os itens da nota.`
 
-const PROMPT_INVENTORY = `Este é um documento de lista de contagem/inventário de estoque de medicamentos.
+const PROMPT_INVENTORY = `Abaixo está o texto extraído de uma lista de contagem de estoque de medicamentos.
 
 A tabela tem colunas: Código | Produto | Lote | Fabricação | Validade | Quantidade Sistema | Quantidade Físico
 
-ATENÇÃO: cada produto aparece em duas linhas — a primeira linha tem só o nome (sem lote/validade/quantidade) e a segunda linha repete o nome e tem os dados reais (lote, validade, quantidade). Ignore as linhas sem lote e sem quantidade. Use APENAS as linhas que possuem valor na coluna "Lote" e "Quantidade Sistema".
+ATENÇÃO: cada produto aparece em duas linhas — a primeira linha tem só o nome (sem lote/validade/quantidade) e a segunda linha repete o nome e tem os dados reais. Ignore linhas sem lote e sem quantidade. Use APENAS as linhas que possuem Lote e Quantidade Sistema preenchidos.
 
-Se um mesmo produto tiver múltiplos lotes (várias linhas com dados), crie uma entrada separada para cada lote.
+Se um mesmo produto tiver múltiplos lotes, crie uma entrada separada para cada lote.
 
 Retorne SOMENTE um JSON array válido, sem nenhum texto antes ou depois:
 [
