@@ -334,6 +334,21 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
     setMsSaving(false)
   }
 
+  async function deleteItem(id: number) {
+    if (!confirm('Excluir este item e todas as suas movimentações?')) return
+    await fetch(`/api/estoque/items/${id}`, { method: 'DELETE' })
+    setItems(p => p.filter(i => i.id !== id))
+    setMovements(p => p.filter(m => m.item_id !== id))
+  }
+
+  async function deleteMovement(id: number) {
+    if (!confirm('Excluir esta movimentação?')) return
+    await fetch(`/api/estoque/movements/${id}`, { method: 'DELETE' })
+    setMovements(p => p.filter(m => m.id !== id))
+    // Refresh items to update quantities
+    fetch('/api/estoque/items').then(r => r.json()).then(setItems)
+  }
+
   async function handleReset() {
     setResetLoading(true); setResetError('')
     const res = await fetch('/api/estoque/reset', {
@@ -448,6 +463,8 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
                         className="p-2 text-violet-600 hover:bg-violet-50 rounded-lg transition-colors text-lg">▦</button>
                       <button onClick={() => setEditItem(item)} title="Editar"
                         className="p-2 text-gray-500 hover:bg-gray-50 rounded-lg transition-colors text-sm">✏️</button>
+                      <button onClick={() => deleteItem(item.id)} title="Excluir item"
+                        className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition-colors text-sm">🗑️</button>
                     </div>
                   </div>
                 ))}
@@ -558,7 +575,10 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
                     </div>
                     <p className="text-xs text-gray-400 mt-1">{formatDate(m.created_at)}{m.created_by ? ` · ${m.created_by}` : ''}</p>
                   </div>
-                  <button onClick={() => setEditMov(m)} className="text-gray-400 hover:text-gray-600 text-sm p-1">✏️</button>
+                  <div className="flex gap-1 shrink-0">
+                    <button onClick={() => setEditMov(m)} className="text-gray-400 hover:text-gray-600 text-sm p-1">✏️</button>
+                    <button onClick={() => deleteMovement(m.id)} className="text-red-400 hover:text-red-600 text-sm p-1" title="Excluir">🗑️</button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -644,7 +664,10 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
                     </div>
                     <p className="text-xs text-gray-400 mt-1">{formatDate(m.created_at)}{m.created_by ? ` · ${m.created_by}` : ''}</p>
                   </div>
-                  <button onClick={() => setEditMov(m)} className="text-gray-400 hover:text-gray-600 text-sm p-1">✏️</button>
+                  <div className="flex gap-1 shrink-0">
+                    <button onClick={() => setEditMov(m)} className="text-gray-400 hover:text-gray-600 text-sm p-1">✏️</button>
+                    <button onClick={() => deleteMovement(m.id)} className="text-red-400 hover:text-red-600 text-sm p-1" title="Excluir">🗑️</button>
+                  </div>
                 </div>
               ))}
             </div>
