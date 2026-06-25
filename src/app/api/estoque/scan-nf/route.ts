@@ -37,17 +37,21 @@ export async function POST(req: NextRequest) {
 
   const text = (message.content[0] as { type: string; text: string }).text
 
-  // Strip markdown code blocks if present
-  const cleaned = text.replace(/```(?:json)?\s*/g, '').replace(/```/g, '').trim()
+  // Find the JSON array — search in original text since backtick stripping may leave artifacts
+  const startIdx = text.indexOf('[')
+  const endIdx = text.lastIndexOf(']')
 
-  const jsonMatch = cleaned.match(/\[[\s\S]*\]/)
-  if (!jsonMatch) return NextResponse.json({ items: [], raw: text })
+  if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
+    return NextResponse.json({ items: [], raw: text.slice(0, 300) })
+  }
+
+  const jsonStr = text.slice(startIdx, endIdx + 1)
 
   try {
-    const items = JSON.parse(jsonMatch[0])
+    const items = JSON.parse(jsonStr)
     return NextResponse.json({ items })
-  } catch {
-    return NextResponse.json({ items: [], raw: text })
+  } catch (err) {
+    return NextResponse.json({ items: [], raw: text.slice(0, 300), parseError: String(err) })
   }
 }
 
