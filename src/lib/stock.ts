@@ -13,7 +13,7 @@ export interface StockItem {
 export interface StockMovement {
   id: number
   item_id: number
-  item_name?: string
+  item_name: string
   type: 'entrada' | 'saida'
   quantity: number
   lot: string | null
