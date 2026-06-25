@@ -92,4 +92,4 @@ Regras:
 - Formate a validade como MM/YYYY (ex: "02/2027")
 - Se não houver lote ou quantidade, ignore a linha
 - Unidade padrão: "un"
-- Retorne APENAS o array JSON, sem explicações, sem markdown`
+- Retorne APENAS o array JSON, sem explicações, sem markdown, sem blocos de código, sem backticks`

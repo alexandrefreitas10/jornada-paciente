@@ -258,7 +258,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
     const res = await fetch('/api/estoque/scan-nf?mode=inventory', { method: 'POST', body: fd })
     const data = await res.json()
     if (data.items?.length) { setNfItems(data.items) }
-    else { setNfError(`Não foi possível extrair itens.${data.raw ? ' Resposta: ' + String(data.raw).slice(0, 200) : ''}`) }
+    else { setNfError(`Não foi possível extrair itens.${data.parseError ? ' Erro: ' + String(data.parseError) : ''}${data.raw ? ' | Raw: ' + String(data.raw).slice(0, 200) : ''}`) }
     setNfLoading(false)
     if (invInputRef.current) invInputRef.current.value = ''
   }
