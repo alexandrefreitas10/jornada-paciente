@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>
 
 const getClient = () => new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -12,33 +10,27 @@ export async function POST(req: NextRequest) {
 
   const mode = req.nextUrl.searchParams.get('mode') ?? 'nf'
   const buffer = Buffer.from(await file.arrayBuffer())
+  const base64 = buffer.toString('base64')
   const mimeType = file.type || 'image/jpeg'
   const isPdf = mimeType === 'application/pdf'
 
-  let content: Anthropic.MessageParam['content']
+  const isInventory = mode === 'inventory'
+  const prompt = isInventory ? PROMPT_INVENTORY : PROMPT_NF
+  // Use haiku for inventory (faster, avoids timeout on large PDFs)
+  const model = isInventory ? 'claude-haiku-4-5-20251001' : 'claude-sonnet-4-6'
 
-  if (isPdf && mode === 'inventory') {
-    // Extract text from PDF and send as text — much faster than vision
-    const parsed = await pdfParse(buffer)
-    const pdfText = parsed.text.trim()
-    content = [{ type: 'text', text: `${PROMPT_INVENTORY}\n\n---\nCONTEÚDO DO DOCUMENTO:\n${pdfText}` }]
-  } else if (isPdf) {
-    const base64 = buffer.toString('base64')
-    content = [
-      { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } } as Anthropic.DocumentBlockParam,
-      { type: 'text', text: PROMPT_NF },
-    ]
-  } else {
-    const base64 = buffer.toString('base64')
-    const prompt = mode === 'inventory' ? PROMPT_INVENTORY : PROMPT_NF
-    content = [
-      { type: 'image', source: { type: 'base64', media_type: mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp', data: base64 } },
-      { type: 'text', text: prompt },
-    ]
-  }
+  const content: Anthropic.MessageParam['content'] = isPdf
+    ? [
+        { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } } as Anthropic.DocumentBlockParam,
+        { type: 'text', text: prompt },
+      ]
+    : [
+        { type: 'image', source: { type: 'base64', media_type: mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp', data: base64 } },
+        { type: 'text', text: prompt },
+      ]
 
   const message = await getClient().messages.create({
-    model: 'claude-sonnet-4-6',
+    model,
     max_tokens: 8192,
     messages: [{ role: 'user', content }],
   })
@@ -69,7 +61,7 @@ Identifique cada item e retorne APENAS um JSON array com o seguinte formato (sem
 ]
 Se não encontrar lote ou validade, use null. Seja objetivo e liste todos os itens da nota.`
 
-const PROMPT_INVENTORY = `Abaixo está o texto extraído de uma lista de contagem de estoque de medicamentos.
+const PROMPT_INVENTORY = `Este é um documento de lista de contagem/inventário de estoque de medicamentos.
 
 A tabela tem colunas: Código | Produto | Lote | Fabricação | Validade | Quantidade Sistema | Quantidade Físico
 
