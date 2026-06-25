@@ -10,7 +10,7 @@ interface ExamFile {
   url: string
   summary: string | null
   created_at: string
-  created_by: string | null
+  created_by?: string | null
 }
 
 interface Props {
