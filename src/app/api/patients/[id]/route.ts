@@ -32,7 +32,7 @@ export async function DELETE(_req: Request, { params }: Params) {
   const session = await auth()
   const userName = session?.user?.name ?? 'Desconhecido'
   const patient = await getPatient(Number(id))
-  await deletePatient(Number(id))
+  await deletePatient(Number(id), userName)
   await logAudit({ userName, action: 'DELETE', entityType: 'patient', entityId: id, details: patient?.name })
   return NextResponse.json({ ok: true })
 }

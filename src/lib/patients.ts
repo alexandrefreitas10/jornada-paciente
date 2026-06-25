@@ -112,9 +112,9 @@ export async function updatePatient(id: number, input: PatientInput): Promise<vo
   `
 }
 
-export async function deletePatient(id: number): Promise<void> {
+export async function deletePatient(id: number, deletedBy?: string | null): Promise<void> {
   await initSchema()
-  await sql`UPDATE patients SET deleted_at = NOW() WHERE id = ${id}`
+  await sql`UPDATE patients SET deleted_at = NOW(), deleted_by = ${deletedBy ?? null} WHERE id = ${id}`
 }
 
 export async function restorePatient(id: number): Promise<void> {

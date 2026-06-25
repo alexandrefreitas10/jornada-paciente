@@ -171,6 +171,8 @@ export async function initSchema() {
   // Soft-delete em arquivos de pacientes (mantém S3 para restauração)
   await sql.unsafe(`ALTER TABLE patient_files ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`).catch(() => {})
 
+  await sql.unsafe(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS deleted_by TEXT`).catch(() => {})
+
   // Usuário administrador principal
   await sql.unsafe(`UPDATE users SET is_admin = TRUE WHERE username = '038.069.291-06'`).catch(() => {})
 

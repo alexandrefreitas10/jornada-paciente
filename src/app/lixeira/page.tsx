@@ -7,6 +7,7 @@ interface Patient {
   id: number
   name: string
   deleted_at: string
+  deleted_by: string | null
 }
 
 export default function LixeiraPage() {
@@ -59,7 +60,10 @@ export default function LixeiraPage() {
             <div key={p.id} className="flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3">
               <div>
                 <p className="font-semibold text-gray-700">{p.name}</p>
-                <p className="text-xs text-gray-400 mt-0.5">Excluído em {formatDate(p.deleted_at)}</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Excluído em {formatDate(p.deleted_at)}
+                  {p.deleted_by && <span className="ml-1">· por <span className="font-medium text-gray-500">{p.deleted_by}</span></span>}
+                </p>
               </div>
               <button
                 onClick={() => handleRestore(p.id)}
