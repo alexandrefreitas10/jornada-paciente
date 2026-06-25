@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import QRCode from 'qrcode'
 
-interface StockItem { id: number; name: string; unit: string; quantity: number; notes: string | null }
+interface StockItem { id: number; name: string; unit: string; quantity: number; notes: string | null; lot: string | null; expiry_date: string | null }
 interface StockMovement {
   id: number; item_id: number; item_name: string; type: 'entrada' | 'saida'
   quantity: number; lot: string | null; expiry_date: string | null
@@ -76,14 +76,27 @@ function EditItemModal({ item, onClose, onSaved }: { item: StockItem; onClose: (
   const [name, setName] = useState(item.name)
   const [unit, setUnit] = useState(item.unit)
   const [notes, setNotes] = useState(item.notes ?? '')
+  const [quantity, setQuantity] = useState(String(item.quantity))
+  const [lot, setLot] = useState(item.lot ?? '')
+  const [expiry, setExpiry] = useState(item.expiry_date ?? '')
   const [saving, setSaving] = useState(false)
 
   async function handleSave() {
     setSaving(true)
-    const res = await fetch(`/api/estoque/items/${item.id}`, {
+    // Save name/unit/notes
+    await fetch(`/api/estoque/items/${item.id}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, unit, notes: notes || null }),
     })
+    // Adjust quantity if changed
+    const targetQty = Number(quantity)
+    if (targetQty !== item.quantity || lot !== (item.lot ?? '') || expiry !== (item.expiry_date ?? '')) {
+      await fetch(`/api/estoque/items/${item.id}/adjust`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_quantity: targetQty, lot: lot || null, expiry_date: expiry || null }),
+      })
+    }
+    const res = await fetch(`/api/estoque/items/${item.id}`)
     if (res.ok) { onSaved(await res.json()) }
     setSaving(false)
   }
@@ -97,9 +110,25 @@ function EditItemModal({ item, onClose, onSaved }: { item: StockItem; onClose: (
             <label className="block text-xs font-medium text-gray-600 mb-1">Nome *</label>
             <input value={name} onChange={e => setName(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Unidade</label>
-            <input value={unit} onChange={e => setUnit(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-600 mb-1">Unidade</label>
+              <input value={unit} onChange={e => setUnit(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            </div>
+            <div className="w-28">
+              <label className="block text-xs font-medium text-gray-600 mb-1">Quantidade</label>
+              <input type="number" min="0" value={quantity} onChange={e => setQuantity(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-600 mb-1">Lote</label>
+              <input value={lot} onChange={e => setLot(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-600 mb-1">Validade</label>
+              <input value={expiry} onChange={e => setExpiry(e.target.value)} placeholder="MM/AAAA" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            </div>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Observações</label>
@@ -188,6 +217,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   const [qrItem, setQrItem] = useState<StockItem | null>(null)
   const [editItem, setEditItem] = useState<StockItem | null>(null)
   const [editMov, setEditMov] = useState<StockMovement | null>(null)
+  const [search, setSearch] = useState('')
 
   // ── Entrada por NF ──────────────────────────────────────────
   const [nfLoading, setNfLoading] = useState(false)
@@ -303,8 +333,14 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
       {/* ── ABA ESTOQUE ATUAL ── */}
       {tab === 'estoque' && (
         <div>
-          <div className="flex justify-between items-center mb-4">
-            <p className="text-sm text-gray-500">{items.length} medicação(ões) cadastrada(s)</p>
+          {/* Busca */}
+          <div className="relative mb-4">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-base">🔍</span>
+            <input
+              value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Buscar medicação..."
+              className="w-full border border-gray-300 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 bg-white shadow-sm"
+            />
           </div>
           {items.length === 0 ? (
             <div className="text-center py-16 text-gray-400">
@@ -312,28 +348,37 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
               <p>Nenhuma medicação cadastrada ainda.</p>
               <p className="text-sm mt-1">Use a aba Entradas para adicionar itens.</p>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {items.map(item => (
-                <div key={item.id} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex items-center gap-4">
-                  <div className="flex-1">
-                    <p className="font-semibold text-gray-800">{item.name}</p>
-                    {item.notes && <p className="text-xs text-gray-400 mt-0.5">{item.notes}</p>}
+          ) : (() => {
+            const filtered = items.filter(i => i.name.toLowerCase().includes(search.toLowerCase()))
+            return filtered.length === 0 ? (
+              <p className="text-center py-10 text-sm text-gray-400">Nenhuma medicação encontrada para "{search}".</p>
+            ) : (
+              <div className="space-y-3">
+                {filtered.map(item => (
+                  <div key={item.id} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex items-start gap-4">
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-800">{item.name}</p>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                        {item.lot && <p className="text-xs text-gray-500">Lote: <span className="font-medium">{item.lot}</span></p>}
+                        {item.expiry_date && <p className="text-xs text-gray-500">Val: <span className="font-medium">{item.expiry_date}</span></p>}
+                        {item.notes && <p className="text-xs text-gray-400">{item.notes}</p>}
+                      </div>
+                    </div>
+                    <div className="text-right mr-2 shrink-0">
+                      <p className={`text-xl font-bold ${item.quantity <= 0 ? 'text-red-500' : 'text-green-600'}`}>{item.quantity}</p>
+                      <p className="text-xs text-gray-400">{item.unit}</p>
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <button onClick={() => setQrItem(item)} title="Gerar QR Code"
+                        className="p-2 text-violet-600 hover:bg-violet-50 rounded-lg transition-colors text-lg">▦</button>
+                      <button onClick={() => setEditItem(item)} title="Editar"
+                        className="p-2 text-gray-500 hover:bg-gray-50 rounded-lg transition-colors text-sm">✏️</button>
+                    </div>
                   </div>
-                  <div className="text-right mr-2">
-                    <p className={`text-xl font-bold ${item.quantity <= 0 ? 'text-red-500' : 'text-green-600'}`}>{item.quantity}</p>
-                    <p className="text-xs text-gray-400">{item.unit}</p>
-                  </div>
-                  <div className="flex gap-1">
-                    <button onClick={() => setQrItem(item)} title="Gerar QR Code"
-                      className="p-2 text-violet-600 hover:bg-violet-50 rounded-lg transition-colors text-lg">▦</button>
-                    <button onClick={() => setEditItem(item)} title="Editar"
-                      className="p-2 text-gray-500 hover:bg-gray-50 rounded-lg transition-colors text-sm">✏️</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )
+          })()}
         </div>
       )}
 
@@ -368,7 +413,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
                     <input value={ni.lot ?? ''} onChange={e => setNfItems(p => p.map((x, i) => i === idx ? { ...x, lot: e.target.value || null } : x))}
                       className="w-28 border border-gray-200 rounded px-2 py-1 text-sm" placeholder="Lote" />
                     <input value={ni.expiry_date ?? ''} onChange={e => setNfItems(p => p.map((x, i) => i === idx ? { ...x, expiry_date: e.target.value || null } : x))}
-                      className="w-28 border border-gray-200 rounded px-2 py-1 text-sm" placeholder="Validade" />
+                      className="w-28 border border-gray-200 rounded px-2 py-1 text-sm" placeholder="MM/AAAA" />
                     <button onClick={() => setNfItems(p => p.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-600 text-sm px-1">✕</button>
                   </div>
                 ))}

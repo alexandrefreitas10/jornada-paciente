@@ -8,6 +8,8 @@ export interface StockItem {
   created_by: string | null
   created_at: string
   quantity: number
+  lot: string | null
+  expiry_date: string | null
 }
 
 export interface StockMovement {
@@ -34,7 +36,9 @@ export async function listStockItems(): Promise<StockItem[]> {
         SUM(CASE WHEN m.type = 'entrada' THEN m.quantity ELSE 0 END) -
         SUM(CASE WHEN m.type = 'saida'   THEN m.quantity ELSE 0 END),
         0
-      )::int AS quantity
+      )::int AS quantity,
+      (SELECT lot FROM stock_movements WHERE item_id = i.id AND type = 'entrada' ORDER BY created_at DESC LIMIT 1) AS lot,
+      (SELECT expiry_date FROM stock_movements WHERE item_id = i.id AND type = 'entrada' ORDER BY created_at DESC LIMIT 1) AS expiry_date
     FROM stock_items i
     LEFT JOIN stock_movements m ON m.item_id = i.id
     GROUP BY i.id
@@ -47,6 +51,8 @@ export async function getStockItem(id: number): Promise<StockItem | null> {
   const [row] = await sql<StockItem[]>`
     SELECT
       i.*,
+      (SELECT lot FROM stock_movements WHERE item_id = i.id AND type = 'entrada' ORDER BY created_at DESC LIMIT 1) AS lot,
+      (SELECT expiry_date FROM stock_movements WHERE item_id = i.id AND type = 'entrada' ORDER BY created_at DESC LIMIT 1) AS expiry_date,
       COALESCE(
         SUM(CASE WHEN m.type = 'entrada' THEN m.quantity ELSE 0 END) -
         SUM(CASE WHEN m.type = 'saida'   THEN m.quantity ELSE 0 END),
@@ -121,6 +127,25 @@ export async function createMovement(data: {
     RETURNING *
   `
   return row
+}
+
+// Cria movimento de ajuste para corrigir quantidade diretamente
+export async function adjustStockQuantity(
+  itemId: number,
+  currentQty: number,
+  targetQty: number,
+  lot: string | null,
+  expiryDate: string | null,
+  createdBy: string | null
+): Promise<void> {
+  await initSchema()
+  const diff = targetQty - currentQty
+  if (diff === 0) return
+  const type = diff > 0 ? 'entrada' : 'saida'
+  await sql`
+    INSERT INTO stock_movements (item_id, type, quantity, lot, expiry_date, observation, created_by)
+    VALUES (${itemId}, ${type}, ${Math.abs(diff)}, ${lot}, ${expiryDate}, ${'Ajuste manual'}, ${createdBy})
+  `
 }
 
 export async function updateMovement(
