@@ -449,6 +449,7 @@ function SemAtualizacao() {
 // ── Aba: Pacientes com fotos ─────────────────────────────────────────────────
 
 function ComFotos() {
+  const [tipo, setTipo] = useState<'photo' | 'evolution'>('photo')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<{
     total: number
@@ -458,7 +459,7 @@ function ComFotos() {
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    const res = await fetch('/api/relatorio/com-fotos')
+    const res = await fetch(`/api/relatorio/com-fotos?type=${tipo}`)
     setResult(await res.json())
     setLoading(false)
   }
@@ -466,24 +467,47 @@ function ComFotos() {
   return (
     <div className="space-y-5">
       <form onSubmit={handleSearch} className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
+        <h2 className="text-sm font-semibold text-gray-700">Pacientes com fotos enviadas</h2>
+
         <div>
-          <h2 className="text-sm font-semibold text-gray-700">Pacientes com fotos de evolução</h2>
-          <p className="text-xs text-gray-400 mt-1">Lista todos os pacientes que têm ao menos uma foto enviada</p>
+          <label className="text-xs text-gray-500 mb-2 block">Origem das fotos</label>
+          <div className="flex gap-2">
+            {([
+              { key: 'photo', label: '🖼 Aba Fotos' },
+              { key: 'evolution', label: '📈 Aba Evolução' },
+            ] as const).map(t => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => { setTipo(t.key); setResult(null) }}
+                className={`px-4 py-2 text-xs font-medium rounded-lg border transition-colors ${
+                  tipo === t.key
+                    ? 'bg-violet-600 text-white border-violet-600'
+                    : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
+
         <button type="submit" disabled={loading}
           className="w-full py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
-          {loading ? 'Buscando...' : '📷 Buscar pacientes com fotos'}
+          {loading ? 'Buscando...' : '📷 Buscar'}
         </button>
       </form>
 
       {result && (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
-            <span className="text-sm font-semibold text-gray-700">Com fotos</span>
+            <span className="text-sm font-semibold text-gray-700">
+              {tipo === 'photo' ? 'Com fotos (aba Fotos)' : 'Com fotos (aba Evolução)'}
+            </span>
             <span className="text-sm font-bold text-violet-700">{result.total} paciente{result.total !== 1 ? 's' : ''}</span>
           </div>
           {result.patients.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-6">Nenhum paciente com fotos</p>
+            <p className="text-sm text-gray-400 text-center py-6">Nenhum paciente com fotos nesta aba</p>
           ) : (
             <div className="divide-y divide-gray-100">
               {result.patients.map(p => (

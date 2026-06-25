@@ -1,10 +1,12 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import sql, { initSchema } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   await initSchema()
+
+  const type = req.nextUrl.searchParams.get('type') === 'evolution' ? 'evolution' : 'photo'
 
   const rows = await sql<{ id: number; name: string; photo_count: string; last_photo: string }[]>`
     SELECT
@@ -15,7 +17,7 @@ export async function GET() {
     FROM patients p
     INNER JOIN patient_files pf ON pf.patient_id = p.id
     WHERE
-      pf.file_type = 'photo'
+      pf.file_type = ${type}
       AND pf.deleted_at IS NULL
       AND p.deleted_at IS NULL
     GROUP BY p.id, p.name
