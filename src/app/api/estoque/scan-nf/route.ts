@@ -37,7 +37,10 @@ export async function POST(req: NextRequest) {
 
   const text = (message.content[0] as { type: string; text: string }).text
 
-  const jsonMatch = text.match(/\[[\s\S]*\]/)
+  // Strip markdown code blocks if present
+  const cleaned = text.replace(/```(?:json)?\s*/g, '').replace(/```/g, '').trim()
+
+  const jsonMatch = cleaned.match(/\[[\s\S]*\]/)
   if (!jsonMatch) return NextResponse.json({ items: [], raw: text })
 
   try {
