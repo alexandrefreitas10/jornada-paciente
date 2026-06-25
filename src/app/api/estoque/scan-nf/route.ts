@@ -29,29 +29,39 @@ export async function POST(req: NextRequest) {
         { type: 'text', text: prompt },
       ]
 
-  const message = await getClient().messages.create({
-    model,
-    max_tokens: 8192,
-    messages: [{ role: 'user', content }],
-  })
-
-  const text = (message.content[0] as { type: string; text: string }).text
-
-  // Find the JSON array — search in original text since backtick stripping may leave artifacts
-  const startIdx = text.indexOf('[')
-  const endIdx = text.lastIndexOf(']')
-
-  if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
-    return NextResponse.json({ items: [], raw: text.slice(0, 300) })
-  }
-
-  const jsonStr = text.slice(startIdx, endIdx + 1)
-
   try {
-    const items = JSON.parse(jsonStr)
-    return NextResponse.json({ items })
+    const message = await getClient().messages.create({
+      model,
+      max_tokens: 8192,
+      messages: [{ role: 'user', content }],
+    })
+
+    const block = message.content[0] as { type: string; text?: string }
+    if (block.type !== 'text' || !block.text) {
+      return NextResponse.json({ items: [], parseError: `Unexpected block type: ${block.type}` })
+    }
+
+    const text = block.text
+    const startIdx = text.indexOf('[')
+    const endIdx = text.lastIndexOf(']')
+
+    if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
+      return NextResponse.json({ items: [], raw: text.slice(0, 500), parseError: `No JSON array found. startIdx=${startIdx} endIdx=${endIdx}` })
+    }
+
+    const jsonStr = text.slice(startIdx, endIdx + 1)
+
+    try {
+      const items = JSON.parse(jsonStr)
+      if (!Array.isArray(items)) {
+        return NextResponse.json({ items: [], parseError: `Parsed value is not an array: ${typeof items}`, raw: jsonStr.slice(0, 200) })
+      }
+      return NextResponse.json({ items })
+    } catch (err) {
+      return NextResponse.json({ items: [], raw: jsonStr.slice(0, 500), parseError: String(err) })
+    }
   } catch (err) {
-    return NextResponse.json({ items: [], raw: text.slice(0, 300), parseError: String(err) })
+    return NextResponse.json({ items: [], parseError: `API error: ${String(err)}` })
   }
 }
 
