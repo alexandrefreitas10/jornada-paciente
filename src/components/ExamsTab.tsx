@@ -17,17 +17,22 @@ interface Props {
   initialFiles: ExamFile[]
 }
 
+function stripMd(text: string): string {
+  return text.replace(/\*\*/g, '').replace(/\*/g, '').trim()
+}
+
 function formatSummaryCompact(summary: string): string {
   const lines = summary.split('\n')
   const items: string[] = []
   for (const line of lines) {
     const trimmed = line.trim()
-    if (/^\|[\s\-|]+\|$/.test(trimmed)) continue
-    if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
-      const cols = trimmed.split('|').map(c => c.trim()).filter(Boolean)
-      if (cols.length >= 2 && cols[0].toLowerCase() !== 'exame') {
-        items.push(`${cols[0]} | ${cols[1]}`)
-      }
+    // skip separator rows
+    if (/^\|[-\s|]+\|$/.test(trimmed)) continue
+    // only table rows
+    if (!trimmed.startsWith('|') || !trimmed.endsWith('|')) continue
+    const cols = trimmed.split('|').map(c => stripMd(c)).filter(Boolean)
+    if (cols.length >= 2 && cols[0].toLowerCase() !== 'exame') {
+      items.push(`${cols[0]} | ${cols[1]}`)
     }
   }
   return items.join('\n')
