@@ -219,6 +219,10 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   const [editMov, setEditMov] = useState<StockMovement | null>(null)
   const [search, setSearch] = useState('')
   const [patients, setPatients] = useState<{ id: number; name: string }[]>([])
+  const [showReset, setShowReset] = useState(false)
+  const [resetPassword, setResetPassword] = useState('')
+  const [resetError, setResetError] = useState('')
+  const [resetLoading, setResetLoading] = useState(false)
 
   useEffect(() => {
     fetch('/api/patients').then(r => r.json()).then(data => {
@@ -330,6 +334,19 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
     setMsSaving(false)
   }
 
+  async function handleReset() {
+    setResetLoading(true); setResetError('')
+    const res = await fetch('/api/estoque/reset', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: resetPassword }),
+    })
+    const data = await res.json()
+    if (!res.ok) { setResetError(data.error || 'Erro ao zerar estoque'); setResetLoading(false); return }
+    setItems([]); setMovements([])
+    setShowReset(false); setResetPassword(''); setResetError('')
+    setResetLoading(false)
+  }
+
   const tabs: { key: Tab; label: string }[] = [
     { key: 'estoque', label: '📦 Estoque Atual' },
     { key: 'entradas', label: '⬆️ Entradas' },
@@ -353,17 +370,52 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
         ))}
       </div>
 
+      {/* ── MODAL ZERAR ESTOQUE ── */}
+      {showReset && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
+            <h3 className="font-bold text-gray-800 text-lg mb-1">⚠️ Zerar Estoque</h3>
+            <p className="text-sm text-gray-500 mb-4">Esta ação apaga <strong>todos</strong> os itens e movimentações. Digite a senha de admin para confirmar.</p>
+            <input
+              type="password"
+              value={resetPassword}
+              onChange={e => setResetPassword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleReset()}
+              placeholder="Senha de admin"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-red-400"
+              autoFocus
+            />
+            {resetError && <p className="text-red-500 text-xs mb-2">{resetError}</p>}
+            <div className="flex gap-2 mt-2">
+              <button onClick={() => { setShowReset(false); setResetPassword(''); setResetError('') }} className="flex-1 py-2 border border-gray-300 text-gray-600 rounded-lg text-sm hover:bg-gray-50">Cancelar</button>
+              <button onClick={handleReset} disabled={resetLoading || !resetPassword} className="flex-1 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 disabled:opacity-50">
+                {resetLoading ? 'Zerando...' : 'Zerar tudo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── ABA ESTOQUE ATUAL ── */}
       {tab === 'estoque' && (
         <div>
-          {/* Busca */}
-          <div className="relative mb-4">
+          {/* Busca + botão zerar */}
+          <div className="flex gap-2 mb-4">
+          <div className="relative flex-1">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-base">🔍</span>
             <input
               value={search} onChange={e => setSearch(e.target.value)}
               placeholder="Buscar medicação..."
               className="w-full border border-gray-300 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 bg-white shadow-sm"
             />
+          </div>
+          <button
+            onClick={() => setShowReset(true)}
+            title="Zerar estoque"
+            className="flex-shrink-0 px-3 py-2.5 bg-red-50 border border-red-200 text-red-500 rounded-xl hover:bg-red-100 transition-colors text-base"
+          >
+            🗑️
+          </button>
           </div>
           {items.length === 0 ? (
             <div className="text-center py-16 text-gray-400">
