@@ -81,7 +81,8 @@
       "Bash(Out-Null)",
       "Bash(mkdir -p \"C:\\\\Users\\\\alexa\\\\Projeto Curso IA\\\\src\\\\app\\\\api\\\\patients\\\\[id]\\\\archive\")",
       "Bash(mkdir -p \"C:\\\\Users\\\\alexa\\\\Projeto Curso IA\\\\src\\\\app\\\\api\\\\patients\\\\[id]\\\\unarchive\")",
-      "Bash(curl -s \"https://agenda-voz-989g.onrender.com/api/reminders/check\")"
+      "Bash(curl -s \"https://agenda-voz-989g.onrender.com/api/reminders/check\")",
+      "Bash(xargs grep -l \"evolution\")"
     ]
   }
 }

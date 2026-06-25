@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { RelatorioUltimaSemana } from '@/components/RelatorioUltimaSemana'
 
-type Tab = 'cards' | 'itens' | 'semana' | 'inativos' | 'concluidos'
+type Tab = 'cards' | 'itens' | 'semana' | 'inativos' | 'concluidos' | 'fotos'
 
 interface PatientOption { id: number; name: string }
 
@@ -446,6 +446,69 @@ function SemAtualizacao() {
   )
 }
 
+// ── Aba: Pacientes com fotos ─────────────────────────────────────────────────
+
+function ComFotos() {
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState<{
+    total: number
+    patients: { id: number; name: string; photo_count: number; last_photo: string }[]
+  } | null>(null)
+
+  async function handleSearch(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    const res = await fetch('/api/relatorio/com-fotos')
+    setResult(await res.json())
+    setLoading(false)
+  }
+
+  return (
+    <div className="space-y-5">
+      <form onSubmit={handleSearch} className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
+        <div>
+          <h2 className="text-sm font-semibold text-gray-700">Pacientes com fotos de evolução</h2>
+          <p className="text-xs text-gray-400 mt-1">Lista todos os pacientes que têm ao menos uma foto enviada</p>
+        </div>
+        <button type="submit" disabled={loading}
+          className="w-full py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
+          {loading ? 'Buscando...' : '📷 Buscar pacientes com fotos'}
+        </button>
+      </form>
+
+      {result && (
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+            <span className="text-sm font-semibold text-gray-700">Com fotos</span>
+            <span className="text-sm font-bold text-violet-700">{result.total} paciente{result.total !== 1 ? 's' : ''}</span>
+          </div>
+          {result.patients.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-6">Nenhum paciente com fotos</p>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {result.patients.map(p => (
+                <div key={p.id} className="px-5 py-3 flex items-center justify-between gap-3">
+                  <div>
+                    <a href={`/pacientes/${p.id}`} className="text-sm font-medium text-gray-900 hover:text-violet-700 transition-colors">
+                      {p.name}
+                    </a>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {p.photo_count} foto{p.photo_count !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                  <span className="text-xs text-gray-400 shrink-0">
+                    Última: {new Date(p.last_photo).toLocaleDateString('pt-BR')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Componente principal ─────────────────────────────────────────────────────
 
 export function RelatoriosClient({ patients }: { patients: PatientOption[] }) {
@@ -454,6 +517,7 @@ export function RelatoriosClient({ patients }: { patients: PatientOption[] }) {
   const tabs: { key: Tab; label: string }[] = [
     { key: 'cards', label: 'Cards criados' },
     { key: 'itens', label: 'Itens enviados' },
+    { key: 'fotos', label: '📷 Com fotos' },
     { key: 'inativos', label: 'Sem atualização' },
     { key: 'concluidos', label: 'Concluídos' },
     { key: 'semana', label: 'Última semana' },
@@ -480,6 +544,7 @@ export function RelatoriosClient({ patients }: { patients: PatientOption[] }) {
 
       {tab === 'cards' && <CardsCreated />}
       {tab === 'itens' && <ItensSent patients={patients} />}
+      {tab === 'fotos' && <ComFotos />}
       {tab === 'inativos' && <SemAtualizacao />}
       {tab === 'concluidos' && <Concluidos />}
       {tab === 'semana' && (
