@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
   const prompt = isInventory ? PROMPT_INVENTORY : PROMPT_NF
   // Use haiku for inventory (faster, avoids timeout on large PDFs)
   const model = isInventory ? 'claude-haiku-4-5-20251001' : 'claude-sonnet-4-6'
+  const maxTokens = isInventory ? 16000 : 8192
 
   const content: Anthropic.MessageParam['content'] = isPdf
     ? [
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
   try {
     const message = await getClient().messages.create({
       model,
-      max_tokens: 8192,
+      max_tokens: maxTokens,
       messages: [{ role: 'user', content }],
     })
 
@@ -42,6 +43,11 @@ export async function POST(req: NextRequest) {
     }
 
     const text = block.text
+
+    if (message.stop_reason === 'max_tokens') {
+      return NextResponse.json({ items: [], parseError: 'Resposta truncada (max_tokens). O inventário tem muitos itens. Tente dividir o PDF em partes menores.' })
+    }
+
     const startIdx = text.indexOf('[')
     const endIdx = text.lastIndexOf(']')
 
@@ -86,20 +92,13 @@ ATENÇÃO: cada produto aparece em duas linhas — a primeira linha tem só o no
 
 Se um mesmo produto tiver múltiplos lotes, crie uma entrada separada para cada lote.
 
-Retorne SOMENTE um JSON array válido, sem nenhum texto antes ou depois:
-[
-  {
-    "name": "Nome completo do produto",
-    "quantity": 10,
-    "unit": "un",
-    "lot": "ABC123",
-    "expiry_date": "MM/YYYY"
-  }
-]
+Retorne SOMENTE um JSON array compacto (sem indentação, tudo em uma linha), sem nenhum texto antes ou depois:
+[{"name":"Nome do produto","quantity":10,"unit":"un","lot":"ABC123","expiry_date":"MM/YYYY"},...]
 
 Regras:
-- Use o valor da coluna "Quantidade Sistema" como quantity
+- Use o valor da coluna "Quantidade Sistema" como quantity (número inteiro)
 - Formate a validade como MM/YYYY (ex: "02/2027")
 - Se não houver lote ou quantidade, ignore a linha
 - Unidade padrão: "un"
+- JSON COMPACTO: sem espaços desnecessários, sem quebras de linha, sem indentação
 - Retorne APENAS o array JSON, sem explicações, sem markdown, sem blocos de código, sem backticks`
