@@ -616,8 +616,14 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
                       </div>
                     </div>
                     <div className="text-right mr-2 shrink-0">
-                      <p className={`text-xl font-bold ${item.quantity <= 0 ? 'text-red-500' : 'text-green-600'}`}>{item.quantity}</p>
+                      <p className={`text-xl font-bold ${item.quantity <= 0 ? 'text-red-500' : item.quantity < 5 ? 'text-orange-500' : 'text-green-600'}`}>{item.quantity}</p>
                       <p className="text-xs text-gray-400">{item.unit}</p>
+                      {item.quantity > 0 && item.quantity < 5 && (
+                        <p className="text-xs text-orange-500 font-semibold mt-0.5">⚠️ Pedir</p>
+                      )}
+                      {item.quantity <= 0 && (
+                        <p className="text-xs text-red-500 font-semibold mt-0.5">🚨 Zerado</p>
+                      )}
                     </div>
                     <div className="flex gap-1 shrink-0">
                       <button onClick={() => setQrItem(item)} title="Gerar QR Code"
