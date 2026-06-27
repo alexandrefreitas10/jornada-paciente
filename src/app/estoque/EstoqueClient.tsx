@@ -380,6 +380,36 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   const entries = movements.filter(m => m.type === 'entrada')
   const exits = movements.filter(m => m.type === 'saida')
 
+  // ── Relatório do Dia ──────────────────────────────────────
+  const [showReport, setShowReport] = useState(false)
+  const [reportPatient, setReportPatient] = useState('')
+  const [reportDate, setReportDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [reportCopied, setReportCopied] = useState(false)
+
+  const reportText = (() => {
+    if (!reportPatient) return ''
+    const dateLabel = new Date(reportDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    const dayExits = exits.filter(m => {
+      const samePatient = m.patient_name?.toLowerCase() === reportPatient.toLowerCase()
+      const sameDay = m.created_at.slice(0, 10) === reportDate
+      return samePatient && sameDay
+    })
+    if (dayExits.length === 0) return `Nenhuma saída registrada para "${reportPatient}" em ${dateLabel}.`
+    const lines = dayExits.map(m => {
+      const parts = [`- ${m.item_name}: ${m.quantity} ${m.lot ? `(Lote: ${m.lot})` : ''}`.trim()]
+      if (m.observation) parts.push(`  Obs: ${m.observation}`)
+      return parts.join('\n')
+    })
+    return `Saídas de estoque — ${dateLabel}\nPaciente: ${reportPatient}\n\n${lines.join('\n')}\n\nRegistrado por: ${exits.find(m => m.patient_name?.toLowerCase() === reportPatient.toLowerCase())?.created_by ?? ''}`
+  })()
+
+  function copyReport() {
+    navigator.clipboard.writeText(reportText).then(() => {
+      setReportCopied(true)
+      setTimeout(() => setReportCopied(false), 2000)
+    })
+  }
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
       <h1 className="text-2xl font-bold text-gray-800 mb-6">Estoque</h1>
@@ -600,9 +630,12 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
       {/* ── ABA SAÍDAS ── */}
       {tab === 'saidas' && (
         <div className="space-y-4">
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 flex-wrap items-center">
             <button onClick={() => setManSaida(true)} className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 transition-colors">
               ✏️ Saída Manual
+            </button>
+            <button onClick={() => setShowReport(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">
+              📋 Relatório do Dia
             </button>
             <p className="text-sm text-gray-500 self-center">ou escaneie o QR Code da medicação com o celular</p>
           </div>
@@ -683,6 +716,49 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── MODAL RELATÓRIO DO DIA ── */}
+      {showReport && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4">
+            <h2 className="text-lg font-bold text-gray-800">📋 Relatório de Saídas</h2>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Paciente</label>
+                <select value={reportPatient} onChange={e => setReportPatient(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                  <option value="">Selecione o paciente</option>
+                  {Array.from(new Set(exits.filter(m => m.patient_name).map(m => m.patient_name!))).sort().map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Data</label>
+                <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+              </div>
+            </div>
+
+            {reportPatient && (
+              <div>
+                <pre className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs text-gray-700 whitespace-pre-wrap font-mono leading-relaxed max-h-64 overflow-y-auto">
+                  {reportText}
+                </pre>
+                <button onClick={copyReport}
+                  className={`mt-2 w-full py-2.5 rounded-xl text-sm font-semibold transition-colors ${reportCopied ? 'bg-green-600 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
+                  {reportCopied ? '✅ Copiado!' : '📋 Copiar para área de transferência'}
+                </button>
+              </div>
+            )}
+
+            <button onClick={() => { setShowReport(false); setReportCopied(false) }}
+              className="w-full py-2 border border-gray-300 text-gray-600 rounded-xl text-sm hover:bg-gray-50">
+              Fechar
+            </button>
+          </div>
         </div>
       )}
 
