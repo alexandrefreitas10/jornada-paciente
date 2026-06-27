@@ -383,6 +383,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   // ── Relatório do Dia ──────────────────────────────────────
   const [showReport, setShowReport] = useState(false)
   const [reportPatient, setReportPatient] = useState('')
+  const [reportPatientSearch, setReportPatientSearch] = useState('')
   const [reportDate, setReportDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [reportCopied, setReportCopied] = useState(false)
 
@@ -727,13 +728,37 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
             <div className="space-y-3">
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-1">Paciente</label>
-                <select value={reportPatient} onChange={e => setReportPatient(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-                  <option value="">Selecione o paciente</option>
-                  {Array.from(new Set(exits.filter(m => m.patient_name).map(m => m.patient_name!))).sort().map(name => (
-                    <option key={name} value={name}>{name}</option>
-                  ))}
-                </select>
+                {reportPatient ? (
+                  <div className="flex items-center gap-2 p-2.5 bg-blue-50 border border-blue-200 rounded-lg">
+                    <span className="text-sm font-medium text-blue-800 flex-1">{reportPatient}</span>
+                    <button onClick={() => { setReportPatient(''); setReportPatientSearch('') }} className="text-blue-400 hover:text-blue-600 text-sm">✕</button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+                    <input
+                      value={reportPatientSearch}
+                      onChange={e => setReportPatientSearch(e.target.value)}
+                      placeholder="Buscar paciente..."
+                      className="w-full border border-gray-300 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    />
+                    {reportPatientSearch && (() => {
+                      const allNames = Array.from(new Set(exits.filter(m => m.patient_name).map(m => m.patient_name!))).sort()
+                      const filtered = allNames.filter(n => n.toLowerCase().includes(reportPatientSearch.toLowerCase()))
+                      if (filtered.length === 0) return <p className="text-xs text-gray-400 mt-1 px-1">Nenhum paciente encontrado</p>
+                      return (
+                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                          {filtered.map(name => (
+                            <button key={name} onClick={() => { setReportPatient(name); setReportPatientSearch('') }}
+                              className="w-full text-left px-3 py-2.5 text-sm hover:bg-blue-50 hover:text-blue-700 transition-colors border-b border-gray-50 last:border-0">
+                              {name}
+                            </button>
+                          ))}
+                        </div>
+                      )
+                    })()}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-1">Data</label>
@@ -754,7 +779,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
               </div>
             )}
 
-            <button onClick={() => { setShowReport(false); setReportCopied(false) }}
+            <button onClick={() => { setShowReport(false); setReportCopied(false); setReportPatient(''); setReportPatientSearch('') }}
               className="w-full py-2 border border-gray-300 text-gray-600 rounded-xl text-sm hover:bg-gray-50">
               Fechar
             </button>
