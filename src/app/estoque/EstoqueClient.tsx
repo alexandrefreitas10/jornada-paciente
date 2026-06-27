@@ -387,6 +387,11 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   const [reportDate, setReportDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [reportCopied, setReportCopied] = useState(false)
 
+  const reportPatientNames = Array.from(new Set(exits.filter(m => m.patient_name).map(m => m.patient_name!))).sort()
+  const reportPatientFiltered = reportPatientSearch
+    ? reportPatientNames.filter(n => n.toLowerCase().includes(reportPatientSearch.toLowerCase()))
+    : reportPatientNames
+
   const reportText = (() => {
     if (!reportPatient) return ''
     const dateLabel = new Date(reportDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -742,21 +747,19 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
                       placeholder="Buscar paciente..."
                       className="w-full border border-gray-300 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                     />
-                    {reportPatientSearch && (() => {
-                      const allNames = Array.from(new Set(exits.filter(m => m.patient_name).map(m => m.patient_name!))).sort()
-                      const filtered = allNames.filter(n => n.toLowerCase().includes(reportPatientSearch.toLowerCase()))
-                      if (filtered.length === 0) return <p className="text-xs text-gray-400 mt-1 px-1">Nenhum paciente encontrado</p>
-                      return (
-                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                          {filtered.map(name => (
-                            <button key={name} onClick={() => { setReportPatient(name); setReportPatientSearch('') }}
-                              className="w-full text-left px-3 py-2.5 text-sm hover:bg-blue-50 hover:text-blue-700 transition-colors border-b border-gray-50 last:border-0">
-                              {name}
-                            </button>
-                          ))}
-                        </div>
-                      )
-                    })()}
+                    {reportPatientSearch && reportPatientFiltered.length === 0 && (
+                      <p className="text-xs text-gray-400 mt-1 px-1">Nenhum paciente encontrado</p>
+                    )}
+                    {reportPatientSearch && reportPatientFiltered.length > 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                        {reportPatientFiltered.map(name => (
+                          <button key={name} onClick={() => { setReportPatient(name); setReportPatientSearch('') }}
+                            className="w-full text-left px-3 py-2.5 text-sm hover:bg-blue-50 hover:text-blue-700 transition-colors border-b border-gray-50 last:border-0">
+                            {name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
