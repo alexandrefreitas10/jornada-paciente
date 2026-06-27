@@ -307,10 +307,42 @@ function SaidaForm() {
 
         {scanError && <p className="text-sm text-red-600 text-center bg-red-50 rounded-xl px-4 py-2">{scanError}</p>}
 
+        {/* Paciente */}
         {cart.length > 0 && (
-          <button onClick={() => setStep('form')}
-            className="w-full py-3.5 bg-violet-600 text-white font-semibold rounded-xl hover:bg-violet-700 transition-colors text-sm">
-            ✅ Finalizar saída ({cart.length} {cart.length === 1 ? 'item' : 'itens'})
+          <div className="bg-white rounded-2xl shadow-lg px-4 py-4">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">👤 Paciente <span className="font-normal text-gray-400">(opcional)</span></label>
+            {patientId ? (
+              <div className="flex items-center gap-2 p-3 bg-violet-50 border border-violet-200 rounded-xl">
+                <span className="text-sm font-medium text-violet-800 flex-1">{selectedPatient?.name}</span>
+                <button onClick={() => { setPatientId(''); setPatientSearch('') }} className="text-violet-400 hover:text-violet-600 text-sm">✕</button>
+              </div>
+            ) : (
+              <div className="relative">
+                <input type="text" value={patientSearch} onChange={e => setPatientSearch(e.target.value)}
+                  placeholder="Buscar paciente..."
+                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+                {patientSearch && filteredPatients.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-40 overflow-y-auto">
+                    {filteredPatients.slice(0, 8).map(p => (
+                      <button key={p.id} onClick={() => { setPatientId(String(p.id)); setPatientSearch('') }}
+                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-violet-50 hover:text-violet-700 transition-colors border-b border-gray-50 last:border-0">
+                        {p.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {patientSearch && filteredPatients.length === 0 && (
+                  <p className="text-xs text-gray-400 mt-1 px-1">Nenhum paciente encontrado</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {cart.length > 0 && (
+          <button onClick={handleSubmit} disabled={saving}
+            className="w-full py-3.5 bg-violet-600 text-white font-semibold rounded-xl hover:bg-violet-700 disabled:opacity-50 transition-colors text-sm">
+            {saving ? 'Registrando...' : `✅ Finalizar saída (${cart.length} ${cart.length === 1 ? 'item' : 'itens'})`}
           </button>
         )}
 
