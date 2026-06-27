@@ -505,37 +505,45 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
       {/* ── MODAL PRÓXIMOS DO VENCIMENTO ── */}
       {showExpiryReport && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4">
-            <h2 className="text-lg font-bold text-gray-800">⚠️ Próximos do Vencimento</h2>
-            <p className="text-xs text-gray-500">{expiringItems.length} item(ns) vencem em até 2 meses ou já venceram.</p>
-            <div className="space-y-2 max-h-64 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col" style={{maxHeight: '85vh'}}>
+            <div className="p-5 border-b border-gray-100">
+              <h2 className="text-lg font-bold text-gray-800">⚠️ Próximos do Vencimento</h2>
+              <div className="flex gap-3 mt-1">
+                <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">
+                  🔴 {expiringItems.filter(i => expiryStatus(i.expiry_date) === 'expired').length} vencido(s)
+                </span>
+                <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-medium">
+                  ⚠️ {expiringItems.filter(i => expiryStatus(i.expiry_date) === 'soon').length} a vencer
+                </span>
+              </div>
+            </div>
+            <div className="overflow-y-auto flex-1 p-4 space-y-2">
               {expiringItems.map(item => {
                 const days = daysUntilExpiry(item.expiry_date)
                 const status = expiryStatus(item.expiry_date)
                 return (
-                  <div key={item.id} className={`flex justify-between items-center px-3 py-2 rounded-xl border ${status === 'expired' ? 'bg-red-100 border-red-300' : 'bg-yellow-50 border-yellow-300'}`}>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-800">{item.name}</p>
-                      <p className="text-xs text-gray-500">Val: {item.expiry_date} · Qtd: {item.quantity} {item.unit}</p>
+                  <div key={item.id} className={`flex justify-between items-center px-3 py-2.5 rounded-xl border ${status === 'expired' ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200'}`}>
+                    <div className="flex-1 min-w-0 mr-3">
+                      <p className="text-sm font-semibold text-gray-800 truncate">{item.name}</p>
+                      <p className="text-xs text-gray-500">Val: {item.expiry_date} · {item.quantity} {item.unit}</p>
                     </div>
-                    <span className={`text-xs font-bold px-2 py-1 rounded-lg ${status === 'expired' ? 'bg-red-200 text-red-700' : 'bg-yellow-200 text-yellow-700'}`}>
+                    <span className={`text-xs font-bold px-2 py-1 rounded-lg shrink-0 ${status === 'expired' ? 'bg-red-200 text-red-700' : 'bg-yellow-200 text-yellow-700'}`}>
                       {status === 'expired' ? 'VENCIDO' : days !== null ? `${days}d` : ''}
                     </span>
                   </div>
                 )
               })}
             </div>
-            <pre className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs text-gray-700 whitespace-pre-wrap font-mono leading-relaxed max-h-48 overflow-y-auto">
-              {expiryReportText}
-            </pre>
-            <button onClick={copyExpiryReport}
-              className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors ${expiryCopied ? 'bg-green-600 text-white' : 'bg-red-600 text-white hover:bg-red-700'}`}>
-              {expiryCopied ? '✅ Copiado!' : '📋 Copiar relatório'}
-            </button>
-            <button onClick={() => setShowExpiryReport(false)}
-              className="w-full py-2 border border-gray-300 text-gray-600 rounded-xl text-sm hover:bg-gray-50">
-              Fechar
-            </button>
+            <div className="p-4 border-t border-gray-100 space-y-2">
+              <button onClick={copyExpiryReport}
+                className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors ${expiryCopied ? 'bg-green-600 text-white' : 'bg-red-600 text-white hover:bg-red-700'}`}>
+                {expiryCopied ? '✅ Copiado!' : '📋 Copiar relatório'}
+              </button>
+              <button onClick={() => setShowExpiryReport(false)}
+                className="w-full py-2 border border-gray-300 text-gray-600 rounded-xl text-sm hover:bg-gray-50">
+                Fechar
+              </button>
+            </div>
           </div>
         </div>
       )}
