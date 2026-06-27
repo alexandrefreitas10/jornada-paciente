@@ -276,9 +276,10 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
             body: JSON.stringify({ name: nfItem.name, unit: nfItem.unit || 'un' }),
           })
           if (!res.ok) { setNfError(`Erro ao criar item: ${nfItem.name}`); setNfSaving(false); return }
-          stockItem = await res.json()
+          stockItem = await res.json() as typeof stockItem
           setItems(prev => [...prev, stockItem!])
         }
+        if (!stockItem) continue
         const movRes = await fetch('/api/estoque/movements', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ item_id: stockItem.id, type: 'entrada', quantity: nfItem.quantity, lot: nfItem.lot, expiry_date: nfItem.expiry_date }),
