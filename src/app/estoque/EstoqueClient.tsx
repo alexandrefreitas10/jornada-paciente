@@ -387,7 +387,12 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   const [reportDate, setReportDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [reportCopied, setReportCopied] = useState(false)
 
-  const reportPatientNames = Array.from(new Set(exits.filter(m => m.patient_name).map(m => m.patient_name!))).sort()
+  // Resolve patient name from patients list when movement only has patient_id
+  const exitsWithName = exits.map(m => ({
+    ...m,
+    patient_name: m.patient_name ?? patients.find(p => p.id === (m as unknown as { patient_id?: number }).patient_id)?.name ?? null,
+  }))
+  const reportPatientNames = Array.from(new Set(exitsWithName.filter(m => m.patient_name).map(m => m.patient_name!))).sort()
   const reportPatientFiltered = reportPatientSearch
     ? reportPatientNames.filter(n => n.toLowerCase().includes(reportPatientSearch.toLowerCase()))
     : reportPatientNames
@@ -395,18 +400,17 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   const reportText = (() => {
     if (!reportPatient) return ''
     const dateLabel = new Date(reportDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-    const dayExits = exits.filter(m => {
-      const samePatient = m.patient_name?.toLowerCase() === reportPatient.toLowerCase()
-      const sameDay = m.created_at.slice(0, 10) === reportDate
-      return samePatient && sameDay
-    })
+    const dayExits = exitsWithName.filter(m =>
+      m.patient_name?.toLowerCase() === reportPatient.toLowerCase() &&
+      m.created_at.slice(0, 10) === reportDate
+    )
     if (dayExits.length === 0) return `Nenhuma saída registrada para "${reportPatient}" em ${dateLabel}.`
     const lines = dayExits.map(m => {
-      const parts = [`- ${m.item_name}: ${m.quantity} ${m.lot ? `(Lote: ${m.lot})` : ''}`.trim()]
+      const parts = [`- ${m.item_name}: ${m.quantity}${m.lot ? ` (Lote: ${m.lot})` : ''}`]
       if (m.observation) parts.push(`  Obs: ${m.observation}`)
       return parts.join('\n')
     })
-    return `Saídas de estoque — ${dateLabel}\nPaciente: ${reportPatient}\n\n${lines.join('\n')}\n\nRegistrado por: ${exits.find(m => m.patient_name?.toLowerCase() === reportPatient.toLowerCase())?.created_by ?? ''}`
+    return `Saídas de estoque — ${dateLabel}\nPaciente: ${reportPatient}\n\n${lines.join('\n')}\n\nRegistrado por: ${dayExits[0].created_by ?? ''}`
   })()
 
   function copyReport() {
@@ -698,11 +702,11 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
             </div>
           )}
 
-          {exits.length === 0 ? (
+          {exitsWithName.length === 0 ? (
             <div className="text-center py-12 text-gray-400"><p className="text-3xl mb-2">📤</p><p>Nenhuma saída registrada.</p></div>
           ) : (
             <div className="space-y-2">
-              {exits.map(m => (
+              {exitsWithName.map(m => (
                 <div key={m.id} className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm flex items-start gap-3">
                   <span className="text-2xl mt-0.5">📤</span>
                   <div className="flex-1">
