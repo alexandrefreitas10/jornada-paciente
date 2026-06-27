@@ -219,15 +219,23 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   const [editMov, setEditMov] = useState<StockMovement | null>(null)
   const [search, setSearch] = useState('')
   const [patients, setPatients] = useState<{ id: number; name: string }[]>([])
+  const [pageLoading, setPageLoading] = useState(true)
   const [showReset, setShowReset] = useState(false)
   const [resetPassword, setResetPassword] = useState('')
   const [resetError, setResetError] = useState('')
   const [resetLoading, setResetLoading] = useState(false)
 
   useEffect(() => {
-    fetch('/api/patients').then(r => r.json()).then(data => {
-      setPatients(Array.isArray(data) ? data : [])
-    }).catch(() => {})
+    Promise.all([
+      fetch('/api/estoque/items').then(r => r.json()),
+      fetch('/api/estoque/movements').then(r => r.json()),
+      fetch('/api/patients').then(r => r.json()),
+    ]).then(([itemsData, movsData, patientsData]) => {
+      if (Array.isArray(itemsData)) setItems(itemsData)
+      if (Array.isArray(movsData)) setMovements(movsData)
+      if (Array.isArray(patientsData)) setPatients(patientsData)
+      setPageLoading(false)
+    }).catch(() => setPageLoading(false))
   }, [])
 
   // ── Entrada por NF / Estoque ────────────────────────────────
@@ -419,6 +427,15 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
       setTimeout(() => setReportCopied(false), 2000)
     })
   }
+
+  if (pageLoading) return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="text-center">
+        <div className="w-10 h-10 border-4 border-violet-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+        <p className="text-gray-500 text-sm">Carregando estoque...</p>
+      </div>
+    </div>
+  )
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
