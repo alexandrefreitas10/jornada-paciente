@@ -388,6 +388,57 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   const entries = movements.filter(m => m.type === 'entrada')
   const exits = movements.filter(m => m.type === 'saida')
 
+  // ── Vencimento ────────────────────────────────────────────
+  function daysUntilExpiry(expiry_date: string | null): number | null {
+    if (!expiry_date) return null
+    // Format MM/YYYY → end of that month
+    const [mm, yyyy] = expiry_date.split('/')
+    if (!mm || !yyyy) return null
+    const exp = new Date(Number(yyyy), Number(mm), 0) // last day of that month
+    const now = new Date()
+    now.setHours(0, 0, 0, 0)
+    return Math.floor((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+  }
+
+  function expiryStatus(expiry_date: string | null): 'expired' | 'soon' | 'ok' | null {
+    const d = daysUntilExpiry(expiry_date)
+    if (d === null) return null
+    if (d < 0) return 'expired'
+    if (d <= 60) return 'soon'
+    return 'ok'
+  }
+
+  const expiringItems = items.filter(i => {
+    const s = expiryStatus(i.expiry_date)
+    return s === 'expired' || s === 'soon'
+  }).sort((a, b) => {
+    const da = daysUntilExpiry(a.expiry_date) ?? 999
+    const db = daysUntilExpiry(b.expiry_date) ?? 999
+    return da - db
+  })
+
+  // ── Relatório Vencimento ──────────────────────────────────
+  const [showExpiryReport, setShowExpiryReport] = useState(false)
+  const [expiryCopied, setExpiryCopied] = useState(false)
+
+  const expiryReportText = (() => {
+    if (expiringItems.length === 0) return 'Nenhuma medicação próxima do vencimento.'
+    const today = new Date().toLocaleDateString('pt-BR')
+    const lines = expiringItems.map(i => {
+      const d = daysUntilExpiry(i.expiry_date)!
+      const status = d < 0 ? '🔴 VENCIDO' : `⚠️ ${d} dias`
+      return `- ${i.name}${i.lot ? ` (Lote: ${i.lot})` : ''} | Val: ${i.expiry_date} | ${status} | Qtd: ${i.quantity} ${i.unit}`
+    })
+    return `Medicações próximas do vencimento — ${today}\n\n${lines.join('\n')}`
+  })()
+
+  function copyExpiryReport() {
+    navigator.clipboard.writeText(expiryReportText).then(() => {
+      setExpiryCopied(true)
+      setTimeout(() => setExpiryCopied(false), 2000)
+    })
+  }
+
   // ── Relatório do Dia ──────────────────────────────────────
   const [showReport, setShowReport] = useState(false)
   const [reportPatient, setReportPatient] = useState('')
@@ -451,6 +502,44 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
         ))}
       </div>
 
+      {/* ── MODAL PRÓXIMOS DO VENCIMENTO ── */}
+      {showExpiryReport && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4">
+            <h2 className="text-lg font-bold text-gray-800">⚠️ Próximos do Vencimento</h2>
+            <p className="text-xs text-gray-500">{expiringItems.length} item(ns) vencem em até 2 meses ou já venceram.</p>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {expiringItems.map(item => {
+                const days = daysUntilExpiry(item.expiry_date)
+                const status = expiryStatus(item.expiry_date)
+                return (
+                  <div key={item.id} className={`flex justify-between items-center px-3 py-2 rounded-xl border ${status === 'expired' ? 'bg-red-100 border-red-300' : 'bg-yellow-50 border-yellow-300'}`}>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-800">{item.name}</p>
+                      <p className="text-xs text-gray-500">Val: {item.expiry_date} · Qtd: {item.quantity} {item.unit}</p>
+                    </div>
+                    <span className={`text-xs font-bold px-2 py-1 rounded-lg ${status === 'expired' ? 'bg-red-200 text-red-700' : 'bg-yellow-200 text-yellow-700'}`}>
+                      {status === 'expired' ? 'VENCIDO' : days !== null ? `${days}d` : ''}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+            <pre className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs text-gray-700 whitespace-pre-wrap font-mono leading-relaxed max-h-48 overflow-y-auto">
+              {expiryReportText}
+            </pre>
+            <button onClick={copyExpiryReport}
+              className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors ${expiryCopied ? 'bg-green-600 text-white' : 'bg-red-600 text-white hover:bg-red-700'}`}>
+              {expiryCopied ? '✅ Copiado!' : '📋 Copiar relatório'}
+            </button>
+            <button onClick={() => setShowExpiryReport(false)}
+              className="w-full py-2 border border-gray-300 text-gray-600 rounded-xl text-sm hover:bg-gray-50">
+              Fechar
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── MODAL ZERAR ESTOQUE ── */}
       {showReset && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -490,6 +579,12 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
               className="w-full border border-gray-300 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 bg-white shadow-sm"
             />
           </div>
+          {expiringItems.length > 0 && (
+            <button onClick={() => setShowExpiryReport(true)}
+              className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2.5 bg-red-50 border border-red-300 text-red-600 rounded-xl hover:bg-red-100 transition-colors text-sm font-medium">
+              ⚠️ {expiringItems.length}
+            </button>
+          )}
           <button
             onClick={() => setShowReset(true)}
             title="Zerar estoque"
@@ -511,12 +606,12 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
             ) : (
               <div className="space-y-3">
                 {filtered.map(item => (
-                  <div key={item.id} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex items-start gap-4">
+                  <div key={item.id} className={`rounded-xl border p-4 shadow-sm flex items-start gap-4 ${expiryStatus(item.expiry_date) === 'expired' || expiryStatus(item.expiry_date) === 'soon' ? 'bg-red-50 border-red-300' : 'bg-white border-gray-200'}`}>
                     <div className="flex-1">
                       <p className="font-semibold text-gray-800">{item.name}</p>
                       <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
                         {item.lot && <p className="text-xs text-gray-500">Lote: <span className="font-medium">{item.lot}</span></p>}
-                        {item.expiry_date && <p className="text-xs text-gray-500">Val: <span className="font-medium">{item.expiry_date}</span></p>}
+                        {item.expiry_date && <p className={`text-xs ${expiryStatus(item.expiry_date) === 'expired' || expiryStatus(item.expiry_date) === 'soon' ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>Val: <span className="font-medium">{item.expiry_date}</span></p>}
                         {item.notes && <p className="text-xs text-gray-400">{item.notes}</p>}
                       </div>
                     </div>
