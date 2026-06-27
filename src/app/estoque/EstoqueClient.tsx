@@ -232,6 +232,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
 
   // ── Entrada por NF / Estoque ────────────────────────────────
   const [nfLoading, setNfLoading] = useState(false)
+  const [nfSaving, setNfSaving] = useState(false)
   const [nfItems, setNfItems] = useState<NfItem[]>([])
   const [nfError, setNfError] = useState('')
   const nfInputRef = useRef<HTMLInputElement>(null)
@@ -264,28 +265,35 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   }
 
   async function saveNfItems() {
-    for (const nfItem of nfItems) {
-      // Find or create stock item
-      let stockItem = items.find(i => i.name.toLowerCase() === nfItem.name.toLowerCase())
-      if (!stockItem) {
-        const res = await fetch('/api/estoque/items', {
+    setNfSaving(true)
+    setNfError('')
+    try {
+      for (const nfItem of nfItems) {
+        let stockItem = items.find(i => i.name.toLowerCase() === nfItem.name.toLowerCase())
+        if (!stockItem) {
+          const res = await fetch('/api/estoque/items', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: nfItem.name, unit: nfItem.unit || 'un' }),
+          })
+          if (!res.ok) { setNfError(`Erro ao criar item: ${nfItem.name}`); setNfSaving(false); return }
+          stockItem = await res.json()
+          setItems(prev => [...prev, stockItem!])
+        }
+        const movRes = await fetch('/api/estoque/movements', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: nfItem.name, unit: nfItem.unit || 'un' }),
+          body: JSON.stringify({ item_id: stockItem.id, type: 'entrada', quantity: nfItem.quantity, lot: nfItem.lot, expiry_date: nfItem.expiry_date }),
         })
-        if (res.ok) { stockItem = await res.json(); setItems(prev => [...prev, stockItem!]) }
+        if (!movRes.ok) { setNfError(`Erro ao registrar entrada: ${nfItem.name}`); setNfSaving(false); return }
       }
-      if (!stockItem) continue
-      await fetch('/api/estoque/movements', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ item_id: stockItem.id, type: 'entrada', quantity: nfItem.quantity, lot: nfItem.lot, expiry_date: nfItem.expiry_date }),
-      })
+      const [itemsRes, movsRes] = await Promise.all([fetch('/api/estoque/items'), fetch('/api/estoque/movements')])
+      setItems(await itemsRes.json())
+      setMovements(await movsRes.json())
+      setNfItems([])
+      setTab('entradas')
+    } catch (e) {
+      setNfError('Erro inesperado: ' + String(e))
     }
-    // Refresh
-    const [itemsRes, movsRes] = await Promise.all([fetch('/api/estoque/items'), fetch('/api/estoque/movements')])
-    setItems(await itemsRes.json())
-    setMovements(await movsRes.json())
-    setNfItems([])
-    setTab('entradas')
+    setNfSaving(false)
   }
 
   // ── Manual entrada ──────────────────────────────────────────
@@ -515,7 +523,9 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
                 ))}
               </div>
               <div className="flex gap-2 mt-3">
-                <button onClick={saveNfItems} className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700">✅ Confirmar Entrada</button>
+                <button onClick={saveNfItems} disabled={nfSaving} className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-60">
+                  {nfSaving ? 'Salvando...' : '✅ Confirmar Entrada'}
+                </button>
                 <button onClick={() => setNfItems([])} className="px-4 py-2 border border-gray-300 text-sm text-gray-600 rounded-lg hover:bg-gray-50">Cancelar</button>
               </div>
             </div>
