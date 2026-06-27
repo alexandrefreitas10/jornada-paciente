@@ -7,7 +7,7 @@ interface StockItem { id: number; name: string; unit: string; quantity: number; 
 interface StockMovement {
   id: number; item_id: number; item_name: string; type: 'entrada' | 'saida'
   quantity: number; lot: string | null; expiry_date: string | null
-  patient_name: string | null; observation: string | null; created_by: string | null; created_at: string
+  patient_id: number | null; patient_name: string | null; observation: string | null; created_by: string | null; created_at: string
 }
 interface NfItem { name: string; quantity: number; unit: string; lot: string | null; expiry_date: string | null }
 
@@ -390,7 +390,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   // Resolve patient name from patients list when movement only has patient_id
   const exitsWithName = exits.map(m => ({
     ...m,
-    patient_name: m.patient_name ?? patients.find(p => p.id === (m as unknown as { patient_id?: number }).patient_id)?.name ?? null,
+    patient_name: m.patient_name ?? patients.find(p => p.id === m.patient_id)?.name ?? null,
   }))
   const reportPatientNames = Array.from(new Set(exitsWithName.filter(m => m.patient_name).map(m => m.patient_name!))).sort()
   const reportPatientFiltered = reportPatientSearch
