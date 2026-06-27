@@ -209,7 +209,7 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
           <TermsTab patientId={patient.id} />
         )}
         {activeTab === 'medications' && (
-          <MedicationsTab patientId={patient.id} />
+          <MedicationsTab patientId={patient.id} patientName={patient.name} />
         )}
       </div>
 
