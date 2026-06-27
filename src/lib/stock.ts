@@ -91,17 +91,21 @@ export async function listMovements(type?: 'entrada' | 'saida'): Promise<StockMo
   await initSchema()
   if (type) {
     return sql<StockMovement[]>`
-      SELECT m.*, i.name AS item_name
+      SELECT m.*, i.name AS item_name,
+        COALESCE(m.patient_name, p.name) AS patient_name
       FROM stock_movements m
       JOIN stock_items i ON i.id = m.item_id
+      LEFT JOIN patients p ON p.id = m.patient_id
       WHERE m.type = ${type}
       ORDER BY m.created_at DESC
     `
   }
   return sql<StockMovement[]>`
-    SELECT m.*, i.name AS item_name
+    SELECT m.*, i.name AS item_name,
+      COALESCE(m.patient_name, p.name) AS patient_name
     FROM stock_movements m
     JOIN stock_items i ON i.id = m.item_id
+    LEFT JOIN patients p ON p.id = m.patient_id
     ORDER BY m.created_at DESC
   `
 }
