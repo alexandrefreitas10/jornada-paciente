@@ -182,12 +182,20 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
     })
   }
 
-  function shareWhatsApp(url: string) {
-    if (navigator.share) {
-      navigator.share({ url }).catch(() => {})
-    } else {
-      window.open(`https://wa.me/?text=${encodeURIComponent(url)}`, '_blank')
+  async function shareWhatsApp(url: string, fileName: string) {
+    try {
+      const res = await fetch(url)
+      const blob = await res.blob()
+      const ext = blob.type.includes('png') ? 'png' : 'jpg'
+      const file = new File([blob], fileName.endsWith('.jpg') || fileName.endsWith('.png') ? fileName : `${fileName}.${ext}`, { type: blob.type })
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file] })
+        return
+      }
+    } catch {
+      // fallback below
     }
+    window.open(`https://wa.me/?text=${encodeURIComponent(url)}`, '_blank')
   }
 
   const numVal = (v: string) => (v === '' ? null : Number(v))
@@ -500,8 +508,8 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
                   </p>
                   <div className="flex items-center gap-2 shrink-0">
                     <button
-                      onClick={() => shareWhatsApp(f.url)}
-                      className="text-lg hover:opacity-70 transition-opacity"
+                      onClick={() => shareWhatsApp(f.url, f.original_name)}
+                      className="hover:opacity-70 transition-opacity"
                       title="Compartilhar no WhatsApp"
                     >
                       <svg viewBox="0 0 24 24" className="w-5 h-5 fill-green-500" xmlns="http://www.w3.org/2000/svg">
@@ -551,8 +559,8 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
                   </p>
                   <div className="flex items-center gap-2 shrink-0">
                     <button
-                      onClick={() => shareWhatsApp(f.url)}
-                      className="text-lg hover:opacity-70 transition-opacity"
+                      onClick={() => shareWhatsApp(f.url, f.original_name)}
+                      className="hover:opacity-70 transition-opacity"
                       title="Compartilhar no WhatsApp"
                     >
                       <svg viewBox="0 0 24 24" className="w-5 h-5 fill-green-500" xmlns="http://www.w3.org/2000/svg">
