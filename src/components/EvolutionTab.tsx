@@ -187,15 +187,21 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
       const res = await fetch(url)
       const blob = await res.blob()
       const ext = blob.type.includes('png') ? 'png' : 'jpg'
-      const file = new File([blob], fileName.endsWith('.jpg') || fileName.endsWith('.png') ? fileName : `${fileName}.${ext}`, { type: blob.type })
+      const name = fileName.match(/\.(jpg|jpeg|png|webp)$/i) ? fileName : `${fileName}.${ext}`
+      const file = new File([blob], name, { type: blob.type })
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file] })
         return
       }
+      // Desktop: baixa o arquivo para o usuário anexar manualmente no WhatsApp Web
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = name
+      a.click()
+      URL.revokeObjectURL(a.href)
     } catch {
-      // fallback below
+      window.open(url, '_blank')
     }
-    window.open(`https://wa.me/?text=${encodeURIComponent(url)}`, '_blank')
   }
 
   const numVal = (v: string) => (v === '' ? null : Number(v))
