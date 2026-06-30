@@ -6,9 +6,10 @@ import { LogoutButton } from './LogoutButton'
 interface Props {
   userName: string
   isAdmin: boolean
+  canEstoque?: boolean
 }
 
-export function NavMenu({ userName, isAdmin }: Props) {
+export function NavMenu({ userName, isAdmin, canEstoque }: Props) {
   const [open, setOpen] = useState(false)
 
   const links = [
@@ -16,7 +17,7 @@ export function NavMenu({ userName, isAdmin }: Props) {
     { href: '/usuarios', label: 'Usuários' },
     { href: '/termos', label: 'Termos' },
     { href: '/relatorios', label: 'Relatórios' },
-    ...(isAdmin ? [{ href: '/estoque', label: 'Estoque' }] : []),
+    ...(isAdmin || canEstoque ? [{ href: '/estoque', label: 'Estoque' }] : []),
     { href: '/pacientes-antigos', label: 'Pacientes Antigos' },
   ]
 

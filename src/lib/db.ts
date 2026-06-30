@@ -87,6 +87,7 @@ export async function initSchema() {
 
   // Adiciona coluna is_admin aos usuários
   await sql.unsafe(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE`).catch(() => {})
+  await sql.unsafe(`ALTER TABLE users ADD COLUMN IF NOT EXISTS can_estoque BOOLEAN DEFAULT FALSE`).catch(() => {})
 
   // Tabela de templates de termos (globais)
   await sql.unsafe(`

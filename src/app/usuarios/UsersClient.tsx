@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { AdminPasswordModal } from '@/components/AdminPasswordModal'
 
-type User = { id: number; username: string; created_at: string }
+type User = { id: number; username: string; is_admin: boolean; can_estoque: boolean; created_at: string }
 
 type EditMode = { type: 'username'; value: string } | { type: 'password'; value: string; confirm: string }
 
@@ -166,6 +166,16 @@ export function UsersClient({ initialUsers }: { initialUsers: User[] }) {
     setPendingDeleteId(null)
   }
 
+  async function toggleEstoque(u: User) {
+    const next = !u.can_estoque
+    await fetch(`/api/usuarios/${u.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ can_estoque: next }),
+    })
+    setUsers(prev => prev.map(x => x.id === u.id ? { ...x, can_estoque: next } : x))
+  }
+
   return (
     <div className="space-y-6">
       {pendingDeleteId !== null && (
@@ -263,13 +273,26 @@ export function UsersClient({ initialUsers }: { initialUsers: User[] }) {
               </div>
             ) : (
               <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{u.username}</p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-medium text-gray-900 truncate">{u.username}</p>
+                    {u.is_admin && <span className="text-xs bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full">Admin</span>}
+                    {u.can_estoque && !u.is_admin && <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">📦 Estoque</span>}
+                  </div>
                   <p className="text-xs text-gray-400 mt-0.5">
                     Cadastrado em {new Date(u.created_at).toLocaleDateString('pt-BR')}
                   </p>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+                  {!u.is_admin && (
+                    <button
+                      onClick={() => toggleEstoque(u)}
+                      className={`text-xs px-2 py-1 rounded-lg transition-colors ${u.can_estoque ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'text-gray-500 hover:bg-gray-100'}`}
+                      title={u.can_estoque ? 'Remover acesso ao estoque' : 'Liberar acesso ao estoque'}
+                    >
+                      📦 {u.can_estoque ? 'Estoque ✓' : 'Estoque'}
+                    </button>
+                  )}
                   <button
                     onClick={() => startEdit(u, 'username')}
                     className="text-xs px-2 py-1 text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"

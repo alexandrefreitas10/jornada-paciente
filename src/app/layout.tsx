@@ -34,6 +34,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <NavMenu
                 userName={session.user.name ?? ''}
                 isAdmin={!!(session.user as { is_admin?: boolean }).is_admin}
+                canEstoque={!!(session.user as { can_estoque?: boolean }).can_estoque}
               />
             </header>
           )}

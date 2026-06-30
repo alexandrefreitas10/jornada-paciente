@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { deleteUser, updateUsername, updatePassword } from '@/lib/users'
+import { deleteUser, updateUsername, updatePassword, setCanEstoque } from '@/lib/users'
 
 type Params = { params: Promise<{ uid: string }> }
 
@@ -28,6 +28,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'Senha deve ter no mínimo 6 caracteres' }, { status: 400 })
     }
     await updatePassword(Number(uid), body.password)
+    return NextResponse.json({ ok: true })
+  }
+
+  if (body.can_estoque !== undefined) {
+    await setCanEstoque(Number(uid), !!body.can_estoque)
     return NextResponse.json({ ok: true })
   }
 
