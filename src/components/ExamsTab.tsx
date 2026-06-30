@@ -43,6 +43,7 @@ export function ExamsTab({ patientId, initialFiles }: Props) {
   const [files, setFiles] = useState<ExamFile[]>(initialFiles)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [regenerating, setRegenerating] = useState<number | null>(null)
   const [activeSubTab, setActiveSubTab] = useState<'files' | 'summary'>('files')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -77,6 +78,20 @@ export function ExamsTab({ patientId, initialFiles }: Props) {
     if (!confirm('Excluir este arquivo?')) return
     await fetch(`/api/patients/${patientId}/files/${id}`, { method: 'DELETE' })
     setFiles((prev) => prev.filter((f) => f.id !== id))
+  }
+
+  async function handleRegenerate(id: number) {
+    setRegenerating(id)
+    try {
+      const res = await fetch(`/api/patients/${patientId}/files/${id}`, { method: 'PATCH' })
+      if (!res.ok) throw new Error('Erro ao regenerar')
+      const { summary } = await res.json()
+      setFiles(prev => prev.map(f => f.id === id ? { ...f, summary } : f))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao regenerar resumo')
+    } finally {
+      setRegenerating(null)
+    }
   }
 
   function handleDownload(id: number) {
@@ -181,9 +196,23 @@ export function ExamsTab({ patientId, initialFiles }: Props) {
                           <p className="text-xs text-gray-400">por <span className="font-medium text-gray-600">{f.created_by}</span></p>
                         )}
                         {f.summary && (
-                          <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">
-                            ✓ Resumo gerado
-                          </span>
+                          <button
+                            onClick={() => handleRegenerate(f.id)}
+                            disabled={regenerating === f.id}
+                            className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full hover:bg-green-200 disabled:opacity-50 transition-colors"
+                            title="Regenerar resumo"
+                          >
+                            {regenerating === f.id ? '⏳ Gerando...' : '✓ Resumo gerado · 🔄'}
+                          </button>
+                        )}
+                        {!f.summary && (
+                          <button
+                            onClick={() => handleRegenerate(f.id)}
+                            disabled={regenerating === f.id}
+                            className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full hover:bg-gray-200 disabled:opacity-50 transition-colors"
+                          >
+                            {regenerating === f.id ? '⏳ Gerando...' : '🔄 Gerar resumo'}
+                          </button>
                         )}
                       </div>
                     </div>

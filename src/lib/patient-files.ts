@@ -70,6 +70,11 @@ export async function softDeletePatientFile(id: number): Promise<PatientFile | n
   return row ?? null
 }
 
+export async function updateFileSummary(id: number, summary: string): Promise<void> {
+  await initSchema()
+  await sql`UPDATE patient_files SET summary = ${summary} WHERE id = ${id}`
+}
+
 export async function restorePatientFile(id: number): Promise<void> {
   await initSchema()
   await sql`UPDATE patient_files SET deleted_at = NULL WHERE id = ${id}`
