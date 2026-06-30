@@ -177,6 +177,8 @@ function SaidaForm() {
             item_id: entry.item.id,
             type: 'saida',
             quantity: entry.quantity,
+            lot: entry.item.lot ?? null,
+            expiry_date: entry.item.expiry_date ?? null,
             patient_id: patientId ? Number(patientId) : null,
             patient_name: selectedPatient?.name ?? null,
             observation: observation || null,
