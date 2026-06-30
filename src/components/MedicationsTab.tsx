@@ -39,7 +39,8 @@ export function MedicationsTab({ patientId, patientName }: { patientId: number; 
     const dayMeds = medications.filter(m => m.created_at.slice(0, 10) === reportDate)
     if (dayMeds.length === 0) return `Nenhuma medicação registrada em ${dateLabel}.`
     const lines = dayMeds.map(m => {
-      const parts = [`- ${m.item_name}: ${m.quantity}${m.lot ? ` (Lote: ${m.lot})` : ''}`]
+      const meta = [m.lot ? `Lote: ${m.lot}` : null, m.expiry_date ? `Val: ${m.expiry_date}` : null].filter(Boolean).join(' | ')
+      const parts = [`- ${m.item_name}: ${m.quantity}${meta ? ` (${meta})` : ''}`]
       if (m.observation) parts.push(`  Obs: ${m.observation}`)
       return parts.join('\n')
     })
