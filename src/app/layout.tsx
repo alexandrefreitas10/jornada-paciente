@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { auth } from '../auth'
-import { LogoutButton } from '@/components/LogoutButton'
+import { NavMenu } from '@/components/NavMenu'
 import { SessionProviderWrapper } from '@/components/SessionProviderWrapper'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -31,27 +31,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   />
                 </a>
               </div>
-              {/* Menu abaixo da logo */}
-              <div className="flex items-center justify-center gap-3 text-sm text-gray-600 mt-1 pb-1">
-                <a href="/" className="hover:text-violet-700 transition-colors">Início</a>
-                <span className="text-gray-300">|</span>
-                <a href="/usuarios" className="hover:text-violet-700 transition-colors">Usuários</a>
-                <span className="text-gray-300">|</span>
-                <a href="/termos" className="hover:text-violet-700 transition-colors">Termos</a>
-                <span className="text-gray-300">|</span>
-                <a href="/relatorios" className="hover:text-violet-700 transition-colors">Relatórios</a>
-                <span className="text-gray-300">|</span>
-                {(session.user as { is_admin?: boolean }).is_admin && (
-                  <>
-                    <a href="/estoque" className="hover:text-violet-700 transition-colors">Estoque</a>
-                    <span className="text-gray-300">|</span>
-                  </>
-                )}
-                <a href="/pacientes-antigos" className="hover:text-violet-700 transition-colors">Pacientes Antigos</a>
-                <span className="text-gray-300">|</span>
-                <span className="truncate max-w-[140px]">{session.user.name}</span>
-                <LogoutButton />
-              </div>
+              <NavMenu
+                userName={session.user.name ?? ''}
+                isAdmin={!!(session.user as { is_admin?: boolean }).is_admin}
+              />
             </header>
           )}
           {children}
