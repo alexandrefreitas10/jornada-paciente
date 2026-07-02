@@ -498,17 +498,26 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   async function generateDocx() {
     if (selectedIds.size === 0) return
     setDocxLoading(true)
-    const res = await fetch('/api/estoque/qr-docx', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ itemIds: Array.from(selectedIds), baseUrl: window.location.origin }),
-    })
-    if (res.ok) {
+    try {
+      const res = await fetch('/api/estoque/qr-docx', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemIds: Array.from(selectedIds), baseUrl: window.location.origin }),
+      })
+      if (!res.ok) {
+        const err = await res.text()
+        alert('Erro ao gerar DOCX: ' + err)
+        setDocxLoading(false)
+        return
+      }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
-      a.href = url; a.download = 'qrcodes-estoque.docx'; a.click()
+      a.href = url; a.download = 'qrcodes-estoque.docx'
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
       URL.revokeObjectURL(url)
+    } catch (e) {
+      alert('Erro: ' + String(e))
     }
     setDocxLoading(false)
   }

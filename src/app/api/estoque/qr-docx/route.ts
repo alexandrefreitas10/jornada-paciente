@@ -22,6 +22,7 @@ async function makeQrBuffer(url: string): Promise<Buffer> {
 }
 
 export async function POST(req: NextRequest) {
+  try {
   const session = await auth()
   const u = session?.user as { is_admin?: boolean; can_estoque?: boolean } | undefined
   if (!u?.is_admin && !u?.can_estoque) return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
@@ -113,4 +114,8 @@ export async function POST(req: NextRequest) {
       'Content-Disposition': 'attachment; filename="qrcodes-estoque.docx"'
     }
   })
+  } catch (e) {
+    console.error('qr-docx error:', e)
+    return NextResponse.json({ error: String(e) }, { status: 500 })
+  }
 }
