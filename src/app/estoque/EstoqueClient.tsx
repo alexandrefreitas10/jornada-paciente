@@ -526,7 +526,8 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
       mm = Number(parts[0]); yyyy = Number(parts[1])
     } else return null
     if (!mm || !yyyy) return null
-    const exp = new Date(yyyy, mm, 0) // last day of that month
+    const fullYear = yyyy < 100 ? 2000 + yyyy : yyyy
+    const exp = new Date(fullYear, mm, 0) // last day of that month
     const now = new Date()
     now.setHours(0, 0, 0, 0)
     return Math.floor((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
