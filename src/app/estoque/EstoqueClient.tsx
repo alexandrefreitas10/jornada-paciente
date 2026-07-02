@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import QRCode from 'qrcode'
+import { RelatoriosTab } from './RelatoriosTab'
 
 interface StockItem { id: number; name: string; unit: string; quantity: number; notes: string | null; lot: string | null; expiry_date: string | null }
 interface StockMovement {
@@ -12,7 +13,7 @@ interface StockMovement {
 interface NfItem { name: string; quantity: number; unit: string; lot: string | null; expiry_date: string | null }
 interface EntryLog { id: number; type: string; original_filename: string | null; s3_key: string | null; item_count: number; created_by: string | null; created_at: string; download_url: string | null }
 
-type Tab = 'estoque' | 'entradas' | 'saidas'
+type Tab = 'estoque' | 'entradas' | 'saidas' | 'relatorios'
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -506,6 +507,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
     { key: 'estoque', label: '📦 Estoque Atual' },
     { key: 'entradas', label: '⬆️ Entradas' },
     { key: 'saidas', label: '⬇️ Saídas' },
+    { key: 'relatorios', label: '📊 Relatórios' },
   ]
 
   const entries = movements.filter(m => m.type === 'entrada')
@@ -1289,6 +1291,11 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
           setMovements(p => p.map(m => m.id === updated.id ? { ...m, ...updated } : m))
           setEditMov(null)
         }} />
+      )}
+
+      {/* ── ABA RELATÓRIOS ── */}
+      {tab === 'relatorios' && (
+        <RelatoriosTab movements={movements} />
       )}
     </div>
   )
