@@ -52,6 +52,43 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
   const prescriptionCameraRef = useRef<HTMLInputElement>(null)
   const photoMenuRef = useRef<HTMLDivElement>(null)
   const prescriptionMenuRef = useRef<HTMLDivElement>(null)
+  const reportInputRef = useRef<HTMLInputElement>(null)
+  const reportCameraRef = useRef<HTMLInputElement>(null)
+  const [showReportMenu, setShowReportMenu] = useState(false)
+  const reportMenuRef = useRef<HTMLDivElement>(null)
+  const [reportLoading, setReportLoading] = useState(false)
+  const [reportText, setReportText] = useState<string | null>(null)
+  const [reportCopied, setReportCopied] = useState(false)
+
+  async function handleReportUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setShowReportMenu(false)
+    setReportLoading(true)
+    setReportText(null)
+    try {
+      const formData = new FormData()
+      formData.append('photo', file)
+      const res = await fetch(`/api/patients/${patientId}/evolution-report`, { method: 'POST', body: formData })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erro ao gerar relatório')
+      setReportText(data.report)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao gerar relatório')
+    } finally {
+      setReportLoading(false)
+      if (reportInputRef.current) reportInputRef.current.value = ''
+      if (reportCameraRef.current) reportCameraRef.current.value = ''
+    }
+  }
+
+  function copyReport() {
+    if (!reportText) return
+    navigator.clipboard.writeText(reportText).then(() => {
+      setReportCopied(true)
+      setTimeout(() => setReportCopied(false), 2000)
+    })
+  }
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -61,10 +98,13 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
       if (prescriptionMenuRef.current && !prescriptionMenuRef.current.contains(e.target as Node)) {
         setShowPrescriptionMenu(false)
       }
+      if (reportMenuRef.current && !reportMenuRef.current.contains(e.target as Node)) {
+        setShowReportMenu(false)
+      }
     }
-    if (showPhotoMenu || showPrescriptionMenu) document.addEventListener('mousedown', handleClickOutside)
+    if (showPhotoMenu || showPrescriptionMenu || showReportMenu) document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [showPhotoMenu, showPrescriptionMenu])
+  }, [showPhotoMenu, showPrescriptionMenu, showReportMenu])
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -299,9 +339,61 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
           )}
         </div>
 
+        {/* Botão relatório de prontuário */}
+        <input ref={reportInputRef} type="file" accept="image/*" className="hidden" onChange={handleReportUpload} />
+        <input ref={reportCameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleReportUpload} />
+        <div className="relative" ref={reportMenuRef}>
+          <button
+            onClick={() => setShowReportMenu(v => !v)}
+            disabled={reportLoading}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {reportLoading ? (
+              <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg> Gerando relatório...</>
+            ) : <>📝 Relatório prontuário ▾</>}
+          </button>
+          {showReportMenu && !reportLoading && (
+            <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-10 overflow-hidden min-w-[200px]">
+              <button onClick={() => { setShowReportMenu(false); reportInputRef.current?.click() }}
+                className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                🖼️ Escolher da galeria
+              </button>
+              <button onClick={() => { setShowReportMenu(false); reportCameraRef.current?.click() }}
+                className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 border-t border-gray-100">
+                📸 Tirar foto agora
+              </button>
+            </div>
+          )}
+        </div>
+
         {uploadError && <p className="text-sm text-red-600">{uploadError}</p>}
         {prescriptionError && <p className="text-sm text-red-600">{prescriptionError}</p>}
       </div>
+
+      {/* Modal relatório de prontuário */}
+      {reportText && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl">
+            <h3 className="font-bold text-gray-800 text-lg mb-4">📝 Relatório para Prontuário</h3>
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4">
+              <pre className="text-sm text-gray-800 whitespace-pre-wrap font-sans leading-relaxed">{reportText}</pre>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={copyReport}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${reportCopied ? 'bg-green-600 text-white' : 'bg-violet-600 text-white hover:bg-violet-700'}`}>
+                {reportCopied ? '✅ Copiado!' : '📋 Copiar texto'}
+              </button>
+              <button onClick={() => { setReportText(null); setReportCopied(false) }}
+                className="flex-1 py-2.5 border border-gray-300 text-gray-600 rounded-xl text-sm hover:bg-gray-50">
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tabela de registros */}
       <div className="overflow-x-auto">
