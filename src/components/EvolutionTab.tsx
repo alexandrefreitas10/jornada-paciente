@@ -57,7 +57,9 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
   const [showReportMenu, setShowReportMenu] = useState(false)
   const reportMenuRef = useRef<HTMLDivElement>(null)
   const [reportLoading, setReportLoading] = useState(false)
-  const [reportText, setReportText] = useState<string | null>(null)
+  const [reportText, setReportText] = useState<string>('')
+  const [reportOpen, setReportOpen] = useState(false)
+  const [reportError, setReportError] = useState<string | null>(null)
   const [reportCopied, setReportCopied] = useState(false)
 
   async function handleReportUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -65,16 +67,19 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
     if (!file) return
     setShowReportMenu(false)
     setReportLoading(true)
-    setReportText(null)
+    setReportError(null)
+    setReportText('')
     try {
       const formData = new FormData()
       formData.append('photo', file)
       const res = await fetch(`/api/patients/${patientId}/evolution-report`, { method: 'POST', body: formData })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Erro ao gerar relatório')
-      setReportText(data.report)
+      if (!res.ok) throw new Error(data.error || `Erro ${res.status}`)
+      setReportText(data.report ?? '')
+      setReportOpen(true)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Erro ao gerar relatório')
+      setReportError(err instanceof Error ? err.message : 'Erro desconhecido')
+      setReportOpen(true)
     } finally {
       setReportLoading(false)
       if (reportInputRef.current) reportInputRef.current.value = ''
@@ -374,19 +379,28 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
       </div>
 
       {/* Modal relatório de prontuário */}
-      {reportText && (
+      {reportOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl">
             <h3 className="font-bold text-gray-800 text-lg mb-4">📝 Relatório para Prontuário</h3>
-            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4">
-              <pre className="text-sm text-gray-800 whitespace-pre-wrap font-sans leading-relaxed">{reportText}</pre>
-            </div>
+            {reportError ? (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+                <p className="text-sm text-red-700 font-medium">Erro ao gerar relatório:</p>
+                <p className="text-sm text-red-600 mt-1">{reportError}</p>
+              </div>
+            ) : (
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4">
+                <pre className="text-sm text-gray-800 whitespace-pre-wrap font-sans leading-relaxed">{reportText || '(sem texto)'}</pre>
+              </div>
+            )}
             <div className="flex gap-2">
-              <button onClick={copyReport}
-                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${reportCopied ? 'bg-green-600 text-white' : 'bg-violet-600 text-white hover:bg-violet-700'}`}>
-                {reportCopied ? '✅ Copiado!' : '📋 Copiar texto'}
-              </button>
-              <button onClick={() => { setReportText(null); setReportCopied(false) }}
+              {!reportError && (
+                <button onClick={copyReport}
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${reportCopied ? 'bg-green-600 text-white' : 'bg-violet-600 text-white hover:bg-violet-700'}`}>
+                  {reportCopied ? '✅ Copiado!' : '📋 Copiar texto'}
+                </button>
+              )}
+              <button onClick={() => { setReportOpen(false); setReportText(''); setReportError(null); setReportCopied(false) }}
                 className="flex-1 py-2.5 border border-gray-300 text-gray-600 rounded-xl text-sm hover:bg-gray-50">
                 Fechar
               </button>
