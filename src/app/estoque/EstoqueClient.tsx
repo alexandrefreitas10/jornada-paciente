@@ -41,10 +41,6 @@ function QrModal({ item, onClose }: { item: StockItem; onClose: () => void }) {
     h2.style.marginBottom = '4px'
     h2.textContent = item.name
 
-    const p = win.document.createElement('p')
-    p.style.cssText = 'color:#666;margin-bottom:4px'
-    p.textContent = 'Escaneie para registrar saída'
-
     const lot = win.document.createElement('p')
     lot.style.cssText = 'color:#666;margin-bottom:4px;font-size:13px'
     lot.textContent = item.lot ? `Lote: ${item.lot}` : ''
@@ -58,7 +54,6 @@ function QrModal({ item, onClose }: { item: StockItem; onClose: () => void }) {
     img.style.width = '220px'
 
     body.appendChild(h2)
-    body.appendChild(p)
     if (item.lot) body.appendChild(lot)
     if (item.expiry_date) body.appendChild(val)
     body.appendChild(img)
@@ -70,7 +65,6 @@ function QrModal({ item, onClose }: { item: StockItem; onClose: () => void }) {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl p-6 max-w-xs w-full text-center shadow-xl">
         <h3 className="font-bold text-gray-800 text-lg mb-1">{item.name}</h3>
-        <p className="text-sm text-gray-500 mb-1">Escaneie para registrar saída</p>
         {(item.lot || item.expiry_date) && (
           <p className="text-xs text-gray-400 mb-4">
             {[item.lot ? `Lote: ${item.lot}` : null, item.expiry_date ? `Val: ${item.expiry_date}` : null].filter(Boolean).join('   ')}
