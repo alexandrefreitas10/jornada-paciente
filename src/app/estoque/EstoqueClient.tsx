@@ -282,6 +282,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   const [items, setItems] = useState(initialItems)
   const [movements, setMovements] = useState(initialMovements)
   const [entryLogs, setEntryLogs] = useState<EntryLog[]>([])
+  const [showEntryLogs, setShowEntryLogs] = useState(false)
   const [qrItem, setQrItem] = useState<StockItem | null>(null)
   const [editItem, setEditItem] = useState<StockItem | null>(null)
   const [editMov, setEditMov] = useState<StockMovement | null>(null)
@@ -791,6 +792,52 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
         </div>
       )}
 
+      {/* ── MODAL HISTÓRICO DE ENTRADAS ── */}
+      {showEntryLogs && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col" style={{maxHeight: '85vh'}}>
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-gray-800">📋 Histórico de Entradas</h2>
+              <button onClick={() => setShowEntryLogs(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-4">
+              {entryLogs.length === 0 ? (
+                <p className="text-center py-8 text-gray-400 text-sm">Nenhuma entrada registrada ainda.</p>
+              ) : (
+                <div className="space-y-2">
+                  {entryLogs.map(log => {
+                    const typeLabel = log.type === 'nf' ? '📷 Nota Fiscal' : log.type === 'inventory' ? '📄 Importação' : '✏️ Manual'
+                    return (
+                      <div key={log.id} className="bg-gray-50 rounded-xl border border-gray-200 p-3 flex items-center gap-3">
+                        <span className="text-xl shrink-0">{log.type === 'nf' ? '📷' : log.type === 'inventory' ? '📄' : '✏️'}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-800">{typeLabel}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {log.item_count} item(s) · {formatDate(log.created_at)}{log.created_by ? ` · ${log.created_by}` : ''}
+                          </p>
+                          {log.original_filename && (
+                            <p className="text-xs text-gray-400 truncate mt-0.5">{log.original_filename}</p>
+                          )}
+                        </div>
+                        {log.download_url && (
+                          <a href={log.download_url} target="_blank" rel="noopener noreferrer"
+                            className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 border border-blue-200 text-blue-600 rounded-lg text-xs font-medium hover:bg-blue-100 transition-colors">
+                            ⬇️ Baixar
+                          </a>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="p-4 border-t border-gray-100">
+              <button onClick={() => setShowEntryLogs(false)} className="w-full py-2 border border-gray-300 text-gray-600 rounded-xl text-sm hover:bg-gray-50">Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── ABA ESTOQUE ATUAL ── */}
       {tab === 'estoque' && (
         <div>
@@ -908,6 +955,14 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
             <button onClick={() => setManEntrada(true)} className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">
               ✏️ Entrada Manual
             </button>
+            <button onClick={() => setShowEntryLogs(true)} className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors relative">
+              📋 Histórico de Entradas
+              {entryLogs.length > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-violet-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                  {entryLogs.length > 9 ? '9+' : entryLogs.length}
+                </span>
+              )}
+            </button>
           </div>
           {nfError && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{nfError}</p>}
 
@@ -973,38 +1028,6 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
               <div className="flex gap-2 mt-3">
                 <button onClick={saveManualEntrada} disabled={meSaving || (!meItemId && (!meIsNew || !meNewName))} className="px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50">{meSaving ? 'Salvando...' : 'Salvar Entrada'}</button>
                 <button onClick={() => setManEntrada(false)} className="px-4 py-2 border border-gray-300 text-sm text-gray-600 rounded-lg hover:bg-gray-50">Cancelar</button>
-              </div>
-            </div>
-          )}
-
-          {/* Entry logs section */}
-          {entryLogs.length > 0 && (
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Histórico de Importações</p>
-              <div className="space-y-2 mb-4">
-                {entryLogs.map(log => {
-                  const typeLabel = log.type === 'nf' ? '📷 Nota Fiscal' : log.type === 'inventory' ? '📄 Importação' : '✏️ Manual'
-                  return (
-                    <div key={log.id} className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm flex items-center gap-3">
-                      <span className="text-xl shrink-0">{log.type === 'nf' ? '📷' : log.type === 'inventory' ? '📄' : '✏️'}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-800">{typeLabel}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {log.item_count} item(s) · {formatDate(log.created_at)}{log.created_by ? ` · ${log.created_by}` : ''}
-                        </p>
-                        {log.original_filename && (
-                          <p className="text-xs text-gray-400 truncate mt-0.5">{log.original_filename}</p>
-                        )}
-                      </div>
-                      {log.download_url && (
-                        <a href={log.download_url} target="_blank" rel="noopener noreferrer"
-                          className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 border border-blue-200 text-blue-600 rounded-lg text-xs font-medium hover:bg-blue-100 transition-colors">
-                          ⬇️ Baixar
-                        </a>
-                      )}
-                    </div>
-                  )
-                })}
               </div>
             </div>
           )}
