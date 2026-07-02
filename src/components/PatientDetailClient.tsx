@@ -183,6 +183,7 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
               phase={phase}
               completedKeys={completedKeys}
               patientId={patient.id}
+              patientName={patient.name}
               onToggle={handleToggle}
             />
           ))
