@@ -1,64 +1,73 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
-import sharp from 'sharp'
+import sql from '@/lib/db'
 
-export const maxDuration = 60
 export const dynamic = 'force-dynamic'
 
-function getClient() { return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }) }
-
-const PROMPT = `Você é um assistente médico que analisa tabelas de acompanhamento de pacientes e gera um relatório curto para prontuário.
-
-A imagem contém uma tabela de evolução semanal do paciente (geralmente com medicação injetável como Tirzepatida, semanas de tratamento, datas, doses etc.).
-
-Com base no que você vê na tabela, gere um relatório de prontuário no seguinte formato exato:
-
-[Nome da medicação] - [dose] ([data do procedimento no formato DD/MM])
-[Nª SEMANA DE X]
-INJETÁVEIS REALIZADOS CONFORME PM, SEM INTERCORRÊNCIAS E SEGUE AOS CUIDADOS DA EQUIPE MULTI.
-
-Regras:
-- Identifique o nome da medicação e a dose da semana mais recente (última linha com dados)
-- A data deve ser a data da aplicação mais recente na tabela, no formato DD/MM
-- O número da semana deve ser a semana atual e o total de semanas previstas (ex: "3ª SEMANA DE 8")
-- Use ordinal feminino para semana (ª)
-- A terceira linha é SEMPRE fixa: "INJETÁVEIS REALIZADOS CONFORME PM, SEM INTERCORRÊNCIAS E SEGUE AOS CUIDADOS DA EQUIPE MULTI."
-- Retorne APENAS as 3 linhas do relatório, sem explicações, sem cabeçalho, sem texto adicional`
-
-export async function POST(
+export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  await params // ensure params are resolved
+  const { id } = await params
+  const patientId = Number(id)
+  const date = req.nextUrl.searchParams.get('date') // YYYY-MM-DD
 
-  const formData = await req.formData()
-  const photo = formData.get('photo') as File | null
-  if (!photo) return NextResponse.json({ error: 'Foto não enviada' }, { status: 400 })
+  if (!date) return NextResponse.json({ error: 'date é obrigatório' }, { status: 400 })
 
   try {
-    const buffer = Buffer.from(await photo.arrayBuffer())
-    const jpeg = await sharp(buffer).rotate().jpeg({ quality: 85 }).toBuffer()
-    const base64 = jpeg.toString('base64')
+    // Busca saídas do paciente na data informada
+    const movements = await sql<{ item_name: string; quantity: number; lot: string | null }[]>`
+      SELECT i.name AS item_name, m.quantity, m.lot
+      FROM stock_movements m
+      JOIN stock_items i ON i.id = m.item_id
+      WHERE m.patient_id = ${patientId}
+        AND m.type = 'saida'
+        AND DATE(m.created_at AT TIME ZONE 'America/Sao_Paulo') = ${date}
+      ORDER BY m.created_at ASC
+    `
 
-    const client = getClient()
-    const message = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 512,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
-          { type: 'text', text: PROMPT },
-        ],
-      }],
-    })
-
-    const block = message.content[0] as { type: string; text?: string }
-    if (block.type !== 'text' || !block.text) {
-      return NextResponse.json({ error: 'Resposta inesperada da IA' }, { status: 500 })
+    if (movements.length === 0) {
+      return NextResponse.json({ error: 'Nenhuma saída encontrada para este paciente nesta data.' }, { status: 404 })
     }
 
-    return NextResponse.json({ report: block.text.trim() })
+    // Busca dados do paciente para calcular semana
+    const [patient] = await sql<{ start_date: string; duration: string }[]>`
+      SELECT start_date, duration FROM patients WHERE id = ${patientId}
+    `
+
+    // Calcula semana atual
+    let weekLine = 'Xª SEMANA DE Y'
+    if (patient?.start_date && patient?.duration) {
+      const start = new Date(patient.start_date)
+      const ref = new Date(date)
+      const totalWeeks = parseInt(patient.duration, 10)
+      if (!isNaN(start.getTime()) && !isNaN(totalWeeks)) {
+        const diffDays = Math.floor((ref.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+        const weekNum = Math.max(1, Math.floor(diffDays / 7) + 1)
+        const clampedWeek = Math.min(weekNum, totalWeeks)
+        const ordinal = clampedWeek + 'ª'
+        weekLine = `${ordinal} SEMANA DE ${totalWeeks}`
+      }
+    }
+
+    // Formata data DD/MM
+    const [yyyy, mm, dd] = date.split('-')
+    const dateFmt = `${dd}/${mm}`
+
+    // Monta o relatório — usa todos os itens do dia
+    const itemLines = movements
+      .map(m => `${m.item_name}${m.lot ? ` (Lote: ${m.lot})` : ''}`)
+      .join('\n')
+
+    // Se só tem 1 item, usa o formato clássico tirzepatide
+    let report: string
+    if (movements.length === 1) {
+      const m = movements[0]
+      report = `${m.item_name} (${dateFmt})\n${weekLine}\nINJETÁVEIS REALIZADOS CONFORME PM, SEM INTERCORRÊNCIAS E SEGUE AOS CUIDADOS DA EQUIPE MULTI.`
+    } else {
+      report = `${itemLines}\n(${dateFmt})\n${weekLine}\nINJETÁVEIS REALIZADOS CONFORME PM, SEM INTERCORRÊNCIAS E SEGUE AOS CUIDADOS DA EQUIPE MULTI.`
+    }
+
+    return NextResponse.json({ report, movements })
   } catch (err) {
     console.error('evolution-report error:', err)
     return NextResponse.json({ error: String(err) }, { status: 500 })
