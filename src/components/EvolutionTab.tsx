@@ -52,8 +52,6 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
   const prescriptionCameraRef = useRef<HTMLInputElement>(null)
   const photoMenuRef = useRef<HTMLDivElement>(null)
   const prescriptionMenuRef = useRef<HTMLDivElement>(null)
-  const [showReportModal, setShowReportModal] = useState(false)
-  const [reportDate, setReportDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [reportLoading, setReportLoading] = useState(false)
   const [reportText, setReportText] = useState<string>('')
   const [reportOpen, setReportOpen] = useState(false)
@@ -65,14 +63,14 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
     setReportError(null)
     setReportText('')
     try {
-      const res = await fetch(`/api/patients/${patientId}/evolution-report?date=${reportDate}`)
+      const res = await fetch(`/api/patients/${patientId}/evolution-report`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || `Erro ${res.status}`)
       setReportText(data.report ?? '')
-      setShowReportModal(false)
       setReportOpen(true)
     } catch (err) {
       setReportError(err instanceof Error ? err.message : 'Erro desconhecido')
+      setReportOpen(true)
     } finally {
       setReportLoading(false)
     }
@@ -334,49 +332,16 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
 
         {/* Botão relatório de prontuário */}
         <button
-          onClick={() => { setShowReportModal(true); setReportError(null) }}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+          onClick={fetchReport}
+          disabled={reportLoading}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
         >
-          📝 Prontuário
+          {reportLoading ? 'Gerando...' : '📝 Prontuário'}
         </button>
 
         {uploadError && <p className="text-sm text-red-600">{uploadError}</p>}
         {prescriptionError && <p className="text-sm text-red-600">{prescriptionError}</p>}
       </div>
-
-      {/* Modal seleção de data para prontuário */}
-      {showReportModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
-            <h3 className="font-bold text-gray-800 text-lg mb-4">📝 Relatório para Prontuário</h3>
-            <p className="text-sm text-gray-500 mb-3">Selecione a data da aplicação para buscar as saídas do estoque.</p>
-            <input
-              type="date"
-              value={reportDate}
-              onChange={e => setReportDate(e.target.value)}
-              className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm mb-3"
-            />
-            {reportError && (
-              <p className="text-sm text-red-600 mb-3">{reportError}</p>
-            )}
-            <div className="flex gap-2">
-              <button
-                onClick={fetchReport}
-                disabled={reportLoading}
-                className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
-                {reportLoading ? 'Gerando...' : 'Gerar relatório'}
-              </button>
-              <button
-                onClick={() => setShowReportModal(false)}
-                className="flex-1 py-2.5 border border-gray-300 text-gray-600 rounded-xl text-sm hover:bg-gray-50"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Modal relatório de prontuário */}
       {reportOpen && (
