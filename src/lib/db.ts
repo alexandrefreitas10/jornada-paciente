@@ -207,6 +207,19 @@ export async function initSchema() {
     )
   `).catch(() => {})
   await sql.unsafe(`ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS patient_id INTEGER`).catch(() => {})
+
+  // Log de entradas de estoque (NF, importação, manual)
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS stock_entry_logs (
+      id SERIAL PRIMARY KEY,
+      type TEXT NOT NULL,
+      original_filename TEXT,
+      s3_key TEXT,
+      item_count INT DEFAULT 0,
+      created_by TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(() => {})
 }
 
 export default sql

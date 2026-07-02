@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { uploadFile } from '@/lib/s3'
 
 const getClient = () => new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -13,6 +14,18 @@ export async function POST(req: NextRequest) {
   const base64 = buffer.toString('base64')
   const mimeType = file.type || 'image/jpeg'
   const isPdf = mimeType === 'application/pdf'
+
+  // Upload to S3 for audit trail
+  let s3Key: string | null = null
+  let originalFilename: string | null = null
+  try {
+    originalFilename = file.name || `${mode}-${Date.now()}.${isPdf ? 'pdf' : 'jpg'}`
+    s3Key = `stock-entries/${mode}/${Date.now()}-${originalFilename}`
+    await uploadFile(s3Key, buffer, mimeType)
+  } catch {
+    // Non-fatal: continue even if S3 upload fails
+    s3Key = null
+  }
 
   const isInventory = mode === 'inventory'
   const prompt = isInventory ? PROMPT_INVENTORY : PROMPT_NF
@@ -62,7 +75,7 @@ export async function POST(req: NextRequest) {
       if (!Array.isArray(items)) {
         return NextResponse.json({ items: [], parseError: `Parsed value is not an array: ${typeof items}`, raw: jsonStr.slice(0, 200) })
       }
-      return NextResponse.json({ items })
+      return NextResponse.json({ items, s3Key, originalFilename })
     } catch (err) {
       return NextResponse.json({ items: [], raw: jsonStr.slice(0, 500), parseError: String(err) })
     }

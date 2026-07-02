@@ -10,6 +10,7 @@ interface StockMovement {
   patient_id: number | null; patient_name: string | null; observation: string | null; created_by: string | null; created_at: string
 }
 interface NfItem { name: string; quantity: number; unit: string; lot: string | null; expiry_date: string | null }
+interface EntryLog { id: number; type: string; original_filename: string | null; s3_key: string | null; item_count: number; created_by: string | null; created_at: string; download_url: string | null }
 
 type Tab = 'estoque' | 'entradas' | 'saidas'
 
@@ -280,6 +281,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   const [tab, setTab] = useState<Tab>('estoque')
   const [items, setItems] = useState(initialItems)
   const [movements, setMovements] = useState(initialMovements)
+  const [entryLogs, setEntryLogs] = useState<EntryLog[]>([])
   const [qrItem, setQrItem] = useState<StockItem | null>(null)
   const [editItem, setEditItem] = useState<StockItem | null>(null)
   const [editMov, setEditMov] = useState<StockMovement | null>(null)
@@ -296,10 +298,12 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
       fetch('/api/estoque/items').then(r => r.json()),
       fetch('/api/estoque/movements').then(r => r.json()),
       fetch('/api/patients').then(r => r.json()),
-    ]).then(([itemsData, movsData, patientsData]) => {
+      fetch('/api/estoque/entry-logs').then(r => r.json()),
+    ]).then(([itemsData, movsData, patientsData, logsData]) => {
       if (Array.isArray(itemsData)) setItems(itemsData)
       if (Array.isArray(movsData)) setMovements(movsData)
       if (Array.isArray(patientsData)) setPatients(patientsData)
+      if (Array.isArray(logsData)) setEntryLogs(logsData)
       setPageLoading(false)
     }).catch(() => setPageLoading(false))
   }, [])
@@ -309,17 +313,20 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   const [nfSaving, setNfSaving] = useState(false)
   const [nfItems, setNfItems] = useState<NfItem[]>([])
   const [nfError, setNfError] = useState('')
+  const [nfS3Key, setNfS3Key] = useState<string | null>(null)
+  const [nfFilename, setNfFilename] = useState<string | null>(null)
+  const [nfType, setNfType] = useState<'nf' | 'inventory'>('nf')
   const nfInputRef = useRef<HTMLInputElement>(null)
   const invInputRef = useRef<HTMLInputElement>(null)
 
   async function handleNfUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    setNfLoading(true); setNfError(''); setNfItems([])
+    setNfLoading(true); setNfError(''); setNfItems([]); setNfS3Key(null); setNfFilename(null); setNfType('nf')
     const fd = new FormData(); fd.append('file', file)
     const res = await fetch('/api/estoque/scan-nf', { method: 'POST', body: fd })
     const data = await res.json()
-    if (data.items?.length) { setNfItems(data.items) }
+    if (data.items?.length) { setNfItems(data.items); setNfS3Key(data.s3Key ?? null); setNfFilename(data.originalFilename ?? null) }
     else { setNfError('Não foi possível extrair itens. Tente uma imagem mais nítida.') }
     setNfLoading(false)
     if (nfInputRef.current) nfInputRef.current.value = ''
@@ -328,11 +335,11 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   async function handleInventoryUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    setNfLoading(true); setNfError(''); setNfItems([])
+    setNfLoading(true); setNfError(''); setNfItems([]); setNfS3Key(null); setNfFilename(null); setNfType('inventory')
     const fd = new FormData(); fd.append('file', file)
     const res = await fetch('/api/estoque/scan-nf?mode=inventory', { method: 'POST', body: fd })
     const data = await res.json()
-    if (data.items?.length) { setNfItems(data.items) }
+    if (data.items?.length) { setNfItems(data.items); setNfS3Key(data.s3Key ?? null); setNfFilename(data.originalFilename ?? null) }
     else { setNfError(`Não foi possível extrair itens.${data.parseError ? ' Erro: ' + String(data.parseError) : ''}${data.raw ? ' | Raw: ' + String(data.raw).slice(0, 200) : ''}`) }
     setNfLoading(false)
     if (invInputRef.current) invInputRef.current.value = ''
@@ -362,10 +369,23 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
         if (!movRes.ok) { setNfError(`Erro ao registrar entrada: ${nfItem.name}`); setNfSaving(false); return }
         savedIds.push(stockItem.id)
       }
+      // Create entry log
+      const logRes = await fetch('/api/estoque/entry-logs', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: nfType, original_filename: nfFilename, s3_key: nfS3Key, item_count: savedIds.length }),
+      })
+      if (logRes.ok) {
+        const newLog = await logRes.json()
+        // Refresh signed URL
+        const logsRes = await fetch('/api/estoque/entry-logs')
+        if (logsRes.ok) setEntryLogs(await logsRes.json())
+        else setEntryLogs(prev => [newLog, ...prev])
+      }
+
       const [itemsRes, movsRes] = await Promise.all([fetch('/api/estoque/items'), fetch('/api/estoque/movements')])
       setItems(await itemsRes.json())
       setMovements(await movsRes.json())
-      setNfItems([])
+      setNfItems([]); setNfS3Key(null); setNfFilename(null)
       setTab('entradas')
       if (savedIds.length > 0) setQrDocxPrompt(savedIds)
     } catch (e) {
@@ -395,8 +415,15 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
     }
     if (!itemId) { setMeSaving(false); return }
     await fetch('/api/estoque/movements', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: itemId, type: 'entrada', quantity: Number(meQty), lot: meLot || null, expiry_date: meExpiry || null, observation: meObs || null }) })
-    const [ir, mr] = await Promise.all([fetch('/api/estoque/items'), fetch('/api/estoque/movements')])
+
+    // Create entry log
+    await fetch('/api/estoque/entry-logs', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'manual', original_filename: null, s3_key: null, item_count: 1 }),
+    })
+    const [ir, mr, logsRes] = await Promise.all([fetch('/api/estoque/items'), fetch('/api/estoque/movements'), fetch('/api/estoque/entry-logs')])
     setItems(await ir.json()); setMovements(await mr.json())
+    if (logsRes.ok) setEntryLogs(await logsRes.json())
     setManEntrada(false); setMeItemId(''); setMeNewName(''); setMeQty('1'); setMeLot(''); setMeExpiry(''); setMeObs(''); setMeIsNew(false)
     setMeSaving(false)
     setQrDocxPrompt([itemId])
@@ -946,6 +973,38 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
               <div className="flex gap-2 mt-3">
                 <button onClick={saveManualEntrada} disabled={meSaving || (!meItemId && (!meIsNew || !meNewName))} className="px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50">{meSaving ? 'Salvando...' : 'Salvar Entrada'}</button>
                 <button onClick={() => setManEntrada(false)} className="px-4 py-2 border border-gray-300 text-sm text-gray-600 rounded-lg hover:bg-gray-50">Cancelar</button>
+              </div>
+            </div>
+          )}
+
+          {/* Entry logs section */}
+          {entryLogs.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Histórico de Importações</p>
+              <div className="space-y-2 mb-4">
+                {entryLogs.map(log => {
+                  const typeLabel = log.type === 'nf' ? '📷 Nota Fiscal' : log.type === 'inventory' ? '📄 Importação' : '✏️ Manual'
+                  return (
+                    <div key={log.id} className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm flex items-center gap-3">
+                      <span className="text-xl shrink-0">{log.type === 'nf' ? '📷' : log.type === 'inventory' ? '📄' : '✏️'}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-800">{typeLabel}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {log.item_count} item(s) · {formatDate(log.created_at)}{log.created_by ? ` · ${log.created_by}` : ''}
+                        </p>
+                        {log.original_filename && (
+                          <p className="text-xs text-gray-400 truncate mt-0.5">{log.original_filename}</p>
+                        )}
+                      </div>
+                      {log.download_url && (
+                        <a href={log.download_url} target="_blank" rel="noopener noreferrer"
+                          className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 border border-blue-200 text-blue-600 rounded-lg text-xs font-medium hover:bg-blue-100 transition-colors">
+                          ⬇️ Baixar
+                        </a>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
