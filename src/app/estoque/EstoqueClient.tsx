@@ -516,10 +516,17 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   // ── Vencimento ────────────────────────────────────────────
   function daysUntilExpiry(expiry_date: string | null): number | null {
     if (!expiry_date) return null
-    // Format MM/YYYY → end of that month
-    const [mm, yyyy] = expiry_date.split('/')
+    const parts = expiry_date.split('/')
+    let mm: number, yyyy: number
+    if (parts.length === 3) {
+      // DD/MM/YYYY
+      mm = Number(parts[1]); yyyy = Number(parts[2])
+    } else if (parts.length === 2) {
+      // MM/YYYY
+      mm = Number(parts[0]); yyyy = Number(parts[1])
+    } else return null
     if (!mm || !yyyy) return null
-    const exp = new Date(Number(yyyy), Number(mm), 0) // last day of that month
+    const exp = new Date(yyyy, mm, 0) // last day of that month
     const now = new Date()
     now.setHours(0, 0, 0, 0)
     return Math.floor((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
