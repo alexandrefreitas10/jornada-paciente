@@ -473,6 +473,46 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
     })
   }
 
+  // ── Seleção para DOCX ─────────────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [docxMode, setDocxMode] = useState(false)
+  const [docxLoading, setDocxLoading] = useState(false)
+
+  function toggleSelect(id: number) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll(filtered: StockItem[]) {
+    const allSelected = filtered.every(i => selectedIds.has(i.id))
+    if (allSelected) {
+      setSelectedIds(prev => { const next = new Set(prev); filtered.forEach(i => next.delete(i.id)); return next })
+    } else {
+      setSelectedIds(prev => { const next = new Set(prev); filtered.forEach(i => next.add(i.id)); return next })
+    }
+  }
+
+  async function generateDocx() {
+    if (selectedIds.size === 0) return
+    setDocxLoading(true)
+    const res = await fetch('/api/estoque/qr-docx', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itemIds: Array.from(selectedIds), baseUrl: window.location.origin }),
+    })
+    if (res.ok) {
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = 'qrcodes-estoque.docx'; a.click()
+      URL.revokeObjectURL(url)
+    }
+    setDocxLoading(false)
+  }
+
   // ── Relatório do Dia ──────────────────────────────────────
   const [showReport, setShowReport] = useState(false)
   const [reportPatient, setReportPatient] = useState('')
@@ -611,30 +651,50 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
       {/* ── ABA ESTOQUE ATUAL ── */}
       {tab === 'estoque' && (
         <div>
-          {/* Busca + botão zerar */}
-          <div className="flex gap-2 mb-4">
-          <div className="relative flex-1">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-base">🔍</span>
-            <input
-              value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Buscar medicação..."
-              className="w-full border border-gray-300 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 bg-white shadow-sm"
-            />
-          </div>
-          {expiringItems.length > 0 && (
-            <button onClick={() => setShowExpiryReport(true)}
-              className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2.5 bg-red-50 border border-red-300 text-red-600 rounded-xl hover:bg-red-100 transition-colors text-sm font-medium">
-              ⚠️ {expiringItems.length}
+          {/* Busca + botões */}
+          <div className="flex gap-2 mb-3">
+            <div className="relative flex-1">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-base">🔍</span>
+              <input
+                value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Buscar medicação..."
+                className="w-full border border-gray-300 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 bg-white shadow-sm"
+              />
+            </div>
+            {expiringItems.length > 0 && (
+              <button onClick={() => setShowExpiryReport(true)}
+                className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2.5 bg-red-50 border border-red-300 text-red-600 rounded-xl hover:bg-red-100 transition-colors text-sm font-medium">
+                ⚠️ {expiringItems.length}
+              </button>
+            )}
+            <button onClick={() => { setDocxMode(m => !m); setSelectedIds(new Set()) }}
+              title="Gerar DOCX com QR Codes"
+              className={`flex-shrink-0 px-3 py-2.5 rounded-xl border transition-colors text-sm font-medium ${docxMode ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
+              📄 DOCX
             </button>
-          )}
-          <button
-            onClick={() => setShowReset(true)}
-            title="Zerar estoque"
-            className="flex-shrink-0 px-3 py-2.5 bg-red-50 border border-red-200 text-red-500 rounded-xl hover:bg-red-100 transition-colors text-base"
-          >
-            🗑️
-          </button>
+            <button onClick={() => setShowReset(true)} title="Zerar estoque"
+              className="flex-shrink-0 px-3 py-2.5 bg-red-50 border border-red-200 text-red-500 rounded-xl hover:bg-red-100 transition-colors text-base">
+              🗑️
+            </button>
           </div>
+          {/* Barra de ação DOCX */}
+          {docxMode && (() => {
+            const filtered = items.filter(i => i.name.toLowerCase().includes(search.toLowerCase()))
+            const allSelected = filtered.length > 0 && filtered.every(i => selectedIds.has(i.id))
+            return (
+              <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-violet-50 border border-violet-200 rounded-xl">
+                <button onClick={() => toggleSelectAll(filtered)}
+                  className="text-sm text-violet-700 font-medium hover:underline">
+                  {allSelected ? 'Desmarcar todos' : 'Selecionar todos'}
+                </button>
+                <span className="text-xs text-violet-500 flex-1">{selectedIds.size} selecionado(s)</span>
+                <button onClick={generateDocx} disabled={docxLoading || selectedIds.size === 0}
+                  className="px-4 py-1.5 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-40 transition-colors">
+                  {docxLoading ? 'Gerando...' : `⬇️ Baixar DOCX`}
+                </button>
+              </div>
+            )
+          })()}
           {items.length === 0 ? (
             <div className="text-center py-16 text-gray-400">
               <p className="text-4xl mb-2">📦</p>
@@ -648,7 +708,13 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
             ) : (
               <div className="space-y-3">
                 {filtered.map(item => (
-                  <div key={item.id} className={`rounded-xl border p-4 shadow-sm flex items-start gap-4 ${expiryStatus(item.expiry_date) === 'expired' || expiryStatus(item.expiry_date) === 'soon' ? 'bg-red-50 border-red-300' : 'bg-white border-gray-200'}`}>
+                  <div key={item.id} onClick={docxMode ? () => toggleSelect(item.id) : undefined}
+                    className={`rounded-xl border p-4 shadow-sm flex items-start gap-4 transition-colors ${docxMode ? 'cursor-pointer' : ''} ${docxMode && selectedIds.has(item.id) ? 'bg-violet-50 border-violet-400' : expiryStatus(item.expiry_date) === 'expired' || expiryStatus(item.expiry_date) === 'soon' ? 'bg-red-50 border-red-300' : 'bg-white border-gray-200'}`}>
+                    {docxMode && (
+                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 ${selectedIds.has(item.id) ? 'bg-violet-600 border-violet-600' : 'border-gray-300 bg-white'}`}>
+                        {selectedIds.has(item.id) && <span className="text-white text-xs font-bold">✓</span>}
+                      </div>
+                    )}
                     <div className="flex-1">
                       <p className="font-semibold text-gray-800">{item.name}</p>
                       <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
