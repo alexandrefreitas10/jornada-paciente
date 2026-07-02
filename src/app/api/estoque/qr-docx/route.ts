@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
-import { sql } from '@/lib/db'
+import sql from '@/lib/db'
 import QRCode from 'qrcode'
 import {
   Document, Packer, Paragraph, Table, TableRow, TableCell,
