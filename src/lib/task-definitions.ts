@@ -18,6 +18,7 @@ export const TASK_PHASES: TaskPhase[] = [
     icon: '📋',
     tasks: [
       { key: 'consulta_agendada', label: 'Consulta agendada' },
+      { key: 'consulta_confirmada', label: 'Consulta confirmada' },
       { key: 'bioimpedancia_info', label: 'Informações da bioimpedância' },
       { key: 'questionario_pre', label: 'Questionário pré consulta' },
       { key: 'exames_prontuario', label: 'Exames / prontuário' },

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { PatientDetail } from '@/lib/patients'
 import { Measurement } from '@/lib/measurements'
-import { TASK_PHASES } from '@/lib/task-definitions'
+import { TASK_PHASES, ALL_TASK_KEYS } from '@/lib/task-definitions'
 import { ProgressBar } from './ProgressBar'
 import { TaskPhase } from './TaskPhase'
 import { PatientModal } from './PatientModal'
@@ -154,7 +154,7 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
             <DeleteButton patientId={patient.id} patientName={patient.name} />
           </div>
         </div>
-        <ProgressBar completed={completedKeys.length} total={20} />
+        <ProgressBar completed={completedKeys.length} total={ALL_TASK_KEYS.length} />
       </div>
 
       {/* Abas */}

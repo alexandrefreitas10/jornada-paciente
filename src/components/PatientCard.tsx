@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { ProgressBar } from './ProgressBar'
 import { PatientListItem } from '@/lib/patients'
 import { ArchivePatientButton } from './ArchivePatientButton'
+import { ALL_TASK_KEYS } from '@/lib/task-definitions'
 
 const AVATAR_COLORS = [
   'bg-violet-500', 'bg-blue-500', 'bg-emerald-500',
@@ -63,7 +64,7 @@ export function PatientCard({ patient }: Props) {
             </div>
           )}
 
-          <ProgressBar completed={patient.completed_count} total={19} />
+          <ProgressBar completed={patient.completed_count} total={ALL_TASK_KEYS.length} />
         </div>
       </div>
       </Link>
