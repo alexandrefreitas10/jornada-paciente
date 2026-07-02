@@ -155,6 +155,63 @@ function EditItemModal({ item, onClose, onSaved }: { item: StockItem; onClose: (
   )
 }
 
+// ── Patient exit groups (accordion) ──────────────────────────
+function PatientExitGroups({ groups, onEdit, onDelete, formatDate }: {
+  groups: [string, StockMovement[]][]
+  onEdit: (m: StockMovement) => void
+  onDelete: (id: number) => void
+  formatDate: (iso: string) => string
+}) {
+  const [open, setOpen] = useState<Record<string, boolean>>({})
+  function toggle(key: string) { setOpen(p => ({ ...p, [key]: !p[key] })) }
+
+  return (
+    <div className="space-y-2">
+      {groups.map(([patient, movs]) => {
+        const isOpen = open[patient] ?? false
+        const lastDate = formatDate(movs[movs.length - 1].created_at)
+        const totalItems = movs.length
+        return (
+          <div key={patient} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <button
+              onClick={() => toggle(patient)}
+              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
+            >
+              <span className="text-xl">👤</span>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-gray-800 text-sm truncate">{patient}</p>
+                <p className="text-xs text-gray-400">{totalItems} ativo(s) · última saída {lastDate}</p>
+              </div>
+              <span className={`text-gray-400 text-xs transition-transform ${isOpen ? 'rotate-180' : ''}`}>▼</span>
+            </button>
+            {isOpen && (
+              <div className="border-t border-gray-100">
+                {movs.map(m => (
+                  <div key={m.id} className="flex items-start gap-3 px-4 py-3 border-b border-gray-50 last:border-0 bg-gray-50/50">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-800">{m.item_name}</p>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                        <p className="text-xs text-gray-500">Qtd: <span className="font-semibold text-red-500">-{m.quantity}</span></p>
+                        {m.lot && <p className="text-xs text-gray-400">Lote: {m.lot}</p>}
+                        {m.observation && <p className="text-xs text-gray-400">{m.observation}</p>}
+                      </div>
+                      <p className="text-xs text-gray-400 mt-0.5">{formatDate(m.created_at)}{m.created_by ? ` · ${m.created_by}` : ''}</p>
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <button onClick={() => onEdit(m)} className="text-gray-400 hover:text-gray-600 p-1 text-sm">✏️</button>
+                      <button onClick={() => onDelete(m.id)} className="text-red-400 hover:text-red-600 p-1 text-sm">🗑️</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ── Edit movement modal ───────────────────────────────────────
 function EditMovementModal({ mov, onClose, onSaved }: { mov: StockMovement; onClose: () => void; onSaved: (m: StockMovement) => void }) {
   const [quantity, setQuantity] = useState(String(mov.quantity))
@@ -1048,28 +1105,27 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
 
           {exitsWithName.length === 0 ? (
             <div className="text-center py-12 text-gray-400"><p className="text-3xl mb-2">📤</p><p>Nenhuma saída registrada.</p></div>
-          ) : (
-            <div className="space-y-2">
-              {exitsWithName.map(m => (
-                <div key={m.id} className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm flex items-start gap-3">
-                  <span className="text-2xl mt-0.5">📤</span>
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-800 text-sm">{m.item_name}</p>
-                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
-                      <p className="text-xs text-gray-500">Qtd: <span className="font-semibold text-red-600">-{m.quantity}</span></p>
-                      {m.patient_name && <p className="text-xs text-gray-500">Paciente: {m.patient_name}</p>}
-                      {m.observation && <p className="text-xs text-gray-500">{m.observation}</p>}
-                    </div>
-                    <p className="text-xs text-gray-400 mt-1">{formatDate(m.created_at)}{m.created_by ? ` · ${m.created_by}` : ''}</p>
-                  </div>
-                  <div className="flex gap-1 shrink-0">
-                    <button onClick={() => setEditMov(m)} className="text-gray-400 hover:text-gray-600 text-sm p-1">✏️</button>
-                    <button onClick={() => deleteMovement(m.id)} className="text-red-400 hover:text-red-600 text-sm p-1" title="Excluir">🗑️</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          ) : (() => {
+            const groups: Record<string, typeof exitsWithName> = {}
+            exitsWithName.forEach(m => {
+              const key = m.patient_name ?? '— Sem paciente'
+              if (!groups[key]) groups[key] = []
+              groups[key].push(m)
+            })
+            const sorted = Object.entries(groups).sort(([a], [b]) => {
+              if (a === '— Sem paciente') return 1
+              if (b === '— Sem paciente') return -1
+              return a.localeCompare(b, 'pt-BR')
+            })
+            return (
+              <PatientExitGroups
+                groups={sorted}
+                onEdit={m => setEditMov(m)}
+                onDelete={deleteMovement}
+                formatDate={formatDate}
+              />
+            )
+          })()}
         </div>
       )}
 
