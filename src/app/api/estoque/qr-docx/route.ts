@@ -31,7 +31,13 @@ export async function POST(req: NextRequest) {
   if (!itemIds?.length) return NextResponse.json({ error: 'Nenhum item selecionado' }, { status: 400 })
 
   const items = await sql<StockItem[]>`
-    SELECT id, name, lot, expiry_date, unit FROM stock_items WHERE id = ANY(${itemIds}::int[]) ORDER BY name
+    SELECT
+      i.id, i.name, i.unit,
+      (SELECT lot FROM stock_movements WHERE item_id = i.id AND type = 'entrada' ORDER BY created_at DESC LIMIT 1) AS lot,
+      (SELECT expiry_date FROM stock_movements WHERE item_id = i.id AND type = 'entrada' ORDER BY created_at DESC LIMIT 1) AS expiry_date
+    FROM stock_items i
+    WHERE i.id = ANY(${itemIds}::int[])
+    ORDER BY i.name
   `
 
   // Generate QR buffers in parallel
