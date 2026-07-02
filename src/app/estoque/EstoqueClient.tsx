@@ -42,8 +42,12 @@ function QrModal({ item, onClose }: { item: StockItem; onClose: () => void }) {
     h2.textContent = item.name
 
     const p = win.document.createElement('p')
-    p.style.cssText = 'color:#666;margin-bottom:16px'
+    p.style.cssText = 'color:#666;margin-bottom:4px'
     p.textContent = 'Escaneie para registrar saída'
+
+    const lot = win.document.createElement('p')
+    lot.style.cssText = 'color:#666;margin-bottom:16px;font-size:13px'
+    lot.textContent = item.lot ? `Lote: ${item.lot}` : ''
 
     const img = win.document.createElement('img')
     img.src = canvas.toDataURL()
@@ -51,6 +55,7 @@ function QrModal({ item, onClose }: { item: StockItem; onClose: () => void }) {
 
     body.appendChild(h2)
     body.appendChild(p)
+    if (item.lot) body.appendChild(lot)
     body.appendChild(img)
 
     win.print()
@@ -60,7 +65,8 @@ function QrModal({ item, onClose }: { item: StockItem; onClose: () => void }) {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl p-6 max-w-xs w-full text-center shadow-xl">
         <h3 className="font-bold text-gray-800 text-lg mb-1">{item.name}</h3>
-        <p className="text-sm text-gray-500 mb-4">Escaneie para registrar saída</p>
+        <p className="text-sm text-gray-500 mb-1">Escaneie para registrar saída</p>
+        {item.lot && <p className="text-xs text-gray-400 mb-4">Lote: {item.lot}</p>}
         <canvas ref={canvasRef} className="mx-auto rounded-lg" />
         <div className="flex gap-2 mt-4">
           <button onClick={handlePrint} className="flex-1 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700">🖨️ Imprimir</button>
@@ -333,21 +339,46 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   }
 
   // ── Manual saída ────────────────────────────────────────────
+  interface ManualCartEntry { item: StockItem; quantity: number }
   const [manSaida, setManSaida] = useState(false)
+  const [msCart, setMsCart] = useState<ManualCartEntry[]>([])
   const [msItemId, setMsItemId] = useState('')
   const [msItemSearch, setMsItemSearch] = useState('')
   const [msQty, setMsQty] = useState('1')
   const [msPatientId, setMsPatientId] = useState('')
+  const [msPatientSearch, setMsPatientSearch] = useState('')
   const [msObs, setMsObs] = useState('')
   const [msSaving, setMsSaving] = useState(false)
 
+  function msAddToCart() {
+    const found = items.find(x => String(x.id) === msItemId)
+    if (!found) return
+    const qty = Math.max(1, Number(msQty) || 1)
+    setMsCart(prev => {
+      const exists = prev.find(e => e.item.id === found.id)
+      return exists
+        ? prev.map(e => e.item.id === found.id ? { ...e, quantity: e.quantity + qty } : e)
+        : [...prev, { item: found, quantity: qty }]
+    })
+    setMsItemId(''); setMsItemSearch(''); setMsQty('1')
+  }
+
+  function msUpdateQty(id: number, qty: number) {
+    setMsCart(prev => qty < 1 ? prev.filter(e => e.item.id !== id) : prev.map(e => e.item.id === id ? { ...e, quantity: qty } : e))
+  }
+
+  const msSelectedPatient = patients.find(p => String(p.id) === msPatientId)
+  const msFilteredPatients = patients.filter(p => p.name.toLowerCase().includes(msPatientSearch.toLowerCase()))
+
   async function saveManualSaida() {
+    if (msCart.length === 0) return
     setMsSaving(true)
-    const selPatient = patients.find(p => String(p.id) === msPatientId)
-    await fetch('/api/estoque/movements', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: Number(msItemId), type: 'saida', quantity: Number(msQty), patient_id: msPatientId ? Number(msPatientId) : null, patient_name: selPatient?.name ?? null, observation: msObs || null }) })
+    await Promise.all(msCart.map(entry =>
+      fetch('/api/estoque/movements', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: entry.item.id, type: 'saida', quantity: entry.quantity, lot: entry.item.lot ?? null, expiry_date: entry.item.expiry_date ?? null, patient_id: msPatientId ? Number(msPatientId) : null, patient_name: msSelectedPatient?.name ?? null, observation: msObs || null }) })
+    ))
     const [ir, mr] = await Promise.all([fetch('/api/estoque/items'), fetch('/api/estoque/movements')])
     setItems(await ir.json()); setMovements(await mr.json())
-    setManSaida(false); setMsItemId(''); setMsItemSearch(''); setMsQty('1'); setMsPatientId(''); setMsObs('')
+    setManSaida(false); setMsCart([]); setMsItemId(''); setMsItemSearch(''); setMsQty('1'); setMsPatientId(''); setMsPatientSearch(''); setMsObs('')
     setMsSaving(false)
   }
 
@@ -778,52 +809,111 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
 
           {/* Manual saída form */}
           {manSaida && (
-            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-              <p className="font-semibold text-gray-800 mb-3">Saída Manual</p>
-              <div className="space-y-3">
-                {msItemId ? (
+            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-4">
+              <p className="font-semibold text-gray-800">Saída Manual</p>
+
+              {/* Carrinho */}
+              {msCart.length > 0 && (
+                <div className="border border-violet-100 rounded-xl overflow-hidden">
+                  {msCart.map(entry => (
+                    <div key={entry.item.id} className="flex items-center gap-3 px-3 py-2.5 border-b border-violet-50 last:border-0 bg-violet-50/50">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-800 truncate">{entry.item.name}</p>
+                        {entry.item.lot && <p className="text-xs text-gray-400">Lote: {entry.item.lot}</p>}
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button onClick={() => msUpdateQty(entry.item.id, entry.quantity - 1)} className="w-6 h-6 rounded-full border border-gray-300 text-gray-500 hover:border-violet-400 hover:text-violet-600 flex items-center justify-center text-base leading-none">−</button>
+                        <span className="w-7 text-center text-sm font-bold">{entry.quantity}</span>
+                        <button onClick={() => msUpdateQty(entry.item.id, entry.quantity + 1)} className="w-6 h-6 rounded-full border border-gray-300 text-gray-500 hover:border-violet-400 hover:text-violet-600 flex items-center justify-center text-base leading-none">+</button>
+                        <button onClick={() => msUpdateQty(entry.item.id, 0)} className="w-6 h-6 rounded-full border border-red-100 text-red-400 hover:bg-red-50 flex items-center justify-center text-xs ml-1">✕</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Adicionar item */}
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Adicionar medicação</p>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    {msItemId ? (
+                      <div className="flex items-center gap-2 p-2.5 bg-violet-50 border border-violet-200 rounded-lg">
+                        <span className="text-sm font-medium text-violet-800 flex-1 truncate">
+                          {items.find(x => String(x.id) === msItemId)?.name}
+                        </span>
+                        <button onClick={() => { setMsItemId(''); setMsItemSearch('') }} className="text-violet-400 hover:text-violet-600 text-xs shrink-0">✕</button>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+                        <input value={msItemSearch} onChange={e => setMsItemSearch(e.target.value)}
+                          placeholder="Buscar medicação..."
+                          className="w-full border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+                        {msItemSearch && (
+                          <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                            {items.filter(i => i.name.toLowerCase().includes(msItemSearch.toLowerCase())).length === 0
+                              ? <p className="px-3 py-2 text-xs text-gray-400">Nenhuma medicação encontrada</p>
+                              : items.filter(i => i.name.toLowerCase().includes(msItemSearch.toLowerCase())).map(i => (
+                                <button key={i.id} onClick={() => { setMsItemId(String(i.id)); setMsItemSearch('') }}
+                                  className="w-full text-left px-3 py-2 text-sm hover:bg-violet-50 border-b border-gray-50 last:border-0">
+                                  <span className="font-medium text-gray-800">{i.name}</span>
+                                  {i.lot && <span className="text-gray-400"> — Lote: {i.lot}</span>}
+                                  <span className="text-gray-400 text-xs ml-1">({i.quantity} {i.unit})</span>
+                                </button>
+                              ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  <input type="number" min="1" value={msQty} onChange={e => setMsQty(e.target.value)}
+                    className="w-20 border border-gray-300 rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-violet-400" />
+                  <button onClick={msAddToCart} disabled={!msItemId}
+                    className="px-3 py-2 bg-violet-600 text-white text-sm rounded-lg hover:bg-violet-700 disabled:opacity-40 shrink-0">
+                    + Adicionar
+                  </button>
+                </div>
+              </div>
+
+              {/* Paciente */}
+              <div>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">Paciente <span className="normal-case font-normal">(opcional)</span></p>
+                {msPatientId ? (
                   <div className="flex items-center gap-2 p-2.5 bg-violet-50 border border-violet-200 rounded-lg">
-                    <span className="text-sm font-medium text-violet-800 flex-1">
-                      {(() => { const i = items.find(x => String(x.id) === msItemId); return i ? `${i.name}${i.lot ? ` — Lote: ${i.lot}` : ''} (estoque: ${i.quantity} ${i.unit})` : '' })()}
-                    </span>
-                    <button onClick={() => { setMsItemId(''); setMsItemSearch('') }} className="text-violet-400 hover:text-violet-600 text-xs">✕</button>
+                    <span className="text-sm font-medium text-violet-800 flex-1">{msSelectedPatient?.name}</span>
+                    <button onClick={() => { setMsPatientId(''); setMsPatientSearch('') }} className="text-violet-400 hover:text-violet-600 text-xs">✕</button>
                   </div>
                 ) : (
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
-                    <input
-                      value={msItemSearch} onChange={e => setMsItemSearch(e.target.value)}
-                      placeholder="Buscar medicação *"
-                      className="w-full border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
-                    />
-                    {msItemSearch && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                        {items.filter(i => i.name.toLowerCase().includes(msItemSearch.toLowerCase())).length === 0 ? (
-                          <p className="px-3 py-2 text-xs text-gray-400">Nenhuma medicação encontrada</p>
-                        ) : items.filter(i => i.name.toLowerCase().includes(msItemSearch.toLowerCase())).map(i => (
-                          <button key={i.id} onClick={() => { setMsItemId(String(i.id)); setMsItemSearch('') }}
-                            className="w-full text-left px-3 py-2 text-sm hover:bg-violet-50 border-b border-gray-50 last:border-0">
-                            <span className="font-medium text-gray-800">{i.name}</span>
-                            {i.lot && <span className="text-gray-500"> — Lote: {i.lot}</span>}
-                            <span className="text-gray-400 text-xs ml-1">(estoque: {i.quantity} {i.unit})</span>
-                          </button>
+                    <input type="text" value={msPatientSearch} onChange={e => setMsPatientSearch(e.target.value)}
+                      placeholder="Buscar paciente..."
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+                    {msPatientSearch && msFilteredPatients.length > 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                        {msFilteredPatients.slice(0, 8).map(p => (
+                          <button key={p.id} onClick={() => { setMsPatientId(String(p.id)); setMsPatientSearch('') }}
+                            className="w-full text-left px-3 py-2.5 text-sm hover:bg-violet-50 border-b border-gray-50 last:border-0">{p.name}</button>
                         ))}
                       </div>
                     )}
                   </div>
                 )}
-                <div className="flex gap-2 flex-wrap">
-                  <input type="number" min="1" value={msQty} onChange={e => setMsQty(e.target.value)} placeholder="Quantidade *" className="w-28 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
-                  <select value={msPatientId} onChange={e => setMsPatientId(e.target.value)} className="flex-1 min-w-[160px] border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
-                    <option value="">Paciente (opcional)</option>
-                    {patients.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                  <input value={msObs} onChange={e => setMsObs(e.target.value)} placeholder="Observação" className="flex-1 min-w-[140px] border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
-                </div>
               </div>
-              <div className="flex gap-2 mt-3">
-                <button onClick={saveManualSaida} disabled={msSaving || !msItemId} className="px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50">{msSaving ? 'Salvando...' : 'Salvar Saída'}</button>
-                <button onClick={() => setManSaida(false)} className="px-4 py-2 border border-gray-300 text-sm text-gray-600 rounded-lg hover:bg-gray-50">Cancelar</button>
+
+              {/* Observação */}
+              <input value={msObs} onChange={e => setMsObs(e.target.value)} placeholder="Observação (opcional)"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+
+              <div className="flex gap-2">
+                <button onClick={saveManualSaida} disabled={msSaving || msCart.length === 0}
+                  className="flex-1 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50">
+                  {msSaving ? 'Salvando...' : `Salvar Saída${msCart.length > 1 ? ` (${msCart.length} itens)` : ''}`}
+                </button>
+                <button onClick={() => { setManSaida(false); setMsCart([]); setMsItemId(''); setMsItemSearch(''); setMsQty('1'); setMsPatientId(''); setMsPatientSearch(''); setMsObs('') }}
+                  className="px-4 py-2 border border-gray-300 text-sm text-gray-600 rounded-lg hover:bg-gray-50">
+                  Cancelar
+                </button>
               </div>
             </div>
           )}
