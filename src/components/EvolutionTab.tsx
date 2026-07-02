@@ -283,7 +283,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
               </svg> Extraindo dados...</>
-            ) : <>📷 Enviar foto da tabela ▾</>}
+            ) : <>📷 Foto da tabela ▾</>}
           </button>
 
           {showPhotoMenu && !uploading && (
@@ -318,7 +318,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
               </svg> Enviando...</>
-            ) : <>📋 Prescrição finalizada ▾</>}
+            ) : <>📋 Prescrição ▾</>}
           </button>
 
           {showPrescriptionMenu && !uploadingPrescription && (
@@ -352,8 +352,8 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
               <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-              </svg> Gerando relatório...</>
-            ) : <>📝 Relatório prontuário ▾</>}
+              </svg> Gerando...</>
+            ) : <>📝 Prontuário ▾</>}
           </button>
           {showReportMenu && !reportLoading && (
             <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-10 overflow-hidden min-w-[200px]">
