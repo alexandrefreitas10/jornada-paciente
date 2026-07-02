@@ -65,6 +65,16 @@ export async function POST(req: NextRequest) {
         children: [
           new Paragraph({
             alignment: AlignmentType.CENTER,
+            spacing: { after: 40 },
+            children: [new TextRun({ text: item.name, bold: true, size: 18, font: 'Arial' })]
+          }),
+          ...(meta ? [new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 60 },
+            children: [new TextRun({ text: meta, size: 14, color: '666666', font: 'Arial' })]
+          })] : []),
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
             children: [new ImageRun({
               type: 'png',
               data: buf,
@@ -72,15 +82,6 @@ export async function POST(req: NextRequest) {
               altText: { title: item.name, description: item.name, name: item.name }
             })]
           }),
-          new Paragraph({
-            alignment: AlignmentType.CENTER,
-            spacing: { before: 40 },
-            children: [new TextRun({ text: item.name, bold: true, size: 18, font: 'Arial' })]
-          }),
-          ...(meta ? [new Paragraph({
-            alignment: AlignmentType.CENTER,
-            children: [new TextRun({ text: meta, size: 14, color: '666666', font: 'Arial' })]
-          })] : []),
         ]
       })
     })
