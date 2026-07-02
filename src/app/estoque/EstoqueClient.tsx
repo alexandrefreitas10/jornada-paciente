@@ -284,6 +284,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   async function saveNfItems() {
     setNfSaving(true)
     setNfError('')
+    const savedIds: number[] = []
     try {
       for (const nfItem of nfItems) {
         let stockItem = items.find(i => i.name.toLowerCase() === nfItem.name.toLowerCase())
@@ -302,12 +303,14 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
           body: JSON.stringify({ item_id: stockItem.id, type: 'entrada', quantity: nfItem.quantity, lot: nfItem.lot, expiry_date: nfItem.expiry_date }),
         })
         if (!movRes.ok) { setNfError(`Erro ao registrar entrada: ${nfItem.name}`); setNfSaving(false); return }
+        savedIds.push(stockItem.id)
       }
       const [itemsRes, movsRes] = await Promise.all([fetch('/api/estoque/items'), fetch('/api/estoque/movements')])
       setItems(await itemsRes.json())
       setMovements(await movsRes.json())
       setNfItems([])
       setTab('entradas')
+      if (savedIds.length > 0) setQrDocxPrompt(savedIds)
     } catch (e) {
       setNfError('Erro inesperado: ' + String(e))
     }
@@ -339,6 +342,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
     setItems(await ir.json()); setMovements(await mr.json())
     setManEntrada(false); setMeItemId(''); setMeNewName(''); setMeQty('1'); setMeLot(''); setMeExpiry(''); setMeObs(''); setMeIsNew(false)
     setMeSaving(false)
+    setQrDocxPrompt([itemId])
   }
 
   // ── Manual saída ────────────────────────────────────────────
@@ -471,6 +475,30 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
       setExpiryCopied(true)
       setTimeout(() => setExpiryCopied(false), 2000)
     })
+  }
+
+  // ── Modal pós-entrada: gerar DOCX ────────────────────────────
+  const [qrDocxPrompt, setQrDocxPrompt] = useState<number[]>([]) // ids dos itens da última entrada
+  const [qrDocxLoading, setQrDocxLoading] = useState(false)
+
+  async function downloadDocxForIds(ids: number[]) {
+    setQrDocxLoading(true)
+    try {
+      const res = await fetch('/api/estoque/qr-docx', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemIds: ids, baseUrl: window.location.origin }),
+      })
+      if (!res.ok) { alert('Erro ao gerar DOCX: ' + await res.text()); setQrDocxLoading(false); return }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = 'qrcodes-estoque.docx'
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (e) { alert('Erro: ' + String(e)) }
+    setQrDocxLoading(false)
+    setQrDocxPrompt([])
   }
 
   // ── Seleção para DOCX ─────────────────────────────────────────
@@ -625,6 +653,28 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
               <button onClick={() => setShowExpiryReport(false)}
                 className="w-full py-2 border border-gray-300 text-gray-600 rounded-xl text-sm hover:bg-gray-50">
                 Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL GERAR QR DOCX PÓS-ENTRADA ── */}
+      {qrDocxPrompt.length > 0 && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl text-center">
+            <p className="text-3xl mb-3">📄</p>
+            <h3 className="font-bold text-gray-800 text-lg mb-1">Gerar QR Codes?</h3>
+            <p className="text-sm text-gray-500 mb-5">
+              Deseja baixar o documento com os QR codes dos {qrDocxPrompt.length} ativo(s) que acabaram de entrar?
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => setQrDocxPrompt([])} className="flex-1 py-2.5 border border-gray-300 text-gray-600 rounded-xl text-sm hover:bg-gray-50">
+                Agora não
+              </button>
+              <button onClick={() => downloadDocxForIds(qrDocxPrompt)} disabled={qrDocxLoading}
+                className="flex-1 py-2.5 bg-violet-600 text-white rounded-xl text-sm font-semibold hover:bg-violet-700 disabled:opacity-50">
+                {qrDocxLoading ? 'Gerando...' : '⬇️ Baixar DOCX'}
               </button>
             </div>
           </div>
