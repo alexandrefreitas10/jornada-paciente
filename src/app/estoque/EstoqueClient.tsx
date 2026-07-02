@@ -46,8 +46,12 @@ function QrModal({ item, onClose }: { item: StockItem; onClose: () => void }) {
     p.textContent = 'Escaneie para registrar saída'
 
     const lot = win.document.createElement('p')
-    lot.style.cssText = 'color:#666;margin-bottom:16px;font-size:13px'
+    lot.style.cssText = 'color:#666;margin-bottom:4px;font-size:13px'
     lot.textContent = item.lot ? `Lote: ${item.lot}` : ''
+
+    const val = win.document.createElement('p')
+    val.style.cssText = 'color:#666;margin-bottom:16px;font-size:13px'
+    val.textContent = item.expiry_date ? `Val: ${item.expiry_date}` : ''
 
     const img = win.document.createElement('img')
     img.src = canvas.toDataURL()
@@ -56,6 +60,7 @@ function QrModal({ item, onClose }: { item: StockItem; onClose: () => void }) {
     body.appendChild(h2)
     body.appendChild(p)
     if (item.lot) body.appendChild(lot)
+    if (item.expiry_date) body.appendChild(val)
     body.appendChild(img)
 
     win.print()
@@ -66,7 +71,11 @@ function QrModal({ item, onClose }: { item: StockItem; onClose: () => void }) {
       <div className="bg-white rounded-2xl p-6 max-w-xs w-full text-center shadow-xl">
         <h3 className="font-bold text-gray-800 text-lg mb-1">{item.name}</h3>
         <p className="text-sm text-gray-500 mb-1">Escaneie para registrar saída</p>
-        {item.lot && <p className="text-xs text-gray-400 mb-4">Lote: {item.lot}</p>}
+        {(item.lot || item.expiry_date) && (
+          <p className="text-xs text-gray-400 mb-4">
+            {[item.lot ? `Lote: ${item.lot}` : null, item.expiry_date ? `Val: ${item.expiry_date}` : null].filter(Boolean).join('   ')}
+          </p>
+        )}
         <canvas ref={canvasRef} className="mx-auto rounded-lg" />
         <div className="flex gap-2 mt-4">
           <button onClick={handlePrint} className="flex-1 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700">🖨️ Imprimir</button>
