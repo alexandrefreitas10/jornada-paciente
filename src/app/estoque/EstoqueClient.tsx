@@ -1112,10 +1112,10 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
               if (!groups[key]) groups[key] = []
               groups[key].push(m)
             })
-            const sorted = Object.entries(groups).sort(([a], [b]) => {
-              if (a === '— Sem paciente') return 1
-              if (b === '— Sem paciente') return -1
-              return a.localeCompare(b, 'pt-BR')
+            const sorted = Object.entries(groups).sort(([, aMovs], [, bMovs]) => {
+              const aLast = aMovs[aMovs.length - 1].created_at
+              const bLast = bMovs[bMovs.length - 1].created_at
+              return bLast.localeCompare(aLast)
             })
             return (
               <PatientExitGroups
