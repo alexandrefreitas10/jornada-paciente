@@ -36,6 +36,7 @@ function filterByRange(movs: StockMovement[], dateStart: string, dateEnd: string
 
 export function RelatoriosTab({ movements }: { movements: StockMovement[] }) {
   const [report, setReport] = useState<ReportType>('movimentos')
+  const [movFilter, setMovFilter] = useState<'all' | 'entrada' | 'saida'>('all')
   const [dateStart, setDateStart] = useState(firstOfMonth())
   const [dateEnd, setDateEnd] = useState(today())
   const [specificDate, setSpecificDate] = useState(today())
@@ -232,11 +233,30 @@ export function RelatoriosTab({ movements }: { movements: StockMovement[] }) {
             </div>
           </div>
 
+          {/* Filtro de tipo */}
+          <div className="flex gap-2">
+            {([['all', 'Tudo'], ['entrada', 'Só Entradas'], ['saida', 'Só Saídas']] as const).map(([val, label]) => (
+              <button
+                key={val}
+                onClick={() => setMovFilter(val)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                  movFilter === val
+                    ? val === 'entrada' ? 'bg-green-600 text-white border-green-600'
+                      : val === 'saida' ? 'bg-red-500 text-white border-red-500'
+                      : 'bg-gray-800 text-white border-gray-800'
+                    : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
           {filtered.length === 0 ? (
             <EmptyState />
           ) : (
             <>
-              {entries.length > 0 && (
+              {(movFilter === 'all' || movFilter === 'entrada') && entries.length > 0 && (
                 <Section title="Entradas" count={entries.length}>
                   {entries.map(m => (
                     <Row key={m.id}
@@ -251,7 +271,7 @@ export function RelatoriosTab({ movements }: { movements: StockMovement[] }) {
                   ))}
                 </Section>
               )}
-              {exits.length > 0 && (
+              {(movFilter === 'all' || movFilter === 'saida') && exits.length > 0 && (
                 <Section title="Saídas" count={exits.length}>
                   {exits.map(m => (
                     <Row key={m.id}
@@ -266,6 +286,8 @@ export function RelatoriosTab({ movements }: { movements: StockMovement[] }) {
                   ))}
                 </Section>
               )}
+              {movFilter === 'entrada' && entries.length === 0 && <EmptyState />}
+              {movFilter === 'saida' && exits.length === 0 && <EmptyState />}
             </>
           )}
         </div>
