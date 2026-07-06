@@ -144,6 +144,117 @@ function PhysicalSignRow({
   )
 }
 
+function PhysicalUploadSection({
+  patientId,
+  onAdded,
+}: {
+  patientId: number
+  onAdded: (term: PatientTerm) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [title, setTitle] = useState('')
+  const [signerName, setSignerName] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!file) return
+    setLoading(true)
+    setError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('title', title || file.name)
+      fd.append('signer_name', signerName)
+      const res = await fetch(`/api/patients/${patientId}/terms/sign-physical-upload`, {
+        method: 'POST',
+        body: fd,
+      })
+      if (!res.ok) throw new Error((await res.json()).error || 'Erro')
+      const term: PatientTerm = await res.json()
+      onAdded(term)
+      setOpen(false)
+      setTitle('')
+      setSignerName('')
+      setFile(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao enviar')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="w-full py-2 border border-dashed border-violet-300 text-violet-600 text-sm font-medium rounded-xl hover:bg-violet-50 transition-colors"
+      >
+        ✍️ Registrar termo assinado fisicamente
+      </button>
+    )
+  }
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+      <p className="text-xs font-semibold text-gray-700">Registrar termo assinado fisicamente</p>
+      <input
+        type="text"
+        placeholder="Nome do termo (ex: Termo LGPD)"
+        value={title}
+        onChange={e => setTitle(e.target.value)}
+        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+      />
+      <input
+        type="text"
+        placeholder="Nome de quem assinou"
+        value={signerName}
+        onChange={e => setSignerName(e.target.value)}
+        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+      />
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*,application/pdf"
+        capture="environment"
+        onChange={e => setFile(e.target.files?.[0] ?? null)}
+        className="hidden"
+      />
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:border-violet-400 hover:text-violet-600 transition-colors"
+      >
+        {file ? (
+          <span className="text-violet-700 font-medium">{file.name}</span>
+        ) : (
+          '📎 Selecionar arquivo ou tirar foto'
+        )}
+      </button>
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => { setOpen(false); setFile(null); setError(null) }}
+          className="flex-1 py-2 border border-gray-300 text-sm text-gray-600 rounded-xl hover:bg-gray-50 transition-colors"
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={handleSubmit}
+          disabled={!file || loading}
+          className="flex-1 py-2 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+        >
+          {loading ? 'Enviando...' : '✅ Salvar'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function TermsTab({ patientId }: Props) {
   const [templates, setTemplates] = useState<Template[]>([])
   const [terms, setTerms] = useState<PatientTerm[]>([])
@@ -209,6 +320,10 @@ export function TermsTab({ patientId }: Props) {
     }
   }
 
+  function handleAdded(term: PatientTerm) {
+    setTerms(prev => [term, ...prev])
+  }
+
   function handleSigned(id: number, signerName: string) {
     setTerms(prev => prev.map(t =>
       t.id === id
@@ -258,6 +373,9 @@ export function TermsTab({ patientId }: Props) {
           )}
         </div>
       </div>
+
+      {/* Upload físico */}
+      <PhysicalUploadSection patientId={patientId} onAdded={handleAdded} />
 
       {/* Termos enviados */}
       <div>
