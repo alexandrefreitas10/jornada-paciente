@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { DeletedItemsButton } from './DeletedItemsButton'
 
 interface Template {
@@ -42,6 +42,106 @@ function fmt(iso: string) {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+function PhysicalSignRow({
+  term,
+  patientId,
+  onSigned,
+}: {
+  term: PatientTerm
+  patientId: number
+  onSigned: (id: number, signerName: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [file, setFile] = useState<File | null>(null)
+  const [signerName, setSignerName] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!file) return
+    setLoading(true)
+    setError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('signer_name', signerName)
+      const res = await fetch(`/api/patients/${patientId}/terms/${term.id}/sign-physical`, {
+        method: 'POST',
+        body: fd,
+      })
+      if (!res.ok) throw new Error((await res.json()).error || 'Erro')
+      onSigned(term.id, signerName)
+      setOpen(false)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao enviar')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="text-xs text-violet-600 hover:text-violet-800 px-2 py-1 rounded hover:bg-violet-50 transition-colors font-medium"
+      >
+        ✍️ Registrar assinatura física
+      </button>
+    )
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-2 space-y-2 border-t border-gray-100 pt-2">
+      <p className="text-xs font-medium text-gray-600">Registrar assinatura física</p>
+      <input
+        type="text"
+        placeholder="Nome de quem assinou"
+        value={signerName}
+        onChange={e => setSignerName(e.target.value)}
+        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-violet-400"
+      />
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*,application/pdf"
+        capture="environment"
+        onChange={e => setFile(e.target.files?.[0] ?? null)}
+        className="hidden"
+      />
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-xs text-gray-500 hover:border-violet-400 hover:text-violet-600 transition-colors"
+      >
+        {file ? (
+          <span className="text-violet-700 font-medium">{file.name}</span>
+        ) : (
+          '📎 Selecionar arquivo ou tirar foto'
+        )}
+      </button>
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => { setOpen(false); setFile(null); setError(null) }}
+          className="flex-1 py-1.5 border border-gray-300 text-xs text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          Cancelar
+        </button>
+        <button
+          type="submit"
+          disabled={!file || loading}
+          className="flex-1 py-1.5 bg-emerald-600 text-white text-xs font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+        >
+          {loading ? 'Enviando...' : '✅ Confirmar'}
+        </button>
+      </div>
+    </form>
+  )
 }
 
 export function TermsTab({ patientId }: Props) {
@@ -107,6 +207,14 @@ export function TermsTab({ patientId }: Props) {
     } finally {
       setDeleting(null)
     }
+  }
+
+  function handleSigned(id: number, signerName: string) {
+    setTerms(prev => prev.map(t =>
+      t.id === id
+        ? { ...t, status: 'signed', signed_at: new Date().toISOString(), signer_name: signerName }
+        : t
+    ))
   }
 
   if (loading) {
@@ -214,6 +322,14 @@ export function TermsTab({ patientId }: Props) {
                   >
                     ⬇ Baixar assinado
                   </a>
+                )}
+
+                {term.status !== 'signed' && (
+                  <PhysicalSignRow
+                    term={term}
+                    patientId={patientId}
+                    onSigned={handleSigned}
+                  />
                 )}
               </div>
             ))}
