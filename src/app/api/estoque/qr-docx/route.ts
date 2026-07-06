@@ -18,7 +18,7 @@ const noBorder = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' }
 const borders = { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder }
 
 async function makeQrBuffer(url: string): Promise<Buffer> {
-  return QRCode.toBuffer(url, { width: 200, margin: 1 }) as Promise<Buffer>
+  return QRCode.toBuffer(url, { width: 300, margin: 1 }) as Promise<Buffer>
 }
 
 export async function POST(req: NextRequest) {
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
 
   const COLS = 4
   const COL_W = 2350 // DXA (each of 4 cols), total ~9400 for A4 with narrow margins
-  const QR_PX = 130  // image pixels for docx
+  const QR_PX = 180  // image pixels for docx
 
   // Build rows (4 items per row)
   const rows: TableRow[] = []
