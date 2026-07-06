@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { RelatorioUltimaSemana } from '@/components/RelatorioUltimaSemana'
 
-type Tab = 'cards' | 'itens' | 'semana' | 'inativos' | 'concluidos' | 'fotos' | 'resumo_paciente'
+type Tab = 'cards' | 'itens' | 'semana' | 'inativos' | 'concluidos' | 'fotos' | 'resumo_paciente' | 'termos'
 
 interface PatientOption { id: number; name: string }
 
@@ -692,6 +692,149 @@ function ResumoPaciente() {
   )
 }
 
+// ── Aba: Termos ──────────────────────────────────────────────────────────────
+
+type TermoStatus = 'todos' | 'signed' | 'sent' | 'draft'
+
+interface TermoRow {
+  id: number
+  patient_id: number
+  patient_name: string
+  title: string
+  status: string
+  created_by: string
+  created_at: string
+  sent_at: string | null
+  signed_at: string | null
+  signer_name: string | null
+}
+
+const STATUS_LABEL: Record<string, { label: string; color: string }> = {
+  signed: { label: 'Assinado', color: 'bg-emerald-100 text-emerald-700' },
+  sent:   { label: 'Aguardando', color: 'bg-amber-100 text-amber-700' },
+  draft:  { label: 'Não enviado', color: 'bg-gray-100 text-gray-600' },
+}
+
+function TermosRelatorio() {
+  const [filter, setFilter] = useState<TermoStatus>('todos')
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState<{ total: number; signed: number; sent: number; draft: number; terms: TermoRow[] } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  async function buscar(f: TermoStatus) {
+    setLoading(true)
+    setError(null)
+    try {
+      const params = f !== 'todos' ? `?status=${f}` : ''
+      const res = await fetch(`/api/relatorio/termos${params}`)
+      if (!res.ok) throw new Error((await res.json()).error || 'Erro')
+      setResult(await res.json())
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao buscar')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function handleFilter(f: TermoStatus) {
+    setFilter(f)
+    buscar(f)
+  }
+
+  const filterOptions: { key: TermoStatus; label: string }[] = [
+    { key: 'todos',  label: 'Todos' },
+    { key: 'signed', label: '✅ Assinados' },
+    { key: 'sent',   label: '⏳ Aguardando' },
+    { key: 'draft',  label: '📋 Não enviados' },
+  ]
+
+  return (
+    <div className="space-y-5">
+      <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
+        <h2 className="text-sm font-semibold text-gray-700">Relatório de termos</h2>
+
+        <div className="flex flex-wrap gap-2">
+          {filterOptions.map(f => (
+            <button
+              key={f.key}
+              onClick={() => handleFilter(f.key)}
+              disabled={loading}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors disabled:opacity-50 ${
+                filter === f.key
+                  ? 'bg-violet-600 text-white border-violet-600'
+                  : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        {error && <p className="text-sm text-red-600">{error}</p>}
+      </div>
+
+      {result && (
+        <div className="space-y-3">
+          {/* Totalizadores */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-white rounded-xl border border-gray-200 p-4 text-center shadow-sm">
+              <p className="text-2xl font-bold text-emerald-600">{result.signed}</p>
+              <p className="text-xs text-gray-500 mt-1">Assinados</p>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-4 text-center shadow-sm">
+              <p className="text-2xl font-bold text-amber-500">{result.sent}</p>
+              <p className="text-xs text-gray-500 mt-1">Aguardando</p>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-4 text-center shadow-sm">
+              <p className="text-2xl font-bold text-gray-500">{result.draft}</p>
+              <p className="text-xs text-gray-500 mt-1">Não enviados</p>
+            </div>
+          </div>
+
+          {/* Lista */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+              <span className="text-sm font-semibold text-gray-700">Termos</span>
+              <span className="text-sm font-bold text-violet-700">{result.total}</span>
+            </div>
+            {result.terms.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-6">Nenhum termo encontrado</p>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {result.terms.map(t => {
+                  const s = STATUS_LABEL[t.status] ?? { label: t.status, color: 'bg-gray-100 text-gray-600' }
+                  return (
+                    <div key={t.id} className="px-5 py-3 flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <a href={`/pacientes/${t.patient_id}`} className="text-sm font-medium text-gray-900 hover:text-violet-700 transition-colors">
+                            {t.patient_name}
+                          </a>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${s.color}`}>{s.label}</span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-0.5 truncate">{t.title}</p>
+                        {t.signed_at && t.signer_name && (
+                          <p className="text-xs text-emerald-600 mt-0.5">Assinado por {t.signer_name} em {new Date(t.signed_at).toLocaleDateString('pt-BR')}</p>
+                        )}
+                        {t.sent_at && t.status === 'sent' && (
+                          <p className="text-xs text-amber-600 mt-0.5">Enviado em {new Date(t.sent_at).toLocaleDateString('pt-BR')}</p>
+                        )}
+                      </div>
+                      <span className="text-xs text-gray-400 shrink-0 mt-0.5">
+                        {new Date(t.created_at).toLocaleDateString('pt-BR')}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Componente principal ─────────────────────────────────────────────────────
 
 export function RelatoriosClient({ patients }: { patients: PatientOption[] }) {
@@ -699,6 +842,7 @@ export function RelatoriosClient({ patients }: { patients: PatientOption[] }) {
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'resumo_paciente', label: '🗒️ Resumo do Paciente' },
+    { key: 'termos', label: '📝 Termos' },
     { key: 'cards', label: 'Cards criados' },
     { key: 'itens', label: 'Itens enviados' },
     { key: 'fotos', label: '📷 Com fotos' },
@@ -727,6 +871,7 @@ export function RelatoriosClient({ patients }: { patients: PatientOption[] }) {
       </div>
 
       {tab === 'resumo_paciente' && <ResumoPaciente />}
+      {tab === 'termos' && <TermosRelatorio />}
       {tab === 'cards' && <CardsCreated />}
       {tab === 'itens' && <ItensSent patients={patients} />}
       {tab === 'fotos' && <ComFotos />}
