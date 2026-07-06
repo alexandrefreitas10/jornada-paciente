@@ -5,6 +5,8 @@ import { randomUUID } from 'crypto'
 import Anthropic from '@anthropic-ai/sdk'
 import { auth } from '@/auth'
 
+export const maxDuration = 120
+
 function getClient() { return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }) }
 
 async function generateExamSummary(buffer: Buffer, mimeType: string, fileName: string): Promise<string> {
