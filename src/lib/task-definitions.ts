@@ -31,6 +31,8 @@ export const TASK_PHASES: TaskPhase[] = [
     tasks: [
       { key: 'orcamento_enviado', label: 'Orçamento enviado' },
       { key: 'orcamento_fechado', label: 'Orçamento fechado' },
+      { key: 'termo_enviado', label: 'Termo enviado' },
+      { key: 'termo_assinado', label: 'Termo assinado' },
     ],
   },
   {
