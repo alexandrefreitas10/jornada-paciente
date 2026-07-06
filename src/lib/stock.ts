@@ -43,6 +43,11 @@ export async function listStockItems(): Promise<StockItem[]> {
     FROM stock_items i
     LEFT JOIN stock_movements m ON m.item_id = i.id
     GROUP BY i.id
+    HAVING COALESCE(
+      SUM(CASE WHEN m.type = 'entrada' THEN m.quantity ELSE 0 END) -
+      SUM(CASE WHEN m.type = 'saida'   THEN m.quantity ELSE 0 END),
+      0
+    ) > 0
     ORDER BY i.name ASC
   `
 }
