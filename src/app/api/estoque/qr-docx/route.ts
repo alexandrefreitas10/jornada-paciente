@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
 
   const COLS = 4
   const COL_W = 2350 // DXA (each of 4 cols), total ~9400 for A4 with narrow margins
-  const QR_PX = 180  // image pixels for docx
+  const QR_PX = 150  // image pixels for docx
 
   // Build rows (4 items per row)
   const rows: TableRow[] = []
