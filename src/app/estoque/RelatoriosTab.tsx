@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 
 interface StockMovement {
   id: number; item_id: number; item_name: string; type: 'entrada' | 'saida'
@@ -8,7 +8,19 @@ interface StockMovement {
   patient_id: number | null; patient_name: string | null; observation: string | null; created_by: string | null; created_at: string
 }
 
-type ReportType = 'movimentos' | 'top_saidas' | 'por_lote' | 'por_produto' | 'por_paciente'
+type ReportType = 'movimentos' | 'top_saidas' | 'por_lote' | 'por_produto' | 'por_paciente' | 'atividade_paciente'
+
+interface PatientActivity {
+  patient_id: number
+  patient_name: string
+  activities: {
+    type: string
+    description: string
+    detail: string | null
+    created_at: string
+    created_by: string | null
+  }[]
+}
 
 function formatDateOnly(iso: string) {
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -37,6 +49,10 @@ function filterByRange(movs: StockMovement[], dateStart: string, dateEnd: string
 export function RelatoriosTab({ movements }: { movements: StockMovement[] }) {
   const [report, setReport] = useState<ReportType>('movimentos')
   const [movFilter, setMovFilter] = useState<'all' | 'entrada' | 'saida'>('all')
+  const [activityData, setActivityData] = useState<PatientActivity[]>([])
+  const [activityLoading, setActivityLoading] = useState(false)
+  const [expandedPatient, setExpandedPatient] = useState<number | null>(null)
+  const [activityCopied, setActivityCopied] = useState<number | null>(null)
   const [dateStart, setDateStart] = useState(firstOfMonth())
   const [dateEnd, setDateEnd] = useState(today())
   const [specificDate, setSpecificDate] = useState(today())
@@ -45,6 +61,19 @@ export function RelatoriosTab({ movements }: { movements: StockMovement[] }) {
 
   const effectiveStart = useSpecific ? specificDate : dateStart
   const effectiveEnd = useSpecific ? specificDate : dateEnd
+
+  const fetchActivity = useCallback(async () => {
+    if (report !== 'atividade_paciente') return
+    setActivityLoading(true)
+    try {
+      const res = await fetch(`/api/reports/patient-activity?start=${effectiveStart}&end=${effectiveEnd}`)
+      if (res.ok) setActivityData(await res.json())
+    } finally {
+      setActivityLoading(false)
+    }
+  }, [report, effectiveStart, effectiveEnd])
+
+  useEffect(() => { fetchActivity() }, [fetchActivity])
 
   const filtered = useMemo(
     () => filterByRange(movements, effectiveStart, effectiveEnd),
@@ -163,6 +192,7 @@ export function RelatoriosTab({ movements }: { movements: StockMovement[] }) {
     { key: 'por_lote', label: 'Por Lote', icon: '🗂️' },
     { key: 'por_produto', label: 'Por Produto', icon: '💊' },
     { key: 'por_paciente', label: 'Por Paciente', icon: '👤' },
+    { key: 'atividade_paciente', label: 'Resumo do Paciente', icon: '🗒️' },
   ]
 
   return (
@@ -368,6 +398,83 @@ export function RelatoriosTab({ movements }: { movements: StockMovement[] }) {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ── RESUMO DO PACIENTE ── */}
+      {report === 'atividade_paciente' && (
+        <div className="space-y-3">
+          {activityLoading ? (
+            <div className="text-center py-10 text-gray-400 text-sm">Carregando...</div>
+          ) : activityData.length === 0 ? (
+            <EmptyState msg="Nenhuma atividade encontrada no período." />
+          ) : activityData.map(p => {
+            const isOpen = expandedPatient === p.patient_id
+
+            function copyPatient() {
+              const lines = [
+                `Resumo — ${p.patient_name}`,
+                `Período: ${effectiveStart === effectiveEnd ? effectiveStart : `${effectiveStart} a ${effectiveEnd}`}`,
+                '',
+                ...p.activities.map(a =>
+                  `• ${a.description}${a.detail ? ` — ${a.detail}` : ''}${a.created_by ? ` (${a.created_by})` : ''} — ${new Date(a.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
+                )
+              ]
+              navigator.clipboard.writeText(lines.join('\n')).then(() => {
+                setActivityCopied(p.patient_id)
+                setTimeout(() => setActivityCopied(null), 2000)
+              })
+            }
+
+            const ICONS: Record<string, string> = {
+              saida: '💊', foto: '📸', exame: '🔬', dieta: '🥗', prescricao: '📄',
+              medicao: '📏', tarefa: '✅', resumo: '📝',
+            }
+
+            return (
+              <div key={p.patient_id} className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+                <button
+                  onClick={() => setExpandedPatient(isOpen ? null : p.patient_id)}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors"
+                >
+                  <div className="w-8 h-8 rounded-full bg-violet-100 flex items-center justify-center text-violet-600 font-bold text-sm shrink-0">
+                    {p.patient_name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 text-left">
+                    <p className="text-sm font-semibold text-gray-800">{p.patient_name}</p>
+                    <p className="text-xs text-gray-400">{p.activities.length} atividade(s)</p>
+                  </div>
+                  <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
+                </button>
+
+                {isOpen && (
+                  <div className="border-t border-gray-100 px-4 pb-4 pt-3 space-y-2">
+                    {p.activities.map((a, i) => (
+                      <div key={i} className="flex items-start gap-2.5">
+                        <span className="text-base mt-0.5 shrink-0">{ICONS[a.type] ?? '•'}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-800">{a.description}</p>
+                          {a.detail && <p className="text-xs text-gray-400 truncate">{a.detail}</p>}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-xs text-gray-400">
+                            {new Date(a.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                          {a.created_by && <p className="text-xs text-gray-400">{a.created_by}</p>}
+                        </div>
+                      </div>
+                    ))}
+                    <div className="pt-2 border-t border-gray-50">
+                      <button onClick={copyPatient}
+                        className={`w-full py-2 rounded-lg text-xs font-medium transition-colors ${activityCopied === p.patient_id ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                        {activityCopied === p.patient_id ? '✅ Copiado!' : '📋 Copiar resumo deste paciente'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
 
