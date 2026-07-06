@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { RelatorioUltimaSemana } from '@/components/RelatorioUltimaSemana'
 
-type Tab = 'cards' | 'itens' | 'semana' | 'inativos' | 'concluidos' | 'fotos'
+type Tab = 'cards' | 'itens' | 'semana' | 'inativos' | 'concluidos' | 'fotos' | 'resumo_paciente'
 
 interface PatientOption { id: number; name: string }
 
@@ -533,12 +533,172 @@ function ComFotos() {
   )
 }
 
+// ── Aba: Resumo do Paciente ──────────────────────────────────────────────────
+
+interface PatientActivity {
+  patient_id: number
+  patient_name: string
+  activities: {
+    type: string
+    description: string
+    detail: string | null
+    created_at: string
+    created_by: string | null
+  }[]
+}
+
+const ACTIVITY_ICONS: Record<string, string> = {
+  saida: '💊', foto: '📸', exame: '🔬', dieta: '🥗', prescricao: '📄',
+  medicao: '📏', tarefa: '✅', resumo: '📝', evolution: '📸', exam: '🔬',
+  diet: '🥗', prescription: '📄', bioimpedance: '📊',
+}
+
+function ResumoPaciente() {
+  const [useSpecific, setUseSpecific] = useState(false)
+  const [specificDate, setSpecificDate] = useState(today)
+  const [dateStart, setDateStart] = useState(firstOfMonth)
+  const [dateEnd, setDateEnd] = useState(today)
+  const [loading, setLoading] = useState(false)
+  const [data, setData] = useState<PatientActivity[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState<number | null>(null)
+  const [copied, setCopied] = useState<number | null>(null)
+
+  const start = useSpecific ? specificDate : dateStart
+  const end = useSpecific ? specificDate : dateEnd
+
+  const search = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    setData(null)
+    try {
+      const res = await fetch(`/api/reports/patient-activity?start=${start}&end=${end}`)
+      if (!res.ok) throw new Error((await res.json()).error || 'Erro')
+      setData(await res.json())
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao buscar')
+    } finally {
+      setLoading(false)
+    }
+  }, [start, end])
+
+  function copyPatient(p: PatientActivity) {
+    const lines = [
+      `Resumo — ${p.patient_name}`,
+      `Período: ${start === end ? start : `${start} a ${end}`}`,
+      '',
+      ...p.activities.map(a =>
+        `• ${a.description}${a.detail ? ` — ${a.detail}` : ''}${a.created_by ? ` (${a.created_by})` : ''} — ${new Date(a.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
+      )
+    ]
+    navigator.clipboard.writeText(lines.join('\n')).then(() => {
+      setCopied(p.patient_id)
+      setTimeout(() => setCopied(null), 2000)
+    })
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Filtros */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
+        <h2 className="text-sm font-semibold text-gray-700">Resumo de atividades por paciente</h2>
+        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+          <input type="checkbox" checked={useSpecific} onChange={e => setUseSpecific(e.target.checked)} className="accent-violet-600" />
+          Data específica
+        </label>
+        {useSpecific ? (
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-medium text-gray-500 w-10">Data</label>
+            <input type="date" value={specificDate} onChange={e => setSpecificDate(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-medium text-gray-500 w-10">Início</label>
+              <input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-medium text-gray-500 w-10">Fim</label>
+              <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            </div>
+          </div>
+        )}
+        <button onClick={search} disabled={loading}
+          className="w-full py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
+          {loading ? 'Buscando...' : '🔍 Buscar'}
+        </button>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+      </div>
+
+      {/* Resultados */}
+      {data !== null && (
+        data.length === 0 ? (
+          <div className="text-center py-10 text-gray-400 text-sm">Nenhuma atividade encontrada no período.</div>
+        ) : (
+          <div className="space-y-3">
+            {data.map(p => {
+              const isOpen = expanded === p.patient_id
+              return (
+                <div key={p.patient_id} className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+                  <button
+                    onClick={() => setExpanded(isOpen ? null : p.patient_id)}
+                    className="w-full flex items-center gap-3 px-5 py-4 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center text-violet-600 font-bold text-sm shrink-0">
+                      {p.patient_name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="text-sm font-semibold text-gray-900">{p.patient_name}</p>
+                      <p className="text-xs text-gray-400">{p.activities.length} atividade{p.activities.length !== 1 ? 's' : ''}</p>
+                    </div>
+                    <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
+                  </button>
+
+                  {isOpen && (
+                    <div className="border-t border-gray-100 px-5 pb-4 pt-3 space-y-3">
+                      {p.activities.map((a, i) => (
+                        <div key={i} className="flex items-start gap-3">
+                          <span className="text-lg mt-0.5 shrink-0">{ACTIVITY_ICONS[a.type] ?? '•'}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-gray-800">{a.description}</p>
+                            {a.detail && <p className="text-xs text-gray-400 truncate">{a.detail}</p>}
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-xs text-gray-400">
+                              {new Date(a.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                            {a.created_by && <p className="text-xs text-gray-400">{a.created_by}</p>}
+                          </div>
+                        </div>
+                      ))}
+                      <div className="pt-2 border-t border-gray-100">
+                        <button onClick={() => copyPatient(p)}
+                          className={`w-full py-2 rounded-xl text-xs font-medium transition-colors ${copied === p.patient_id ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                          {copied === p.patient_id ? '✅ Copiado!' : '📋 Copiar resumo deste paciente'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )
+      )}
+    </div>
+  )
+}
+
 // ── Componente principal ─────────────────────────────────────────────────────
 
 export function RelatoriosClient({ patients }: { patients: PatientOption[] }) {
-  const [tab, setTab] = useState<Tab>('cards')
+  const [tab, setTab] = useState<Tab>('resumo_paciente')
 
   const tabs: { key: Tab; label: string }[] = [
+    { key: 'resumo_paciente', label: '🗒️ Resumo do Paciente' },
     { key: 'cards', label: 'Cards criados' },
     { key: 'itens', label: 'Itens enviados' },
     { key: 'fotos', label: '📷 Com fotos' },
@@ -566,6 +726,7 @@ export function RelatoriosClient({ patients }: { patients: PatientOption[] }) {
         ))}
       </div>
 
+      {tab === 'resumo_paciente' && <ResumoPaciente />}
       {tab === 'cards' && <CardsCreated />}
       {tab === 'itens' && <ItensSent patients={patients} />}
       {tab === 'fotos' && <ComFotos />}

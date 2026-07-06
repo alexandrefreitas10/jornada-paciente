@@ -53,8 +53,8 @@ export async function GET(req: NextRequest) {
       ORDER BY created_at
     `,
     // Tarefas concluídas
-    sql<{ patient_id: number; task_key: string; completed_at: string; completed_by: string | null }[]>`
-      SELECT patient_id, task_key, completed_at, completed_by
+    sql<{ patient_id: number; task_key: string; completed_at: string }[]>`
+      SELECT patient_id, task_key, completed_at
       FROM task_completions
       WHERE completed_at BETWEEN ${startTs}::timestamptz AND ${endTs}::timestamptz
       ORDER BY completed_at
@@ -141,7 +141,7 @@ export async function GET(req: NextRequest) {
         description: `Tarefa concluída: ${TASK_LABEL[r.task_key] ?? r.task_key}`,
         detail: null,
         created_at: r.completed_at,
-        created_by: r.completed_by,
+        created_by: null,
       })
     })
 
