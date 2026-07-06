@@ -715,11 +715,115 @@ const STATUS_LABEL: Record<string, { label: string; color: string }> = {
   draft:  { label: 'Não enviado', color: 'bg-gray-100 text-gray-600' },
 }
 
+function PhysicalSignModal({
+  termo,
+  onClose,
+  onSigned,
+}: {
+  termo: TermoRow
+  onClose: () => void
+  onSigned: (id: number) => void
+}) {
+  const [file, setFile] = useState<File | null>(null)
+  const [signerName, setSignerName] = useState(termo.patient_name)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!file) return
+    setLoading(true)
+    setError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('signer_name', signerName)
+      const res = await fetch(`/api/patients/${termo.patient_id}/terms/${termo.id}/sign-physical`, {
+        method: 'POST',
+        body: fd,
+      })
+      if (!res.ok) throw new Error((await res.json()).error || 'Erro')
+      onSigned(termo.id)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao enviar')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4" onClick={e => e.stopPropagation()}>
+        <div>
+          <h3 className="text-base font-semibold text-gray-900">Registrar assinatura física</h3>
+          <p className="text-xs text-gray-500 mt-1 truncate">{termo.title} — {termo.patient_name}</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="text-xs font-medium text-gray-600 block mb-1">Nome de quem assinou</label>
+            <input
+              type="text"
+              value={signerName}
+              onChange={e => setSignerName(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-gray-600 block mb-1">Arquivo ou foto do termo assinado</label>
+            <input
+              ref={inputRef}
+              type="file"
+              accept="image/*,application/pdf"
+              capture="environment"
+              onChange={e => setFile(e.target.files?.[0] ?? null)}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:border-violet-400 hover:text-violet-600 transition-colors"
+            >
+              {file ? (
+                <span className="text-violet-700 font-medium">{file.name}</span>
+              ) : (
+                '📎 Selecionar arquivo ou tirar foto'
+              )}
+            </button>
+          </div>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2 border border-gray-300 text-sm text-gray-600 rounded-xl hover:bg-gray-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={!file || loading}
+              className="flex-1 py-2 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+            >
+              {loading ? 'Enviando...' : '✅ Confirmar assinatura'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 function TermosRelatorio() {
   const [filter, setFilter] = useState<TermoStatus>('todos')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<{ total: number; signed: number; sent: number; draft: number; terms: TermoRow[] } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [signModal, setSignModal] = useState<TermoRow | null>(null)
 
   async function buscar(f: TermoStatus) {
     setLoading(true)
@@ -741,6 +845,20 @@ function TermosRelatorio() {
     buscar(f)
   }
 
+  function handleSigned(id: number) {
+    setSignModal(null)
+    setResult(prev => {
+      if (!prev) return prev
+      const terms = prev.terms.map(t =>
+        t.id === id ? { ...t, status: 'signed', signed_at: new Date().toISOString(), signer_name: signModal?.patient_name ?? t.patient_name } : t
+      )
+      const signed = terms.filter(t => t.status === 'signed').length
+      const sent   = terms.filter(t => t.status === 'sent').length
+      const draft  = terms.filter(t => t.status === 'draft').length
+      return { ...prev, terms, signed, sent, draft }
+    })
+  }
+
   const filterOptions: { key: TermoStatus; label: string }[] = [
     { key: 'todos',  label: 'Todos' },
     { key: 'signed', label: '✅ Assinados' },
@@ -750,6 +868,14 @@ function TermosRelatorio() {
 
   return (
     <div className="space-y-5">
+      {signModal && (
+        <PhysicalSignModal
+          termo={signModal}
+          onClose={() => setSignModal(null)}
+          onSigned={handleSigned}
+        />
+      )}
+
       <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
         <h2 className="text-sm font-semibold text-gray-700">Relatório de termos</h2>
 
@@ -818,6 +944,14 @@ function TermosRelatorio() {
                         )}
                         {t.sent_at && t.status === 'sent' && (
                           <p className="text-xs text-amber-600 mt-0.5">Enviado em {new Date(t.sent_at).toLocaleDateString('pt-BR')}</p>
+                        )}
+                        {t.status !== 'signed' && (
+                          <button
+                            onClick={() => setSignModal(t)}
+                            className="mt-1.5 text-xs text-violet-600 hover:text-violet-800 font-medium underline underline-offset-2"
+                          >
+                            + Registrar assinatura física
+                          </button>
                         )}
                       </div>
                       <span className="text-xs text-gray-400 shrink-0 mt-0.5">
