@@ -12,7 +12,6 @@ import { DeleteButton } from './DeleteButton'
 import { EvolutionTab } from './EvolutionTab'
 import { FilesTab } from './FilesTab'
 import { ExamsTab } from './ExamsTab'
-import { EvolucaoResumoTab } from './EvolucaoResumoTab'
 import { TermsTab } from './TermsTab'
 import { MedicationsTab } from './MedicationsTab'
 import { EsteticaTab } from './EsteticaTab'
@@ -25,7 +24,7 @@ function avatarColor(name: string) {
   return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]
 }
 
-type Tab = 'tasks' | 'evolution' | 'photos' | 'bioimpedance' | 'exams' | 'diet' | 'resumo' | 'terms' | 'medications' | 'estetica'
+type Tab = 'tasks' | 'evolution' | 'photos' | 'bioimpedance' | 'exams' | 'diet' | 'terms' | 'medications' | 'estetica'
 
 interface FileRecord {
   id: number
@@ -37,28 +36,6 @@ interface FileRecord {
   created_by?: string | null
 }
 
-interface SummaryTopics {
-  objetivos_principais: string
-  tratamentos_anteriores: string
-  queixas_principais: string
-  qualidade_sono: string
-  intestino: string
-  libido: string
-  padrao_alimentar: string
-  atividade_fisica: string
-  doencas_previas_cirurgias: string
-  medicacao_suplementos: string
-}
-
-interface EvolutionSummary {
-  id: number
-  patient_id: number
-  audio_s3_key: string | null
-  audio_name: string | null
-  transcription: string
-  summary: SummaryTopics
-  created_at: string
-}
 
 interface Props {
   patient: PatientDetail
@@ -69,11 +46,10 @@ interface Props {
   initialDiets: FileRecord[]
   initialEvolutionPhotos: FileRecord[]
   initialPrescriptions: FileRecord[]
-  initialSummaries: EvolutionSummary[]
   currentUserName: string
 }
 
-export function PatientDetailClient({ patient, initialMeasurements, initialPhotos, initialBioimpedances, initialExams, initialDiets, initialEvolutionPhotos, initialPrescriptions, initialSummaries, currentUserName }: Props) {
+export function PatientDetailClient({ patient, initialMeasurements, initialPhotos, initialBioimpedances, initialExams, initialDiets, initialEvolutionPhotos, initialPrescriptions, currentUserName }: Props) {
   const [completedKeys, setCompletedKeys] = useState<string[]>(patient.completed_task_keys)
   const [editOpen, setEditOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<Tab>('tasks')
@@ -116,8 +92,7 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
     { key: 'bioimpedance', label: 'Bioimpedância' },
     { key: 'exams', label: 'Exames' },
     { key: 'diet', label: 'Dietas' },
-    { key: 'resumo', label: 'Resumo de Evolução' },
-    { key: 'terms', label: '📄 Termos' },
+{ key: 'terms', label: '📄 Termos' },
     { key: 'medications', label: '💊 Medicações' },
     { key: 'estetica', label: '✨ Estética' },
   ]
@@ -205,10 +180,7 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
         {activeTab === 'diet' && (
           <FilesTab patientId={patient.id} fileType="diet" initialFiles={initialDiets} />
         )}
-        {activeTab === 'resumo' && (
-          <EvolucaoResumoTab patientId={patient.id} initialSummaries={initialSummaries} />
-        )}
-        {activeTab === 'terms' && (
+{activeTab === 'terms' && (
           <TermsTab patientId={patient.id} />
         )}
         {activeTab === 'medications' && (
