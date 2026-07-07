@@ -37,7 +37,7 @@ export async function listStockItems(): Promise<StockItem[]> {
         SUM(CASE WHEN m.type = 'entrada' THEN m.quantity ELSE 0 END) -
         SUM(CASE WHEN m.type = 'saida'   THEN m.quantity ELSE 0 END),
         0
-      )::int AS quantity,
+      ) AS quantity,
       (SELECT lot FROM stock_movements WHERE item_id = i.id AND type = 'entrada' ORDER BY created_at DESC LIMIT 1) AS lot,
       (SELECT expiry_date FROM stock_movements WHERE item_id = i.id AND type = 'entrada' ORDER BY created_at DESC LIMIT 1) AS expiry_date
     FROM stock_items i
@@ -63,7 +63,7 @@ export async function getStockItem(id: number): Promise<StockItem | null> {
         SUM(CASE WHEN m.type = 'entrada' THEN m.quantity ELSE 0 END) -
         SUM(CASE WHEN m.type = 'saida'   THEN m.quantity ELSE 0 END),
         0
-      )::int AS quantity
+      ) AS quantity
     FROM stock_items i
     LEFT JOIN stock_movements m ON m.item_id = i.id
     WHERE i.id = ${id}
