@@ -55,6 +55,7 @@ export default function ImplantesClient({ patients }: Props) {
   const [stockItems, setStockItems] = useState<StockItem[]>([])
   const [selectedStock, setSelectedStock] = useState<SelectedStock[]>([])
   const [registerSaida, setRegisterSaida] = useState(true)
+  const [stockSearch, setStockSearch] = useState('')
 
   useEffect(() => {
     fetch('/api/implants')
@@ -239,39 +240,64 @@ export default function ImplantesClient({ patients }: Props) {
               />
             </div>
 
-            {/* Itens do estoque usados */}
+            {/* Itens do estoque usados — apenas com "implante" no nome */}
             <div>
               <label className="text-xs font-medium text-gray-600 block mb-2">Implantes utilizados (do estoque)</label>
-              {stockItems.length === 0 ? (
-                <p className="text-xs text-gray-400">Nenhum item disponível no estoque.</p>
-              ) : (
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                  {stockItems.map(item => {
-                    const sel = selectedStock.find(s => s.item.id === item.id)
-                    return (
-                      <div key={item.id} className={`flex items-center gap-3 p-2.5 rounded-xl border cursor-pointer transition-colors ${sel ? 'border-violet-400 bg-violet-50' : 'border-gray-200 hover:border-gray-300'}`}
-                        onClick={() => toggleStockItem(item)}>
-                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${sel ? 'bg-violet-600 border-violet-600' : 'border-gray-300'}`}>
-                          {sel && <span className="text-white text-xs leading-none">✓</span>}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-gray-800 truncate">{item.name}</p>
-                          {item.lot && <p className="text-xs text-gray-400">Lote: {item.lot} · Estoque: {item.quantity} {item.unit}</p>}
-                        </div>
-                        {sel && (
-                          <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
-                            <button type="button" onClick={() => updateStockQty(item.id, sel.quantity - 1)}
-                              className="w-6 h-6 rounded-full border border-gray-300 text-gray-500 text-sm flex items-center justify-center hover:border-violet-400">−</button>
-                            <span className="w-6 text-center text-sm font-bold text-gray-700">{sel.quantity}</span>
-                            <button type="button" onClick={() => updateStockQty(item.id, sel.quantity + 1)}
-                              className="w-6 h-6 rounded-full border border-gray-300 text-gray-500 text-sm flex items-center justify-center hover:border-violet-400">+</button>
+
+              {/* Lupa de busca */}
+              <div className="relative mb-2">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+                <input
+                  type="text"
+                  value={stockSearch}
+                  onChange={e => setStockSearch(e.target.value)}
+                  placeholder="Buscar implante..."
+                  className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                />
+              </div>
+
+              {(() => {
+                const implantItems = stockItems
+                  .filter(i => i.name.toLowerCase().includes('implante'))
+                  .filter(i => stockSearch === '' || i.name.toLowerCase().includes(stockSearch.toLowerCase()))
+
+                if (stockItems.length === 0) return <p className="text-xs text-gray-400">Carregando estoque...</p>
+                if (implantItems.length === 0) return <p className="text-xs text-gray-400">Nenhum implante encontrado no estoque.</p>
+
+                return (
+                  <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                    {implantItems.map(item => {
+                      const sel = selectedStock.find(s => s.item.id === item.id)
+                      return (
+                        <div key={item.id}
+                          className={`flex items-center gap-3 p-2.5 rounded-xl border cursor-pointer transition-colors ${sel ? 'border-violet-400 bg-violet-50' : 'border-gray-200 hover:border-gray-300'}`}
+                          onClick={() => toggleStockItem(item)}>
+                          <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${sel ? 'bg-violet-600 border-violet-600' : 'border-gray-300'}`}>
+                            {sel && <span className="text-white text-xs leading-none">✓</span>}
                           </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-gray-800 truncate">{item.name}</p>
+                            <p className="text-xs text-gray-400">
+                              {item.lot ? `Lote: ${item.lot}` : 'Sem lote'}
+                              {item.expiry_date ? ` · Val: ${item.expiry_date}` : ''}
+                              {` · Estoque: ${item.quantity} ${item.unit}`}
+                            </p>
+                          </div>
+                          {sel && (
+                            <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+                              <button type="button" onClick={() => updateStockQty(item.id, sel.quantity - 1)}
+                                className="w-6 h-6 rounded-full border border-gray-300 text-gray-500 text-sm flex items-center justify-center hover:border-violet-400">−</button>
+                              <span className="w-6 text-center text-sm font-bold text-gray-700">{sel.quantity}</span>
+                              <button type="button" onClick={() => updateStockQty(item.id, sel.quantity + 1)}
+                                className="w-6 h-6 rounded-full border border-gray-300 text-gray-500 text-sm flex items-center justify-center hover:border-violet-400">+</button>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
             </div>
 
             {/* Opção de dar saída */}
