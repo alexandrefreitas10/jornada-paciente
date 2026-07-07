@@ -131,7 +131,8 @@ export async function listMovementsByPatient(patientId: number): Promise<StockMo
 
   // Converte implantes para o mesmo formato de StockMovement
   const implantRows: StockMovement[] = implants.flatMap(imp => {
-    const items = imp.items_used && imp.items_used.length > 0 ? imp.items_used : [{ name: 'Implante hormonal', quantity: 1, unit: 'un' }]
+    const rawItems = typeof imp.items_used === 'string' ? JSON.parse(imp.items_used) : imp.items_used
+    const items = Array.isArray(rawItems) && rawItems.length > 0 ? rawItems : [{ name: 'Implante hormonal', quantity: 1, unit: 'un' }]
     return items.map((item, idx) => ({
       id: -(imp.id * 100 + idx),
       item_id: 0,

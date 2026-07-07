@@ -63,7 +63,15 @@ export default function ImplantesClient({ patients }: Props) {
   useEffect(() => {
     fetch('/api/implants')
       .then(r => r.json())
-      .then(data => { if (Array.isArray(data)) setImplants(data) })
+      .then(data => {
+        if (Array.isArray(data)) {
+          setImplants(data.map(imp => ({
+            ...imp,
+            items_used: Array.isArray(imp.items_used) ? imp.items_used
+              : (typeof imp.items_used === 'string' ? JSON.parse(imp.items_used) : [])
+          })))
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
@@ -417,7 +425,7 @@ export default function ImplantesClient({ patients }: Props) {
                     </div>
                   </div>
 
-                  {implant.items_used && implant.items_used.length > 0 && (
+                  {Array.isArray(implant.items_used) && implant.items_used.length > 0 && (
                     <div className="mt-2 pt-2 border-t border-gray-100">
                       <p className="text-xs text-gray-400 mb-1">Itens utilizados:</p>
                       <div className="flex flex-wrap gap-1.5">
