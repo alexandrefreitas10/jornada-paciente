@@ -64,7 +64,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
   const [tirzModal, setTirzModal] = useState<{ dose: number } | null>(null)
   const [tirzStock, setTirzStock] = useState<StockItem[]>([])
   const [tirzSelectedItem, setTirzSelectedItem] = useState<StockItem | null>(null)
-  const [tirzQty, setTirzQty] = useState(1)
+  const [tirzQty, setTirzQty] = useState<number | string>(1)
   const [tirzSaving, setTirzSaving] = useState(false)
   const [tirzError, setTirzError] = useState<string | null>(null)
 
@@ -266,6 +266,8 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
 
   async function handleTirzConfirm() {
     if (!tirzSelectedItem || !tirzModal) return
+    const qty = Number(tirzQty)
+    if (!qty || qty <= 0) { setTirzError('Informe uma quantidade válida'); return }
     setTirzSaving(true)
     setTirzError(null)
     try {
@@ -275,7 +277,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
         body: JSON.stringify({
           item_id: tirzSelectedItem.id,
           type: 'saida',
-          quantity: tirzQty,
+          quantity: qty,
           lot: tirzSelectedItem.lot ?? null,
           patient_id: patientId,
           observation: `Tirzepartida ${tirzModal.dose}mg`,
@@ -459,14 +461,17 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
             </div>
 
             <div>
-              <label className="text-xs font-medium text-gray-600 block mb-1">Quantidade (frascos/unidades)</label>
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setTirzQty(q => Math.max(1, q - 1))}
-                  className="w-8 h-8 rounded-full border border-gray-300 text-gray-600 flex items-center justify-center hover:border-violet-400">−</button>
-                <span className="w-10 text-center font-bold text-gray-800">{tirzQty}</span>
-                <button type="button" onClick={() => setTirzQty(q => q + 1)}
-                  className="w-8 h-8 rounded-full border border-gray-300 text-gray-600 flex items-center justify-center hover:border-violet-400">+</button>
-              </div>
+              <label className="text-xs font-medium text-gray-600 block mb-1">Quantidade usada (mg ou frascos)</label>
+              <input
+                type="number"
+                min="0.1"
+                step="0.1"
+                value={tirzQty}
+                onChange={e => setTirzQty(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                placeholder="Ex: 2.5"
+              />
+              <p className="text-xs text-gray-400 mt-1">Use ponto ou vírgula para decimais (ex: 2.5 ou 6.2)</p>
             </div>
 
             {tirzError && <p className="text-sm text-red-600">{tirzError}</p>}
