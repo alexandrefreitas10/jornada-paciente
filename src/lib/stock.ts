@@ -162,12 +162,25 @@ export async function adjustStockQuantity(
 ): Promise<void> {
   await initSchema()
   const diff = targetQty - currentQty
-  if (diff === 0) return
-  const type = diff > 0 ? 'entrada' : 'saida'
-  await sql`
-    INSERT INTO stock_movements (item_id, type, quantity, lot, expiry_date, observation, created_by)
-    VALUES (${itemId}, ${type}, ${Math.abs(diff)}, ${lot}, ${expiryDate}, ${'Ajuste manual'}, ${createdBy})
-  `
+  if (diff !== 0) {
+    const type = diff > 0 ? 'entrada' : 'saida'
+    await sql`
+      INSERT INTO stock_movements (item_id, type, quantity, lot, expiry_date, observation, created_by)
+      VALUES (${itemId}, ${type}, ${Math.abs(diff)}, ${lot}, ${expiryDate}, ${'Ajuste manual'}, ${createdBy})
+    `
+  } else {
+    // Quantidade não mudou: atualiza lote/validade direto na última entrada
+    await sql`
+      UPDATE stock_movements
+      SET lot = ${lot}, expiry_date = ${expiryDate}
+      WHERE id = (
+        SELECT id FROM stock_movements
+        WHERE item_id = ${itemId} AND type = 'entrada'
+        ORDER BY created_at DESC
+        LIMIT 1
+      )
+    `
+  }
 }
 
 export async function updateMovement(
