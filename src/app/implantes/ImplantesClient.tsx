@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react'
 interface Patient { id: number; name: string }
 interface StockItem { id: number; name: string; unit: string; quantity: number; lot: string | null; expiry_date: string | null }
 
-interface ImplantItem { name: string; quantity: number; unit: string }
+interface ImplantItem { name: string; quantity: number; unit: string; lot?: string | null; expiry_date?: string | null }
 
 interface Implant {
   id: number
@@ -116,7 +116,7 @@ export default function ImplantesClient({ patients }: Props) {
 
       // 1. Cria o card de implante
       const itemsUsed = registerSaida && selectedStock.length > 0
-        ? selectedStock.map(s => ({ name: s.item.name, quantity: s.quantity, unit: s.item.unit }))
+        ? selectedStock.map(s => ({ name: s.item.name, quantity: s.quantity, unit: s.item.unit, lot: s.item.lot ?? null, expiry_date: s.item.expiry_date ?? null }))
         : []
 
       const res = await fetch('/api/implants', {
@@ -182,7 +182,7 @@ export default function ImplantesClient({ patients }: Props) {
     setRenewError(null)
     try {
       const itemsUsed = renewSaida && renewStock.length > 0
-        ? renewStock.map(s => ({ name: s.item.name, quantity: s.quantity, unit: s.item.unit }))
+        ? renewStock.map(s => ({ name: s.item.name, quantity: s.quantity, unit: s.item.unit, lot: s.item.lot ?? null, expiry_date: s.item.expiry_date ?? null }))
         : []
 
       // Cria novo registro (preserva histórico)
@@ -500,8 +500,10 @@ export default function ImplantesClient({ patients }: Props) {
                       <p className="text-xs text-gray-400 mb-1">Itens utilizados:</p>
                       <div className="flex flex-wrap gap-1.5">
                         {implant.items_used.map((item, i) => (
-                          <span key={i} className="text-xs bg-violet-50 text-violet-700 border border-violet-200 rounded-full px-2 py-0.5">
+                          <span key={i} className="text-xs bg-violet-50 text-violet-700 border border-violet-200 rounded-lg px-2 py-0.5 leading-relaxed">
                             {item.name} × {item.quantity} {item.unit}
+                            {item.lot && <span className="text-violet-400"> · Lote: {item.lot}</span>}
+                            {item.expiry_date && <span className="text-violet-400"> · Val: {item.expiry_date}</span>}
                           </span>
                         ))}
                       </div>
@@ -551,7 +553,15 @@ export default function ImplantesClient({ patients }: Props) {
                                 <div>
                                   <p className="font-medium text-gray-700">{fmtDate(h.last_implant_date)}</p>
                                   {Array.isArray(h.items_used) && h.items_used.length > 0 && (
-                                    <p className="text-gray-400 mt-0.5">{h.items_used.map(it => `${it.name} ×${it.quantity}`).join(', ')}</p>
+                                    <div className="mt-1 space-y-0.5">
+                                      {h.items_used.map((it, idx) => (
+                                        <p key={idx} className="text-gray-400">
+                                          {it.name} ×{it.quantity}
+                                          {it.lot && <span> · Lote: {it.lot}</span>}
+                                          {it.expiry_date && <span> · Val: {it.expiry_date}</span>}
+                                        </p>
+                                      ))}
+                                    </div>
                                   )}
                                   {h.notes && <p className="text-gray-400 italic mt-0.5">{h.notes}</p>}
                                 </div>
