@@ -28,10 +28,6 @@ export async function GET(
     WHERE m.type = 'entrada'
       AND m.created_at BETWEEN ${log.created_at}::timestamptz - INTERVAL '10 minutes'
                             AND ${log.created_at}::timestamptz + INTERVAL '2 minutes'
-      AND (
-        ${log.created_by ?? null} IS NULL
-        OR m.created_by = ${log.created_by ?? null}
-      )
     ORDER BY m.created_at, m.id
   `
 
