@@ -351,28 +351,29 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
       const [imgA, imgB, logoImg] = await Promise.all([
         loadFromApi(a.id), loadFromApi(b.id), loadFromUrl('/logo-it.png'),
       ])
-      const GAP = 20; const LABEL_H = 80; const PADDING = 40; const LOGO_H = 300; const LOGO_GAP = 16
+      const GAP = 16; const LABEL_H = 60; const PADDING = 24; const LOGO_H = 80; const LOGO_GAP = 12
       const effWA = imgA.naturalWidth * cA.w; const effHA = imgA.naturalHeight * cA.h
       const effWB = imgB.naturalWidth * cB.w; const effHB = imgB.naturalHeight * cB.h
       const maxH = Math.max(effHA, effHB)
       const wA = effWA * (maxH / effHA); const wB = effWB * (maxH / effHB)
       const totalW = wA + wB + GAP + PADDING * 2
       const logoW = logoImg.naturalWidth * (LOGO_H / logoImg.naturalHeight)
-      const totalH = LOGO_H + LOGO_GAP + LABEL_H + maxH + PADDING * 2 + 24
+      const totalH = PADDING + LOGO_H + LOGO_GAP + LABEL_H + maxH + 50 + PADDING
       const canvas = document.createElement('canvas')
       canvas.width = totalW; canvas.height = totalH
       const ctx = canvas.getContext('2d')!
       ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, totalW, totalH)
-      ctx.drawImage(logoImg, (totalW - logoW) / 2, PADDING, logoW, LOGO_H)
+      // Logo pequena no canto superior direito
+      ctx.drawImage(logoImg, totalW - logoW - PADDING, PADDING, logoW, LOGO_H)
       const contentTop = PADDING + LOGO_H + LOGO_GAP
-      ctx.fillStyle = '#374151'; ctx.font = 'bold 48px sans-serif'; ctx.textAlign = 'center'
-      ctx.fillText('ANTES', PADDING + wA / 2, contentTop + 56)
-      ctx.fillText('DEPOIS', PADDING + wA + GAP + wB / 2, contentTop + 56)
+      ctx.fillStyle = '#374151'; ctx.font = 'bold 40px sans-serif'; ctx.textAlign = 'center'
+      ctx.fillText('ANTES', PADDING + wA / 2, contentTop + 44)
+      ctx.fillText('DEPOIS', PADDING + wA + GAP + wB / 2, contentTop + 44)
       ctx.drawImage(imgA, cA.x*imgA.naturalWidth, cA.y*imgA.naturalHeight, effWA, effHA, PADDING, contentTop+LABEL_H, wA, maxH)
       ctx.drawImage(imgB, cB.x*imgB.naturalWidth, cB.y*imgB.naturalHeight, effWB, effHB, PADDING+wA+GAP, contentTop+LABEL_H, wB, maxH)
-      ctx.fillStyle = '#374151'; ctx.font = 'bold 36px sans-serif'
-      ctx.fillText(fmtDate(a.created_at), PADDING+wA/2, contentTop+LABEL_H+maxH+50)
-      ctx.fillText(fmtDate(b.created_at), PADDING+wA+GAP+wB/2, contentTop+LABEL_H+maxH+50)
+      ctx.fillStyle = '#6b7280'; ctx.font = '28px sans-serif'
+      ctx.fillText(fmtDate(a.created_at), PADDING+wA/2, contentTop+LABEL_H+maxH+40)
+      ctx.fillText(fmtDate(b.created_at), PADDING+wA+GAP+wB/2, contentTop+LABEL_H+maxH+40)
       canvas.toBlob(blob => {
         if (!blob) return
         const url = URL.createObjectURL(blob)
