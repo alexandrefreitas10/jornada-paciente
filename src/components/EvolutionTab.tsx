@@ -282,7 +282,8 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
   async function handleTirzConfirm() {
     if (!tirzSelectedItem || !tirzModal) return
     const doseValue = tirzModal.dose ?? Number(tirzManualDose)
-    const qty = Number(tirzQty)
+    // no modo manual, a dose digitada já é a quantidade a debitar
+    const qty = tirzModal.dose !== null ? Number(tirzQty) : Number(tirzManualDose)
     if (!qty || qty <= 0) { setTirzError('Informe uma quantidade válida'); return }
     setTirzSaving(true)
     setTirzError(null)
@@ -507,19 +508,21 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
               </select>
             </div>
 
-            <div>
-              <label className="text-xs font-medium text-gray-600 block mb-1">Quantidade usada (mg ou frascos)</label>
-              <input
-                type="number"
-                min="0.1"
-                step="0.1"
-                value={tirzQty}
-                onChange={e => setTirzQty(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
-                placeholder="Ex: 2.5"
-              />
-              <p className="text-xs text-gray-400 mt-1">Use ponto ou vírgula para decimais (ex: 2.5 ou 6.2)</p>
-            </div>
+            {tirzModal.dose !== null && (
+              <div>
+                <label className="text-xs font-medium text-gray-600 block mb-1">Quantidade usada (mg ou frascos)</label>
+                <input
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  value={tirzQty}
+                  onChange={e => setTirzQty(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                  placeholder="Ex: 2.5"
+                />
+                <p className="text-xs text-gray-400 mt-1">Use ponto ou vírgula para decimais (ex: 2.5 ou 6.2)</p>
+              </div>
+            )}
 
             {tirzError && <p className="text-sm text-red-600">{tirzError}</p>}
 
