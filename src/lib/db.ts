@@ -195,7 +195,7 @@ export async function initSchema() {
       id SERIAL PRIMARY KEY,
       item_id INTEGER NOT NULL REFERENCES stock_items(id) ON DELETE CASCADE,
       type TEXT NOT NULL,
-      quantity INTEGER NOT NULL,
+      quantity NUMERIC NOT NULL,
       lot TEXT,
       expiry_date TEXT,
       patient_id INTEGER,
@@ -207,6 +207,7 @@ export async function initSchema() {
     )
   `).catch(() => {})
   await sql.unsafe(`ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS patient_id INTEGER`).catch(() => {})
+  await sql.unsafe(`ALTER TABLE stock_movements ALTER COLUMN quantity TYPE NUMERIC USING quantity::numeric`).catch(() => {})
 
   // Log de entradas de estoque (NF, importação, manual)
   await sql.unsafe(`
