@@ -61,12 +61,13 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
   const [reportCopied, setReportCopied] = useState(false)
 
   // modal confirmação saída Tirzepartida
-  const [tirzModal, setTirzModal] = useState<{ dose: number } | null>(null)
+  const [tirzModal, setTirzModal] = useState<{ dose: number | null } | null>(null)
   const [tirzStock, setTirzStock] = useState<StockItem[]>([])
   const [tirzSelectedItem, setTirzSelectedItem] = useState<StockItem | null>(null)
   const [tirzQty, setTirzQty] = useState<number | string>(1)
   const [tirzSaving, setTirzSaving] = useState(false)
   const [tirzError, setTirzError] = useState<string | null>(null)
+  const [tirzManualDose, setTirzManualDose] = useState('')
 
   async function fetchReport() {
     setReportLoading(true)
@@ -264,8 +265,23 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
     }
   }
 
+  async function openTirzManual() {
+    setTirzManualDose('')
+    setTirzQty(1)
+    setTirzError(null)
+    const stockRes = await fetch('/api/estoque/items')
+    if (stockRes.ok) {
+      const allItems: StockItem[] = await stockRes.json()
+      const tirzItems = allItems.filter(i => i.name.toLowerCase().includes('tirzep'))
+      setTirzStock(tirzItems)
+      setTirzSelectedItem(tirzItems[0] ?? null)
+    }
+    setTirzModal({ dose: null })
+  }
+
   async function handleTirzConfirm() {
     if (!tirzSelectedItem || !tirzModal) return
+    const doseValue = tirzModal.dose ?? Number(tirzManualDose)
     const qty = Number(tirzQty)
     if (!qty || qty <= 0) { setTirzError('Informe uma quantidade válida'); return }
     setTirzSaving(true)
@@ -280,10 +296,14 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
           quantity: qty,
           lot: tirzSelectedItem.lot ?? null,
           patient_id: patientId,
-          observation: `Tirzepartida ${tirzModal.dose}mg`,
+          observation: `Tirzepartida ${doseValue}mg`,
         }),
       })
-      if (!res.ok) throw new Error((await res.json()).error || 'Erro')
+      if (!res.ok) {
+        let msg = 'Erro ao registrar saída'
+        try { msg = (await res.json()).error || msg } catch {}
+        throw new Error(msg)
+      }
       setTirzModal(null)
     } catch (err) {
       setTirzError(err instanceof Error ? err.message : 'Erro')
@@ -396,6 +416,14 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
           {reportLoading ? 'Gerando...' : '📝 Prontuário'}
         </button>
 
+        {/* Saída manual Tirzepartida */}
+        <button
+          onClick={openTirzManual}
+          className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white text-sm font-medium rounded-lg hover:bg-amber-600 transition-colors"
+        >
+          💉 Saída Tirzepartida
+        </button>
+
         {uploadError && <p className="text-sm text-red-600">{uploadError}</p>}
         {prescriptionError && <p className="text-sm text-red-600">{prescriptionError}</p>}
       </div>
@@ -436,11 +464,30 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4">
             <div>
-              <h3 className="font-bold text-gray-800 text-lg">💉 Confirmar saída — Tirzepartida</h3>
-              <p className="text-sm text-gray-500 mt-1">
-                Dose detectada na tabela: <span className="font-semibold text-violet-700">{tirzModal.dose}mg</span>
-              </p>
+              <h3 className="font-bold text-gray-800 text-lg">💉 Saída — Tirzepartida</h3>
+              {tirzModal.dose !== null ? (
+                <p className="text-sm text-gray-500 mt-1">
+                  Dose detectada na tabela: <span className="font-semibold text-violet-700">{tirzModal.dose}mg</span>
+                </p>
+              ) : (
+                <p className="text-sm text-gray-500 mt-1">Registrar saída manual do estoque</p>
+              )}
             </div>
+
+            {tirzModal.dose === null && (
+              <div>
+                <label className="text-xs font-medium text-gray-600 block mb-1">Dose aplicada (mg)</label>
+                <input
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  value={tirzManualDose}
+                  onChange={e => setTirzManualDose(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  placeholder="Ex: 2.5"
+                />
+              </div>
+            )}
 
             <div>
               <label className="text-xs font-medium text-gray-600 block mb-1">Ativo no estoque</label>
@@ -481,7 +528,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
                 className="flex-1 py-2.5 border border-gray-300 text-gray-600 rounded-xl text-sm hover:bg-gray-50">
                 Pular
               </button>
-              <button onClick={handleTirzConfirm} disabled={tirzSaving || !tirzSelectedItem}
+              <button onClick={handleTirzConfirm} disabled={tirzSaving || !tirzSelectedItem || (tirzModal.dose === null && !tirzManualDose)}
                 className="flex-1 py-2.5 bg-violet-600 text-white text-sm font-semibold rounded-xl hover:bg-violet-700 disabled:opacity-50">
                 {tirzSaving ? 'Registrando...' : '✅ Confirmar saída'}
               </button>
