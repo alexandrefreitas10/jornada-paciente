@@ -828,11 +828,13 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
                       if (!canExpand) return
                       if (isExpanded) { setExpandedLogId(null); return }
                       setExpandedLogId(log.id)
-                      if (!logDetails[log.id]) {
-                        const res = await fetch(`/api/estoque/entry-logs/${log.id}`)
-                        if (res.ok) {
-                          const data = await res.json()
-                          setLogDetails(prev => ({ ...prev, [log.id]: data.movements }))
+                      if (logDetails[log.id] === undefined) {
+                        try {
+                          const res = await fetch(`/api/estoque/entry-logs/${log.id}`)
+                          const data = res.ok ? await res.json() : { movements: [] }
+                          setLogDetails(prev => ({ ...prev, [log.id]: data.movements ?? [] }))
+                        } catch {
+                          setLogDetails(prev => ({ ...prev, [log.id]: [] }))
                         }
                       }
                     }

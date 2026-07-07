@@ -5,6 +5,8 @@ import { useState, useEffect } from 'react'
 interface Patient { id: number; name: string }
 interface StockItem { id: number; name: string; unit: string; quantity: number; lot: string | null; expiry_date: string | null }
 
+interface ImplantItem { name: string; quantity: number; unit: string }
+
 interface Implant {
   id: number
   patient_id: number | null
@@ -13,6 +15,7 @@ interface Implant {
   next_implant_date: string
   days_until: number
   notes: string | null
+  items_used: ImplantItem[]
   created_at: string
 }
 
@@ -94,6 +97,10 @@ export default function ImplantesClient({ patients }: Props) {
       const name = selectedPatient?.name ?? formPatientName
 
       // 1. Cria o card de implante
+      const itemsUsed = registerSaida && selectedStock.length > 0
+        ? selectedStock.map(s => ({ name: s.item.name, quantity: s.quantity, unit: s.item.unit }))
+        : []
+
       const res = await fetch('/api/implants', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -102,6 +109,7 @@ export default function ImplantesClient({ patients }: Props) {
           patient_name: name,
           last_implant_date: formDate,
           notes: formNotes || null,
+          items_used: itemsUsed,
         }),
       })
       if (!res.ok) throw new Error((await res.json()).error || 'Erro')
@@ -407,6 +415,19 @@ export default function ImplantesClient({ patients }: Props) {
                       </p>
                     </div>
                   </div>
+
+                  {implant.items_used && implant.items_used.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-gray-100">
+                      <p className="text-xs text-gray-400 mb-1">Itens utilizados:</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {implant.items_used.map((item, i) => (
+                          <span key={i} className="text-xs bg-violet-50 text-violet-700 border border-violet-200 rounded-full px-2 py-0.5">
+                            {item.name} × {item.quantity} {item.unit}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="mt-3 flex gap-2 flex-wrap">
                     <button

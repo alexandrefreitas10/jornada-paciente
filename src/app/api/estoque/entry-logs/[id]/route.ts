@@ -26,8 +26,8 @@ export async function GET(
     FROM stock_movements m
     JOIN stock_items i ON i.id = m.item_id
     WHERE m.type = 'entrada'
-      AND m.created_at BETWEEN ${log.created_at}::timestamptz - INTERVAL '5 seconds'
-                            AND ${log.created_at}::timestamptz + INTERVAL '60 seconds'
+      AND m.created_at BETWEEN ${log.created_at}::timestamptz - INTERVAL '10 minutes'
+                            AND ${log.created_at}::timestamptz + INTERVAL '2 minutes'
       AND (
         ${log.created_by ?? null} IS NULL
         OR m.created_by = ${log.created_by ?? null}

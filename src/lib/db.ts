@@ -229,9 +229,15 @@ export async function initSchema() {
       patient_name TEXT NOT NULL,
       last_implant_date DATE NOT NULL,
       notes TEXT,
+      items_used JSONB DEFAULT '[]',
       created_by TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
+  `).catch(() => {})
+
+  // Adicionar coluna items_used se não existir (para tabelas já criadas)
+  await sql.unsafe(`
+    ALTER TABLE implants ADD COLUMN IF NOT EXISTS items_used JSONB DEFAULT '[]'
   `).catch(() => {})
 }
 
