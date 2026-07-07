@@ -241,6 +241,33 @@ export async function initSchema() {
   await sql.unsafe(`
     ALTER TABLE implants ADD COLUMN IF NOT EXISTS items_used JSONB DEFAULT '[]'
   `).catch(() => {})
+
+  // Estética: procedimentos estéticos
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS aesthetic_sessions (
+      id SERIAL PRIMARY KEY,
+      patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      procedure_name TEXT NOT NULL,
+      total_sessions INTEGER NOT NULL DEFAULT 1,
+      sessions_per_week INTEGER NOT NULL DEFAULT 1,
+      start_date DATE NOT NULL,
+      end_date DATE NOT NULL,
+      region TEXT,
+      created_by TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(() => {})
+
+  // Estética: sessões concluídas
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS aesthetic_session_completions (
+      id SERIAL PRIMARY KEY,
+      aesthetic_session_id INTEGER NOT NULL REFERENCES aesthetic_sessions(id) ON DELETE CASCADE,
+      session_number INTEGER NOT NULL,
+      completed_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(aesthetic_session_id, session_number)
+    )
+  `).catch(() => {})
 }
 
 export default sql

@@ -15,6 +15,7 @@ import { ExamsTab } from './ExamsTab'
 import { EvolucaoResumoTab } from './EvolucaoResumoTab'
 import { TermsTab } from './TermsTab'
 import { MedicationsTab } from './MedicationsTab'
+import { EsteticaTab } from './EsteticaTab'
 
 const AVATAR_COLORS = [
   'bg-violet-500', 'bg-blue-500', 'bg-emerald-500',
@@ -24,7 +25,7 @@ function avatarColor(name: string) {
   return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]
 }
 
-type Tab = 'tasks' | 'evolution' | 'photos' | 'bioimpedance' | 'exams' | 'diet' | 'resumo' | 'terms' | 'medications'
+type Tab = 'tasks' | 'evolution' | 'photos' | 'bioimpedance' | 'exams' | 'diet' | 'resumo' | 'terms' | 'medications' | 'estetica'
 
 interface FileRecord {
   id: number
@@ -118,6 +119,7 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
     { key: 'resumo', label: 'Resumo de Evolução' },
     { key: 'terms', label: '📄 Termos' },
     { key: 'medications', label: '💊 Medicações' },
+    { key: 'estetica', label: '✨ Estética' },
   ]
 
   return (
@@ -211,6 +213,9 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
         )}
         {activeTab === 'medications' && (
           <MedicationsTab patientId={patient.id} patientName={patient.name} />
+        )}
+        {activeTab === 'estetica' && (
+          <EsteticaTab patientId={patient.id} />
         )}
       </div>
 
