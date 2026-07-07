@@ -42,9 +42,18 @@ export default function ImplantesClient({ patients }: Props) {
   const [implants, setImplants] = useState<Implant[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [renewingId, setRenewingId] = useState<number | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [filter, setFilter] = useState<'todos' | 'atrasado' | 'em_breve' | 'ok'>('todos')
+  const [expandedHistory, setExpandedHistory] = useState<Set<string>>(new Set())
+
+  // modal renovação
+  const [renewTarget, setRenewTarget] = useState<Implant | null>(null)
+  const [renewDate, setRenewDate] = useState(today())
+  const [renewStock, setRenewStock] = useState<SelectedStock[]>([])
+  const [renewSearch, setRenewSearch] = useState('')
+  const [renewSaida, setRenewSaida] = useState(true)
+  const [renewLoading, setRenewLoading] = useState(false)
+  const [renewError, setRenewError] = useState<string | null>(null)
 
   // form state
   const [formPatientId, setFormPatientId] = useState<string>('')
@@ -76,14 +85,14 @@ export default function ImplantesClient({ patients }: Props) {
       .finally(() => setLoading(false))
   }, [])
 
-  // Carrega itens do estoque ao abrir o form
+  // Carrega itens do estoque ao abrir o form ou modal de renovação
   useEffect(() => {
-    if (!showForm) return
+    if (!showForm && !renewTarget) return
     fetch('/api/estoque/items')
       .then(r => r.json())
       .then((items: StockItem[]) => setStockItems(items))
       .catch(() => {})
-  }, [showForm])
+  }, [showForm, renewTarget])
 
   function toggleStockItem(item: StockItem) {
     setSelectedStock(prev => {
@@ -157,19 +166,67 @@ export default function ImplantesClient({ patients }: Props) {
     }
   }
 
-  async function handleRenew(implant: Implant) {
-    setRenewingId(implant.id)
+  function openRenew(implant: Implant) {
+    setRenewTarget(implant)
+    setRenewDate(today())
+    setRenewStock([])
+    setRenewSearch('')
+    setRenewSaida(true)
+    setRenewError(null)
+  }
+
+  async function handleRenewSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!renewTarget) return
+    setRenewLoading(true)
+    setRenewError(null)
     try {
-      const res = await fetch(`/api/implants/${implant.id}`, {
-        method: 'PATCH',
+      const itemsUsed = renewSaida && renewStock.length > 0
+        ? renewStock.map(s => ({ name: s.item.name, quantity: s.quantity, unit: s.item.unit }))
+        : []
+
+      // Cria novo registro (preserva histórico)
+      const res = await fetch('/api/implants', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ last_implant_date: today() }),
+        body: JSON.stringify({
+          patient_id: renewTarget.patient_id,
+          patient_name: renewTarget.patient_name,
+          last_implant_date: renewDate,
+          notes: renewTarget.notes,
+          items_used: itemsUsed,
+        }),
       })
-      if (!res.ok) throw new Error()
-      const updated: Implant = await res.json()
-      setImplants(prev => prev.map(i => i.id === implant.id ? updated : i).sort((a, b) => a.days_until - b.days_until))
+      if (!res.ok) throw new Error((await res.json()).error || 'Erro')
+      const newImplant: Implant = await res.json()
+      newImplant.items_used = Array.isArray(newImplant.items_used) ? newImplant.items_used
+        : (typeof newImplant.items_used === 'string' ? JSON.parse(newImplant.items_used) : [])
+
+      // Registra saídas no estoque
+      if (renewSaida && renewStock.length > 0) {
+        await Promise.all(renewStock.map(s =>
+          fetch('/api/estoque/movements', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              item_id: s.item.id,
+              type: 'saida',
+              quantity: s.quantity,
+              lot: s.item.lot ?? null,
+              patient_id: renewTarget.patient_id,
+              patient_name: renewTarget.patient_name,
+              observation: 'Implante hormonal',
+            }),
+          })
+        ))
+      }
+
+      setImplants(prev => [...prev, newImplant].sort((a, b) => a.days_until - b.days_until))
+      setRenewTarget(null)
+    } catch (err) {
+      setRenewError(err instanceof Error ? err.message : 'Erro')
     } finally {
-      setRenewingId(null)
+      setRenewLoading(false)
     }
   }
 
@@ -184,16 +241,29 @@ export default function ImplantesClient({ patients }: Props) {
     }
   }
 
-  const filtered = implants.filter(i => {
+  // Agrupa por paciente — mostra o mais recente (menor days_until) como ativo
+  const grouped = implants.reduce((acc, imp) => {
+    const key = String(imp.patient_id ?? imp.patient_name)
+    if (!acc[key]) acc[key] = []
+    acc[key].push(imp)
+    return acc
+  }, {} as Record<string, Implant[]>)
+
+  // Pega o implante mais recente de cada grupo (menor days_until = próxima data mais próxima)
+  const latestByPatient = Object.values(grouped).map(group =>
+    group.slice().sort((a, b) => b.days_until - a.days_until)[0]
+  )
+
+  const filtered = latestByPatient.filter(i => {
     if (filter === 'atrasado') return i.days_until < 0
     if (filter === 'em_breve') return i.days_until >= 0 && i.days_until <= 30
     if (filter === 'ok')       return i.days_until > 30
     return true
   })
 
-  const atrasados  = implants.filter(i => i.days_until < 0).length
-  const emBreve    = implants.filter(i => i.days_until >= 0 && i.days_until <= 30).length
-  const okCount    = implants.filter(i => i.days_until > 30).length
+  const atrasados  = latestByPatient.filter(i => i.days_until < 0).length
+  const emBreve    = latestByPatient.filter(i => i.days_until >= 0 && i.days_until <= 30).length
+  const okCount    = latestByPatient.filter(i => i.days_until > 30).length
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -440,11 +510,10 @@ export default function ImplantesClient({ patients }: Props) {
 
                   <div className="mt-3 flex gap-2 flex-wrap">
                     <button
-                      onClick={() => handleRenew(implant)}
-                      disabled={renewingId === implant.id}
-                      className="flex-1 py-1.5 bg-violet-600 text-white text-xs font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors"
+                      onClick={() => openRenew(implant)}
+                      className="flex-1 py-1.5 bg-violet-600 text-white text-xs font-medium rounded-lg hover:bg-violet-700 transition-colors"
                     >
-                      {renewingId === implant.id ? 'Registrando...' : '✅ Registrar novo implante (hoje)'}
+                      ✅ Registrar novo implante
                     </button>
                     <button
                       onClick={() => handleDelete(implant.id)}
@@ -454,12 +523,165 @@ export default function ImplantesClient({ patients }: Props) {
                       {deletingId === implant.id ? '...' : '🗑'}
                     </button>
                   </div>
+
+                  {/* Histórico de implantes do mesmo paciente */}
+                  {(() => {
+                    const key = String(implant.patient_id ?? implant.patient_name)
+                    const history = (grouped[key] ?? []).filter(i => i.id !== implant.id).sort((a, b) =>
+                      new Date(b.last_implant_date).getTime() - new Date(a.last_implant_date).getTime()
+                    )
+                    if (history.length === 0) return null
+                    const histOpen = expandedHistory.has(key)
+                    return (
+                      <div className="mt-2 border-t border-gray-100 pt-2">
+                        <button
+                          onClick={() => setExpandedHistory(prev => {
+                            const next = new Set(prev)
+                            next.has(key) ? next.delete(key) : next.add(key)
+                            return next
+                          })}
+                          className="text-xs text-violet-600 hover:text-violet-800 font-medium"
+                        >
+                          {histOpen ? '▲ Ocultar histórico' : `▼ Ver histórico (${history.length} registro${history.length > 1 ? 's' : ''})`}
+                        </button>
+                        {histOpen && (
+                          <div className="mt-2 space-y-1.5">
+                            {history.map(h => (
+                              <div key={h.id} className="bg-gray-50 rounded-lg px-3 py-2 text-xs text-gray-600 flex items-start justify-between gap-2">
+                                <div>
+                                  <p className="font-medium text-gray-700">{fmtDate(h.last_implant_date)}</p>
+                                  {Array.isArray(h.items_used) && h.items_used.length > 0 && (
+                                    <p className="text-gray-400 mt-0.5">{h.items_used.map(it => `${it.name} ×${it.quantity}`).join(', ')}</p>
+                                  )}
+                                  {h.notes && <p className="text-gray-400 italic mt-0.5">{h.notes}</p>}
+                                </div>
+                                <button
+                                  onClick={() => handleDelete(h.id)}
+                                  disabled={deletingId === h.id}
+                                  className="text-red-400 hover:text-red-600 shrink-0 disabled:opacity-50"
+                                >🗑</button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
               )
             })}
           </div>
         )}
       </div>
+
+      {/* Modal de renovação */}
+      {renewTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-gray-800">Novo implante — {renewTarget.patient_name}</h2>
+                <button onClick={() => setRenewTarget(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+              </div>
+
+              <form onSubmit={handleRenewSubmit} className="space-y-4">
+                <div>
+                  <label className="text-xs font-medium text-gray-600 block mb-1">Data do implante</label>
+                  <input
+                    type="date"
+                    value={renewDate}
+                    onChange={e => setRenewDate(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-gray-600 block mb-2">Implantes utilizados</label>
+                  <div className="relative mb-2">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+                    <input
+                      type="text"
+                      value={renewSearch}
+                      onChange={e => setRenewSearch(e.target.value)}
+                      placeholder="Buscar implante..."
+                      className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                    />
+                  </div>
+
+                  {(() => {
+                    const implantItems = stockItems
+                      .filter(i => i.name.toLowerCase().includes('implante'))
+                      .filter(i => renewSearch === '' || i.name.toLowerCase().includes(renewSearch.toLowerCase()))
+
+                    if (stockItems.length === 0) return <p className="text-xs text-gray-400">Carregando estoque...</p>
+                    if (implantItems.length === 0) return <p className="text-xs text-gray-400">Nenhum implante no estoque.</p>
+
+                    return (
+                      <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                        {implantItems.map(item => {
+                          const sel = renewStock.find(s => s.item.id === item.id)
+                          return (
+                            <div key={item.id}
+                              className={`flex items-center gap-3 p-2.5 rounded-xl border cursor-pointer transition-colors ${sel ? 'border-violet-400 bg-violet-50' : 'border-gray-200 hover:border-gray-300'}`}
+                              onClick={() => setRenewStock(prev => {
+                                const exists = prev.find(s => s.item.id === item.id)
+                                return exists ? prev.filter(s => s.item.id !== item.id) : [...prev, { item, quantity: 1 }]
+                              })}>
+                              <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 ${sel ? 'bg-violet-600 border-violet-600' : 'border-gray-300'}`}>
+                                {sel && <span className="text-white text-xs leading-none">✓</span>}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm text-gray-800 truncate">{item.name}</p>
+                                <p className="text-xs text-gray-400">
+                                  {item.lot ? `Lote: ${item.lot}` : 'Sem lote'}
+                                  {item.expiry_date ? ` · Val: ${item.expiry_date}` : ''}
+                                  {` · Estoque: ${item.quantity} ${item.unit}`}
+                                </p>
+                              </div>
+                              {sel && (
+                                <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+                                  <button type="button"
+                                    onClick={() => setRenewStock(prev => prev.map(s => s.item.id === item.id ? { ...s, quantity: Math.max(1, s.quantity - 1) } : s))}
+                                    className="w-6 h-6 rounded-full border border-gray-300 text-gray-500 text-sm flex items-center justify-center hover:border-violet-400">−</button>
+                                  <span className="w-6 text-center text-sm font-bold text-gray-700">{sel.quantity}</span>
+                                  <button type="button"
+                                    onClick={() => setRenewStock(prev => prev.map(s => s.item.id === item.id ? { ...s, quantity: s.quantity + 1 } : s))}
+                                    className="w-6 h-6 rounded-full border border-gray-300 text-gray-500 text-sm flex items-center justify-center hover:border-violet-400">+</button>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })()}
+                </div>
+
+                {renewStock.length > 0 && (
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input type="checkbox" checked={renewSaida} onChange={e => setRenewSaida(e.target.checked)} className="accent-violet-600 w-4 h-4" />
+                    <span className="text-sm text-gray-700">Dar saída no estoque automaticamente</span>
+                  </label>
+                )}
+
+                {renewError && <p className="text-sm text-red-600">{renewError}</p>}
+
+                <div className="flex gap-2 pt-1">
+                  <button type="button" onClick={() => setRenewTarget(null)}
+                    className="flex-1 py-2 border border-gray-300 text-sm text-gray-600 rounded-xl hover:bg-gray-50">
+                    Cancelar
+                  </button>
+                  <button type="submit" disabled={renewLoading}
+                    className="flex-1 py-2 bg-violet-600 text-white text-sm font-medium rounded-xl hover:bg-violet-700 disabled:opacity-50">
+                    {renewLoading ? 'Salvando...' : 'Salvar'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
