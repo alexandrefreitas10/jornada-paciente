@@ -16,6 +16,7 @@ interface Implant {
   days_until: number
   notes: string | null
   items_used: ImplantItem[]
+  archived_at: string | null
   created_at: string
 }
 
@@ -43,6 +44,8 @@ export default function ImplantesClient({ patients }: Props) {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [archivingId, setArchivingId] = useState<number | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
   const [filter, setFilter] = useState<'todos' | 'atrasado' | 'em_breve' | 'ok'>('todos')
   const [nameSearch, setNameSearch] = useState('')
   const [expandedHistory, setExpandedHistory] = useState<Set<string>>(new Set())
@@ -258,15 +261,34 @@ export default function ImplantesClient({ patients }: Props) {
     }
   }
 
-  // Agrupa por paciente — mostra o mais recente (menor days_until) como ativo
-  const grouped = implants.reduce((acc, imp) => {
+  async function handleArchive(implant: Implant, archive: boolean) {
+    setArchivingId(implant.id)
+    try {
+      const res = await fetch(`/api/implants/${implant.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archive }),
+      })
+      if (!res.ok) return
+      const updated = await res.json()
+      setImplants(prev => prev.map(i => i.id === implant.id ? { ...i, archived_at: updated.archived_at } : i))
+    } finally {
+      setArchivingId(null)
+    }
+  }
+
+  // Separa arquivados dos ativos
+  const activeImplants   = implants.filter(i => !i.archived_at)
+  const archivedImplants = implants.filter(i => !!i.archived_at)
+
+  // Agrupa ativos por paciente — mostra o mais recente como card principal
+  const grouped = activeImplants.reduce((acc, imp) => {
     const key = String(imp.patient_id ?? imp.patient_name)
     if (!acc[key]) acc[key] = []
     acc[key].push(imp)
     return acc
   }, {} as Record<string, Implant[]>)
 
-  // Pega o implante mais recente de cada grupo (menor days_until = próxima data mais próxima)
   const latestByPatient = Object.values(grouped).map(group =>
     group.slice().sort((a, b) => b.days_until - a.days_until)[0]
   )
@@ -278,6 +300,18 @@ export default function ImplantesClient({ patients }: Props) {
     if (filter === 'ok')       return i.days_until > 30
     return true
   })
+
+  // Agrupa arquivados por paciente — mostra o mais recente
+  const archivedGrouped = archivedImplants.reduce((acc, imp) => {
+    const key = String(imp.patient_id ?? imp.patient_name)
+    if (!acc[key]) acc[key] = []
+    acc[key].push(imp)
+    return acc
+  }, {} as Record<string, Implant[]>)
+
+  const archivedLatest = Object.values(archivedGrouped)
+    .map(group => group.slice().sort((a, b) => new Date(b.last_implant_date).getTime() - new Date(a.last_implant_date).getTime())[0])
+    .filter(i => !nameSearch || i.patient_name.toLowerCase().includes(nameSearch.toLowerCase()))
 
   const atrasados  = latestByPatient.filter(i => i.days_until < 0).length
   const emBreve    = latestByPatient.filter(i => i.days_until >= 0 && i.days_until <= 30).length
@@ -599,6 +633,14 @@ export default function ImplantesClient({ patients }: Props) {
                       ✅ Registrar novo implante
                     </button>
                     <button
+                      onClick={() => handleArchive(implant, true)}
+                      disabled={archivingId === implant.id}
+                      title="Mover para Pacientes antigos"
+                      className="px-3 py-1.5 border border-gray-200 text-gray-500 text-xs font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                    >
+                      {archivingId === implant.id ? '...' : '📦'}
+                    </button>
+                    <button
                       onClick={() => handleDelete(implant.id)}
                       disabled={deletingId === implant.id}
                       className="px-3 py-1.5 border border-red-200 text-red-600 text-xs font-medium rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors"
@@ -661,6 +703,61 @@ export default function ImplantesClient({ patients }: Props) {
                 </div>
               )
             })}
+          </div>
+        )}
+
+        {/* Seção de pacientes antigos (arquivados) */}
+        {archivedLatest.length > 0 && (
+          <div className="border border-gray-200 rounded-2xl bg-white shadow-sm overflow-hidden">
+            <button
+              onClick={() => setShowArchived(v => !v)}
+              className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              <span className="flex items-center gap-2">
+                <span className="text-gray-400">📦</span>
+                Pacientes antigos de implante
+                <span className="bg-gray-100 text-gray-500 text-xs font-semibold px-2 py-0.5 rounded-full">{archivedLatest.length}</span>
+              </span>
+              <span className="text-gray-400 text-xs">{showArchived ? '▲ Ocultar' : '▼ Ver'}</span>
+            </button>
+
+            {showArchived && (
+              <div className="border-t border-gray-100 divide-y divide-gray-100">
+                {archivedLatest.map(implant => (
+                  <div key={implant.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      {implant.patient_id ? (
+                        <a href={`/pacientes/${implant.patient_id}`}
+                          className="text-sm font-medium text-gray-700 hover:text-violet-700 transition-colors">
+                          {implant.patient_name}
+                        </a>
+                      ) : (
+                        <p className="text-sm font-medium text-gray-700">{implant.patient_name}</p>
+                      )}
+                      <p className="text-xs text-gray-400 mt-0.5">Último implante: {fmtDate(implant.last_implant_date)}</p>
+                      {implant.notes && <p className="text-xs text-gray-400 truncate">{implant.notes}</p>}
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={() => handleArchive(implant, false)}
+                        disabled={archivingId === implant.id}
+                        title="Reativar"
+                        className="px-3 py-1.5 border border-violet-200 text-violet-600 text-xs font-medium rounded-lg hover:bg-violet-50 disabled:opacity-50 transition-colors"
+                      >
+                        {archivingId === implant.id ? '...' : '↩ Reativar'}
+                      </button>
+                      <button
+                        onClick={() => handleDelete(implant.id)}
+                        disabled={deletingId === implant.id}
+                        className="px-3 py-1.5 border border-red-200 text-red-600 text-xs font-medium rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors"
+                      >
+                        {deletingId === implant.id ? '...' : '🗑'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

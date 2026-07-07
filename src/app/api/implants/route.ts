@@ -27,6 +27,7 @@ export async function GET() {
       ((last_implant_date + INTERVAL '6 months')::date - CURRENT_DATE)::int AS days_until,
       notes,
       COALESCE(items_used, '[]'::jsonb) AS items_used,
+      archived_at,
       created_at
     FROM implants
     ORDER BY (last_implant_date + INTERVAL '6 months') ASC

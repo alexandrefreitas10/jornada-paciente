@@ -270,6 +270,9 @@ export async function initSchema() {
     )
   `).catch(() => {})
   await sql.unsafe(`ALTER TABLE aesthetic_session_completions ADD COLUMN IF NOT EXISTS observation TEXT`).catch(() => {})
+
+  // Arquivamento de implantes (pacientes antigos)
+  await sql.unsafe(`ALTER TABLE implants ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`).catch(() => {})
 }
 
 export default sql
