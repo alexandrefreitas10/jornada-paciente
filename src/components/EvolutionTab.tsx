@@ -61,7 +61,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
   const [reportCopied, setReportCopied] = useState(false)
 
   // modal confirmação saída Tirzepartida
-  const [tirzModal, setTirzModal] = useState<{ dose: number | null } | null>(null)
+  const [tirzModal, setTirzModal] = useState<{ dose: number | null; measurementId: number | null } | null>(null)
   const [tirzStock, setTirzStock] = useState<StockItem[]>([])
   const [tirzSelectedItem, setTirzSelectedItem] = useState<StockItem | null>(null)
   const [tirzQty, setTirzQty] = useState<number | string>(1)
@@ -163,7 +163,8 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
             setTirzSelectedItem(match)
             setTirzQty(1)
             setTirzError(null)
-            setTirzModal({ dose: lastDose })
+            const triggerMeasurement = withDose[withDose.length - 1]
+            setTirzModal({ dose: lastDose, measurementId: triggerMeasurement.id })
           }
         }
       }
@@ -199,6 +200,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
   }
 
   async function handleSaveEdit(id: number) {
+    const original = measurements.find(m => m.id === id)
     const res = await fetch(`/api/patients/${patientId}/measurements/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -208,6 +210,17 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
     const updated: Measurement = await res.json()
     setMeasurements((prev) => prev.map((m) => (m.id === id ? updated : m)))
     setEditingId(null)
+
+    // Se a dose de tirzepartida mudou, atualiza o movimento de estoque vinculado
+    const oldDose = Number(original?.tirzepatide_dose ?? 0)
+    const newDose = Number(editValues.tirzepatide_dose ?? 0)
+    if (newDose !== oldDose && newDose > 0) {
+      await fetch(`/api/estoque/movements/by-measurement/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity: newDose, observation: `Tirzepartida ${newDose}mg` }),
+      })
+    }
   }
 
   async function handleDelete(id: number) {
@@ -276,7 +289,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
       setTirzStock(tirzItems)
       setTirzSelectedItem(tirzItems[0] ?? null)
     }
-    setTirzModal({ dose: null })
+    setTirzModal({ dose: null, measurementId: null })
   }
 
   async function handleTirzConfirm() {
@@ -298,6 +311,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
           lot: tirzSelectedItem.lot ?? null,
           patient_id: patientId,
           observation: `Tirzepartida ${doseValue}mg`,
+          measurement_id: tirzModal.measurementId,
         }),
       })
       if (!res.ok) {

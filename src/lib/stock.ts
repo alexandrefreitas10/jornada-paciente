@@ -26,6 +26,7 @@ export interface StockMovement {
   nf_s3_key: string | null
   created_by: string | null
   created_at: string
+  measurement_id: number | null
 }
 
 export async function listStockItems(): Promise<StockItem[]> {
@@ -135,14 +136,15 @@ export async function createMovement(data: {
   observation?: string | null
   nf_s3_key?: string | null
   created_by?: string | null
+  measurement_id?: number | null
 }): Promise<StockMovement> {
   await initSchema()
   const [row] = await sql<StockMovement[]>`
-    INSERT INTO stock_movements (item_id, type, quantity, lot, expiry_date, patient_id, patient_name, observation, nf_s3_key, created_by)
+    INSERT INTO stock_movements (item_id, type, quantity, lot, expiry_date, patient_id, patient_name, observation, nf_s3_key, created_by, measurement_id)
     VALUES (
       ${data.item_id}, ${data.type}, ${data.quantity},
       ${data.lot ?? null}, ${data.expiry_date ?? null}, ${data.patient_id ?? null}, ${data.patient_name ?? null},
-      ${data.observation ?? null}, ${data.nf_s3_key ?? null}, ${data.created_by ?? null}
+      ${data.observation ?? null}, ${data.nf_s3_key ?? null}, ${data.created_by ?? null}, ${data.measurement_id ?? null}
     )
     RETURNING *
   `

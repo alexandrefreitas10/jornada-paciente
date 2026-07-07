@@ -208,6 +208,7 @@ export async function initSchema() {
   `).catch(() => {})
   await sql.unsafe(`ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS patient_id INTEGER`).catch(() => {})
   await sql.unsafe(`ALTER TABLE stock_movements ALTER COLUMN quantity TYPE NUMERIC USING quantity::numeric`).catch(() => {})
+  await sql.unsafe(`ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS measurement_id INTEGER`).catch(() => {})
 
   // Log de entradas de estoque (NF, importação, manual)
   await sql.unsafe(`

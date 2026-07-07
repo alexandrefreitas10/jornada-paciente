@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   const session = await auth()
   const createdBy = session?.user?.name ?? null
   const body = await req.json()
-  const { item_id, type, quantity, lot, expiry_date, patient_id, patient_name, observation, nf_s3_key } = body
+  const { item_id, type, quantity, lot, expiry_date, patient_id, patient_name, observation, nf_s3_key, measurement_id } = body
   if (!item_id || !type || !quantity) {
     return NextResponse.json({ error: 'item_id, type e quantity são obrigatórios' }, { status: 400 })
   }
@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
     item_id: Number(item_id), type, quantity: Number(quantity),
     lot, expiry_date, patient_id: patient_id ? Number(patient_id) : null,
     patient_name, observation, nf_s3_key, created_by: createdBy,
+    measurement_id: measurement_id ? Number(measurement_id) : null,
   })
   return NextResponse.json(movement, { status: 201 })
 }
