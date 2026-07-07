@@ -114,45 +114,14 @@ export async function listMovements(type?: 'entrada' | 'saida'): Promise<StockMo
 export async function listMovementsByPatient(patientId: number): Promise<StockMovement[]> {
   await initSchema()
 
-  // Saídas de estoque vinculadas ao paciente
-  const movements = await sql<StockMovement[]>`
+  // Apenas saídas reais do estoque vinculadas ao paciente
+  return sql<StockMovement[]>`
     SELECT m.*, i.name AS item_name
     FROM stock_movements m
     JOIN stock_items i ON i.id = m.item_id
     WHERE m.patient_id = ${patientId} AND m.type = 'saida'
+    ORDER BY m.created_at DESC
   `
-
-  // Implantes vinculados ao paciente (com itens ou sem)
-  const implants = await sql<{ id: number; items_used: { name: string; quantity: number; unit: string }[] | null; created_by: string | null; created_at: string }[]>`
-    SELECT id, items_used, created_by, created_at
-    FROM implants
-    WHERE patient_id = ${patientId}
-  `
-
-  // Converte implantes para o mesmo formato de StockMovement
-  const implantRows: StockMovement[] = implants.flatMap(imp => {
-    const rawItems = typeof imp.items_used === 'string' ? JSON.parse(imp.items_used) : imp.items_used
-    const items = Array.isArray(rawItems) && rawItems.length > 0 ? rawItems : [{ name: 'Implante hormonal', quantity: 1, unit: 'un' }]
-    return items.map((item, idx) => ({
-      id: -(imp.id * 100 + idx),
-      item_id: 0,
-      item_name: item.name,
-      type: 'saida' as const,
-      quantity: item.quantity,
-      lot: null,
-      expiry_date: null,
-      patient_id: patientId,
-      patient_name: null,
-      observation: 'Implante hormonal',
-      created_by: imp.created_by,
-      created_at: imp.created_at,
-      nf_s3_key: null,
-    }))
-  })
-
-  return [...movements, ...implantRows].sort((a, b) =>
-    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-  )
 }
 
 export async function createMovement(data: {
