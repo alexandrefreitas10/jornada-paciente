@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 interface Patient { id: number; name: string }
 interface StockItem { id: number; name: string; unit: string; quantity: number; lot: string | null; expiry_date: string | null }
@@ -61,6 +61,7 @@ export default function ImplantesClient({ patients }: Props) {
   const [formPatientName, setFormPatientName] = useState('')
   const [formPatientSearch, setFormPatientSearch] = useState('')
   const [formPatientOpen, setFormPatientOpen] = useState(false)
+  const patientDropdownRef = useRef<HTMLDivElement>(null)
   const [formDate, setFormDate] = useState(today())
   const [formNotes, setFormNotes] = useState('')
   const [formLoading, setFormLoading] = useState(false)
@@ -86,6 +87,17 @@ export default function ImplantesClient({ patients }: Props) {
       })
       .catch(() => {})
       .finally(() => setLoading(false))
+  }, [])
+
+  // Fecha dropdown de paciente ao clicar fora
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (patientDropdownRef.current && !patientDropdownRef.current.contains(e.target as Node)) {
+        setFormPatientOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
   // Carrega itens do estoque ao abrir o form ou modal de renovação
@@ -324,7 +336,7 @@ export default function ImplantesClient({ patients }: Props) {
                 </div>
               ) : (
                 // Busca com autocomplete
-                <div className="relative">
+                <div className="relative" ref={patientDropdownRef}>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
                       <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
