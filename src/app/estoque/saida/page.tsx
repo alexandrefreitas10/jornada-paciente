@@ -15,6 +15,73 @@ function saveCart(cart: CartEntry[]) { localStorage.setItem(CART_KEY, JSON.strin
 function loadCart(): CartEntry[] { try { return JSON.parse(localStorage.getItem(CART_KEY) ?? '[]') } catch { return [] } }
 function clearCart() { localStorage.removeItem(CART_KEY) }
 
+function ImplanteCard({ patientId, patientName }: { patientId: number | null; patientName: string | null }) {
+  const [saved, setSaved] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [dismissed, setDismissed] = useState(false)
+  const [name, setName] = useState(patientName ?? '')
+  const today = new Date().toISOString().slice(0, 10)
+
+  if (dismissed) return null
+
+  async function handleCreate() {
+    setLoading(true)
+    try {
+      await fetch('/api/implants', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patient_id: patientId,
+          patient_name: name,
+          last_implant_date: today,
+          notes: null,
+        }),
+      })
+      setSaved(true)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (saved) return (
+    <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center">
+      <p className="text-sm font-semibold text-emerald-700">✅ Card de implante criado!</p>
+      <p className="text-xs text-emerald-600 mt-1">Próximo implante previsto em 6 meses.</p>
+    </div>
+  )
+
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-sm font-semibold text-amber-800">💉 Criar card de implante?</p>
+          <p className="text-xs text-amber-600 mt-0.5">Foi detectado um implante nesta saída. Deseja registrar para controle de renovação?</p>
+        </div>
+        <button onClick={() => setDismissed(true)} className="text-amber-400 hover:text-amber-600 text-lg leading-none shrink-0">✕</button>
+      </div>
+      {!patientName && (
+        <input
+          type="text"
+          placeholder="Nome do paciente"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+        />
+      )}
+      <div className="flex gap-2">
+        <button onClick={() => setDismissed(true)}
+          className="flex-1 py-2 border border-amber-300 text-amber-700 text-xs font-medium rounded-xl hover:bg-amber-100 transition-colors">
+          Agora não
+        </button>
+        <button onClick={handleCreate} disabled={loading || !name}
+          className="flex-1 py-2 bg-amber-500 text-white text-xs font-medium rounded-xl hover:bg-amber-600 disabled:opacity-50 transition-colors">
+          {loading ? 'Criando...' : '✅ Criar card'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function SaidaForm() {
   const searchParams = useSearchParams()
   const itemId = searchParams.get('item')
@@ -453,24 +520,35 @@ function SaidaForm() {
 
   /* ── STEP: Sucesso ── */
   const doneItems = cart.length > 0 ? cart : (item ? [{ item, quantity: 1 }] : [])
+  const implantItems = doneItems.filter(e => e.item.name.toLowerCase().includes('implante'))
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-lg p-8 text-center">
-        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <span className="text-3xl">✅</span>
+      <div className="w-full max-w-sm space-y-3">
+        <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
+          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-3xl">✅</span>
+          </div>
+          <h2 className="text-xl font-bold text-gray-800 mb-3">
+            {doneItems.length > 1 ? 'Saídas registradas!' : 'Saída registrada!'}
+          </h2>
+          <div className="space-y-1 mb-2">
+            {doneItems.map(e => (
+              <p key={e.item.id} className="text-gray-500 text-sm">{e.item.name} · {e.quantity} {e.item.unit}</p>
+            ))}
+          </div>
+          {selectedPatient && <p className="text-gray-400 text-sm mt-1">Paciente: {selectedPatient.name}</p>}
+          <button onClick={reset} className="mt-6 w-full py-3 bg-violet-600 text-white font-semibold rounded-xl hover:bg-violet-700 transition-colors">
+            Registrar outra saída
+          </button>
         </div>
-        <h2 className="text-xl font-bold text-gray-800 mb-3">
-          {doneItems.length > 1 ? 'Saídas registradas!' : 'Saída registrada!'}
-        </h2>
-        <div className="space-y-1 mb-2">
-          {doneItems.map(e => (
-            <p key={e.item.id} className="text-gray-500 text-sm">{e.item.name} · {e.quantity} {e.item.unit}</p>
-          ))}
-        </div>
-        {selectedPatient && <p className="text-gray-400 text-sm mt-1">Paciente: {selectedPatient.name}</p>}
-        <button onClick={reset} className="mt-6 w-full py-3 bg-violet-600 text-white font-semibold rounded-xl hover:bg-violet-700 transition-colors">
-          Registrar outra saída
-        </button>
+
+        {/* Card de implante automático */}
+        {implantItems.length > 0 && (
+          <ImplanteCard
+            patientId={selectedPatient ? Number(patientId) : null}
+            patientName={selectedPatient?.name ?? null}
+          />
+        )}
       </div>
     </div>
   )
