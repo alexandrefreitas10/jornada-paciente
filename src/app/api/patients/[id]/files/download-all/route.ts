@@ -61,6 +61,7 @@ export async function GET(
     diet: 'dietas',
     evolution: 'evolucao',
     prescription: 'prescricoes',
+    estetica: 'estetica',
   }
 
   const patientName = (patient?.name ?? `paciente-${id}`)
