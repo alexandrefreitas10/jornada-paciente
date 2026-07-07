@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 
 interface Patient { id: number; name: string }
-interface StockItem { id: number; name: string; unit: string; quantity: number; lot: string | null }
+interface StockItem { id: number; name: string; unit: string; quantity: number; lot: string | null; expiry_date: string | null }
 
 interface Implant {
   id: number

@@ -12,6 +12,7 @@ interface StockMovement {
 }
 interface NfItem { name: string; quantity: number; unit: string; lot: string | null; expiry_date: string | null }
 interface EntryLog { id: number; type: string; original_filename: string | null; s3_key: string | null; item_count: number; created_by: string | null; created_at: string; download_url: string | null }
+interface EntryLogDetail { item_name: string; quantity: number; lot: string | null; expiry_date: string | null }
 
 type Tab = 'estoque' | 'entradas' | 'saidas' | 'relatorios'
 
@@ -284,6 +285,8 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   const [movements, setMovements] = useState(initialMovements)
   const [entryLogs, setEntryLogs] = useState<EntryLog[]>([])
   const [showEntryLogs, setShowEntryLogs] = useState(false)
+  const [expandedLogId, setExpandedLogId] = useState<number | null>(null)
+  const [logDetails, setLogDetails] = useState<Record<number, EntryLogDetail[]>>({})
   const [qrItem, setQrItem] = useState<StockItem | null>(null)
   const [editItem, setEditItem] = useState<StockItem | null>(null)
   const [editMov, setEditMov] = useState<StockMovement | null>(null)
@@ -817,23 +820,74 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
                 <div className="space-y-2">
                   {entryLogs.map(log => {
                     const typeLabel = log.type === 'nf' ? '📷 Nota Fiscal' : log.type === 'inventory' ? '📄 Importação' : '✏️ Manual'
+                    const isExpanded = expandedLogId === log.id
+                    const details = logDetails[log.id]
+                    const canExpand = log.type !== 'nf'
+
+                    async function toggleExpand() {
+                      if (!canExpand) return
+                      if (isExpanded) { setExpandedLogId(null); return }
+                      setExpandedLogId(log.id)
+                      if (!logDetails[log.id]) {
+                        const res = await fetch(`/api/estoque/entry-logs/${log.id}`)
+                        if (res.ok) {
+                          const data = await res.json()
+                          setLogDetails(prev => ({ ...prev, [log.id]: data.movements }))
+                        }
+                      }
+                    }
+
                     return (
-                      <div key={log.id} className="bg-gray-50 rounded-xl border border-gray-200 p-3 flex items-center gap-3">
-                        <span className="text-xl shrink-0">{log.type === 'nf' ? '📷' : log.type === 'inventory' ? '📄' : '✏️'}</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-800">{typeLabel}</p>
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            {log.item_count} item(s) · {formatDate(log.created_at)}{log.created_by ? ` · ${log.created_by}` : ''}
-                          </p>
-                          {log.original_filename && (
-                            <p className="text-xs text-gray-400 truncate mt-0.5">{log.original_filename}</p>
+                      <div key={log.id} className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
+                        <div
+                          className={`p-3 flex items-center gap-3 ${canExpand ? 'cursor-pointer hover:bg-gray-100 transition-colors' : ''}`}
+                          onClick={toggleExpand}
+                        >
+                          <span className="text-xl shrink-0">{log.type === 'nf' ? '📷' : log.type === 'inventory' ? '📄' : '✏️'}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-800">{typeLabel}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              {log.item_count} item(s) · {formatDate(log.created_at)}{log.created_by ? ` · ${log.created_by}` : ''}
+                            </p>
+                            {log.original_filename && (
+                              <p className="text-xs text-gray-400 truncate mt-0.5">{log.original_filename}</p>
+                            )}
+                          </div>
+                          {log.download_url && (
+                            <a href={log.download_url} target="_blank" rel="noopener noreferrer"
+                              onClick={e => e.stopPropagation()}
+                              className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 border border-blue-200 text-blue-600 rounded-lg text-xs font-medium hover:bg-blue-100 transition-colors">
+                              ⬇️ Baixar
+                            </a>
+                          )}
+                          {canExpand && (
+                            <span className="text-gray-400 text-xs shrink-0">{isExpanded ? '▲' : '▼'}</span>
                           )}
                         </div>
-                        {log.download_url && (
-                          <a href={log.download_url} target="_blank" rel="noopener noreferrer"
-                            className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 border border-blue-200 text-blue-600 rounded-lg text-xs font-medium hover:bg-blue-100 transition-colors">
-                            ⬇️ Baixar
-                          </a>
+
+                        {isExpanded && (
+                          <div className="border-t border-gray-200 bg-white px-3 pb-3 pt-2">
+                            {!details ? (
+                              <p className="text-xs text-gray-400 animate-pulse">Carregando...</p>
+                            ) : details.length === 0 ? (
+                              <p className="text-xs text-gray-400">Nenhum item encontrado para esta entrada.</p>
+                            ) : (
+                              <div className="space-y-1.5">
+                                {details.map((d, i) => (
+                                  <div key={i} className="flex items-center justify-between gap-2 py-1 border-b border-gray-100 last:border-0">
+                                    <div className="min-w-0">
+                                      <p className="text-sm text-gray-800 truncate">{d.item_name}</p>
+                                      <p className="text-xs text-gray-400">
+                                        {d.lot ? `Lote: ${d.lot}` : 'Sem lote'}
+                                        {d.expiry_date ? ` · Val: ${d.expiry_date}` : ''}
+                                      </p>
+                                    </div>
+                                    <span className="text-sm font-semibold text-emerald-600 shrink-0">+{d.quantity}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
                     )

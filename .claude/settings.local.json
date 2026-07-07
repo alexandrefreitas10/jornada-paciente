@@ -86,7 +86,12 @@
       "Bash(xargs grep -l \"summary\")",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\alexa\\\\Projeto Curso IA\\\\src\\\\app\" -Directory)",
       "Bash(ls -la \"C:\\\\Users\\\\alexa\\\\Projeto Curso IA\\\\src\\\\app\" 2>/dev/null || ls -la \"/mnt/c/Users/alexa/Projeto Curso IA/src/app\")",
-      "Bash(find \"/mnt/c/Users/alexa/Projeto Curso IA\" -type d -name components 2>/dev/null)"
+      "Bash(find \"/mnt/c/Users/alexa/Projeto Curso IA\" -type d -name components 2>/dev/null)",
+      "Bash(cat .node-version)",
+      "Bash(cat .nvmrc)",
+      "Bash(node -e \"console.log\\('node ok'\\)\")",
+      "Bash(extract-text \"C:\\\\Users\\\\alexa\\\\OneDrive\\\\Desktop\\\\ESTOQUE.docx\")",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('next:', p.dependencies.next\\)\")"
     ]
   }
 }
