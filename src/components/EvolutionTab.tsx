@@ -14,6 +14,8 @@ interface EvolutionPhoto {
   created_at: string
 }
 
+interface StockItem { id: number; name: string; unit: string; quantity: number; lot: string | null; expiry_date: string | null }
+
 interface Props {
   patientId: number
   initialMeasurements: Measurement[]
@@ -57,6 +59,14 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
   const [reportOpen, setReportOpen] = useState(false)
   const [reportError, setReportError] = useState<string | null>(null)
   const [reportCopied, setReportCopied] = useState(false)
+
+  // modal confirmação saída Tirzepartida
+  const [tirzModal, setTirzModal] = useState<{ dose: number } | null>(null)
+  const [tirzStock, setTirzStock] = useState<StockItem[]>([])
+  const [tirzSelectedItem, setTirzSelectedItem] = useState<StockItem | null>(null)
+  const [tirzQty, setTirzQty] = useState(1)
+  const [tirzSaving, setTirzSaving] = useState(false)
+  const [tirzError, setTirzError] = useState<string | null>(null)
 
   async function fetchReport() {
     setReportLoading(true)
@@ -136,6 +146,25 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
       if (photosRes.ok) {
         const photos: EvolutionPhoto[] = await photosRes.json()
         setEvolutionPhotos(photos)
+      }
+
+      // Verifica se tem dose de Tirzepartida na tabela extraída → oferecer saída de estoque
+      const withDose = newItems.filter(m => m.tirzepatide_dose != null)
+      if (withDose.length > 0) {
+        const lastDose = Number(withDose[withDose.length - 1].tirzepatide_dose)
+        const stockRes = await fetch('/api/estoque/items')
+        if (stockRes.ok) {
+          const allItems: StockItem[] = await stockRes.json()
+          const tirzItems = allItems.filter(i => i.name.toLowerCase().includes('tirzep'))
+          if (tirzItems.length > 0) {
+            setTirzStock(tirzItems)
+            const match = tirzItems.find(i => i.name.includes(String(lastDose))) ?? tirzItems[0]
+            setTirzSelectedItem(match)
+            setTirzQty(1)
+            setTirzError(null)
+            setTirzModal({ dose: lastDose })
+          }
+        }
       }
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Erro desconhecido')
@@ -232,6 +261,32 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
       URL.revokeObjectURL(a.href)
     } catch {
       window.open(url, '_blank')
+    }
+  }
+
+  async function handleTirzConfirm() {
+    if (!tirzSelectedItem || !tirzModal) return
+    setTirzSaving(true)
+    setTirzError(null)
+    try {
+      const res = await fetch('/api/estoque/movements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          item_id: tirzSelectedItem.id,
+          type: 'saida',
+          quantity: tirzQty,
+          lot: tirzSelectedItem.lot ?? null,
+          patient_id: patientId,
+          observation: `Tirzepartida ${tirzModal.dose}mg`,
+        }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error || 'Erro')
+      setTirzModal(null)
+    } catch (err) {
+      setTirzError(err instanceof Error ? err.message : 'Erro')
+    } finally {
+      setTirzSaving(false)
     }
   }
 
@@ -368,6 +423,62 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
               <button onClick={() => { setReportOpen(false); setReportText(''); setReportError(null); setReportCopied(false) }}
                 className="flex-1 py-2.5 border border-gray-300 text-gray-600 rounded-xl text-sm hover:bg-gray-50">
                 Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal confirmação saída Tirzepartida */}
+      {tirzModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4">
+            <div>
+              <h3 className="font-bold text-gray-800 text-lg">💉 Confirmar saída — Tirzepartida</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Dose detectada na tabela: <span className="font-semibold text-violet-700">{tirzModal.dose}mg</span>
+              </p>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-1">Ativo no estoque</label>
+              <select
+                value={tirzSelectedItem?.id ?? ''}
+                onChange={e => {
+                  const item = tirzStock.find(i => i.id === Number(e.target.value)) ?? null
+                  setTirzSelectedItem(item)
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+              >
+                {tirzStock.map(i => (
+                  <option key={i.id} value={i.id}>
+                    {i.name}{i.lot ? ` · Lote: ${i.lot}` : ''}{i.expiry_date ? ` · Val: ${i.expiry_date}` : ''} ({i.quantity} {i.unit})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-1">Quantidade (frascos/unidades)</label>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setTirzQty(q => Math.max(1, q - 1))}
+                  className="w-8 h-8 rounded-full border border-gray-300 text-gray-600 flex items-center justify-center hover:border-violet-400">−</button>
+                <span className="w-10 text-center font-bold text-gray-800">{tirzQty}</span>
+                <button type="button" onClick={() => setTirzQty(q => q + 1)}
+                  className="w-8 h-8 rounded-full border border-gray-300 text-gray-600 flex items-center justify-center hover:border-violet-400">+</button>
+              </div>
+            </div>
+
+            {tirzError && <p className="text-sm text-red-600">{tirzError}</p>}
+
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setTirzModal(null)}
+                className="flex-1 py-2.5 border border-gray-300 text-gray-600 rounded-xl text-sm hover:bg-gray-50">
+                Pular
+              </button>
+              <button onClick={handleTirzConfirm} disabled={tirzSaving || !tirzSelectedItem}
+                className="flex-1 py-2.5 bg-violet-600 text-white text-sm font-semibold rounded-xl hover:bg-violet-700 disabled:opacity-50">
+                {tirzSaving ? 'Registrando...' : '✅ Confirmar saída'}
               </button>
             </div>
           </div>
