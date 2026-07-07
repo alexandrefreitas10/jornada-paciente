@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 
 interface Patient { id: number; name: string }
+interface StockItem { id: number; name: string; unit: string; quantity: number; lot: string | null }
 
 interface Implant {
   id: number
@@ -14,6 +15,8 @@ interface Implant {
   notes: string | null
   created_at: string
 }
+
+interface SelectedStock { item: StockItem; quantity: number }
 
 function statusInfo(days: number) {
   if (days < 0)  return { label: 'Atrasado',  color: 'bg-red-100 text-red-700 border-red-200',    dot: 'bg-red-500',    cardBorder: 'border-red-300' }
@@ -48,12 +51,38 @@ export default function ImplantesClient({ patients }: Props) {
   const [formLoading, setFormLoading] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
+  // estoque state
+  const [stockItems, setStockItems] = useState<StockItem[]>([])
+  const [selectedStock, setSelectedStock] = useState<SelectedStock[]>([])
+  const [registerSaida, setRegisterSaida] = useState(true)
+
   useEffect(() => {
     fetch('/api/implants')
       .then(r => r.json())
       .then(setImplants)
       .finally(() => setLoading(false))
   }, [])
+
+  // Carrega itens do estoque ao abrir o form
+  useEffect(() => {
+    if (!showForm) return
+    fetch('/api/estoque/items')
+      .then(r => r.json())
+      .then((items: StockItem[]) => setStockItems(items))
+      .catch(() => {})
+  }, [showForm])
+
+  function toggleStockItem(item: StockItem) {
+    setSelectedStock(prev => {
+      const exists = prev.find(s => s.item.id === item.id)
+      if (exists) return prev.filter(s => s.item.id !== item.id)
+      return [...prev, { item, quantity: 1 }]
+    })
+  }
+
+  function updateStockQty(itemId: number, qty: number) {
+    setSelectedStock(prev => prev.map(s => s.item.id === itemId ? { ...s, quantity: Math.max(1, qty) } : s))
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
@@ -62,6 +91,8 @@ export default function ImplantesClient({ patients }: Props) {
     try {
       const selectedPatient = patients.find(p => String(p.id) === formPatientId)
       const name = selectedPatient?.name ?? formPatientName
+
+      // 1. Cria o card de implante
       const res = await fetch('/api/implants', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -74,12 +105,33 @@ export default function ImplantesClient({ patients }: Props) {
       })
       if (!res.ok) throw new Error((await res.json()).error || 'Erro')
       const newImplant: Implant = await res.json()
+
+      // 2. Registra saídas no estoque se solicitado
+      if (registerSaida && selectedStock.length > 0) {
+        await Promise.all(selectedStock.map(s =>
+          fetch('/api/estoque/movements', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              item_id: s.item.id,
+              type: 'saida',
+              quantity: s.quantity,
+              lot: s.item.lot ?? null,
+              patient_id: selectedPatient?.id ?? null,
+              patient_name: name,
+              observation: 'Implante hormonal',
+            }),
+          })
+        ))
+      }
+
       setImplants(prev => [...prev, newImplant].sort((a, b) => a.days_until - b.days_until))
       setShowForm(false)
       setFormPatientId('')
       setFormPatientName('')
       setFormDate(today())
       setFormNotes('')
+      setSelectedStock([])
     } catch (e) {
       setFormError(e instanceof Error ? e.message : 'Erro')
     } finally {
@@ -186,6 +238,49 @@ export default function ImplantesClient({ patients }: Props) {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
               />
             </div>
+
+            {/* Itens do estoque usados */}
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-2">Implantes utilizados (do estoque)</label>
+              {stockItems.length === 0 ? (
+                <p className="text-xs text-gray-400">Nenhum item disponível no estoque.</p>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {stockItems.map(item => {
+                    const sel = selectedStock.find(s => s.item.id === item.id)
+                    return (
+                      <div key={item.id} className={`flex items-center gap-3 p-2.5 rounded-xl border cursor-pointer transition-colors ${sel ? 'border-violet-400 bg-violet-50' : 'border-gray-200 hover:border-gray-300'}`}
+                        onClick={() => toggleStockItem(item)}>
+                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${sel ? 'bg-violet-600 border-violet-600' : 'border-gray-300'}`}>
+                          {sel && <span className="text-white text-xs leading-none">✓</span>}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-800 truncate">{item.name}</p>
+                          {item.lot && <p className="text-xs text-gray-400">Lote: {item.lot} · Estoque: {item.quantity} {item.unit}</p>}
+                        </div>
+                        {sel && (
+                          <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+                            <button type="button" onClick={() => updateStockQty(item.id, sel.quantity - 1)}
+                              className="w-6 h-6 rounded-full border border-gray-300 text-gray-500 text-sm flex items-center justify-center hover:border-violet-400">−</button>
+                            <span className="w-6 text-center text-sm font-bold text-gray-700">{sel.quantity}</span>
+                            <button type="button" onClick={() => updateStockQty(item.id, sel.quantity + 1)}
+                              className="w-6 h-6 rounded-full border border-gray-300 text-gray-500 text-sm flex items-center justify-center hover:border-violet-400">+</button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Opção de dar saída */}
+            {selectedStock.length > 0 && (
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input type="checkbox" checked={registerSaida} onChange={e => setRegisterSaida(e.target.checked)} className="accent-violet-600 w-4 h-4" />
+                <span className="text-sm text-gray-700">Dar saída no estoque automaticamente</span>
+              </label>
+            )}
 
             <div>
               <label className="text-xs font-medium text-gray-600 block mb-1">Observações (opcional)</label>
