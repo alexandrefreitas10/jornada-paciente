@@ -410,6 +410,13 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   const [meObs, setMeObs] = useState('')
   const [meSaving, setMeSaving] = useState(false)
   const [meIsNew, setMeIsNew] = useState(false)
+  // campos auxiliares para tirzepartida (frascos × mg/frasco)
+  const [meFrascos, setMeFrascos] = useState('')
+  const [meMgFrasco, setMeMgFrasco] = useState('')
+
+  const meSelectedItem = items.find(i => i.id === Number(meItemId))
+  const meIsTirzep = (meSelectedItem?.name ?? meNewName).toLowerCase().includes('tirzep')
+  const meTotalMg = meFrascos && meMgFrasco ? Number(meFrascos) * Number(meMgFrasco) : null
 
   async function saveManualEntrada() {
     setMeSaving(true)
@@ -419,7 +426,11 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
       if (res.ok) { const ni = await res.json(); itemId = ni.id; setItems(p => [...p, ni]) }
     }
     if (!itemId) { setMeSaving(false); return }
-    await fetch('/api/estoque/movements', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: itemId, type: 'entrada', quantity: Number(meQty), lot: meLot || null, expiry_date: meExpiry || null, observation: meObs || null }) })
+    const finalQty = meIsTirzep && meTotalMg ? meTotalMg : Number(meQty)
+    const finalObs = meIsTirzep && meFrascos && meMgFrasco
+      ? `${meFrascos} frasco(s) × ${meMgFrasco}mg${meObs ? ` — ${meObs}` : ''}`
+      : (meObs || null)
+    await fetch('/api/estoque/movements', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: itemId, type: 'entrada', quantity: finalQty, lot: meLot || null, expiry_date: meExpiry || null, observation: finalObs }) })
 
     // Create entry log
     await fetch('/api/estoque/entry-logs', {
@@ -429,7 +440,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
     const [ir, mr, logsRes] = await Promise.all([fetch('/api/estoque/items'), fetch('/api/estoque/movements'), fetch('/api/estoque/entry-logs')])
     setItems(await ir.json()); setMovements(await mr.json())
     if (logsRes.ok) setEntryLogs(await logsRes.json())
-    setManEntrada(false); setMeItemId(''); setMeNewName(''); setMeQty('1'); setMeLot(''); setMeExpiry(''); setMeObs(''); setMeIsNew(false)
+    setManEntrada(false); setMeItemId(''); setMeNewName(''); setMeQty('1'); setMeLot(''); setMeExpiry(''); setMeObs(''); setMeIsNew(false); setMeFrascos(''); setMeMgFrasco('')
     setMeSaving(false)
     setQrDocxPrompt([itemId])
   }
@@ -1084,15 +1095,41 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
                     {items.map(i => <option key={i.id} value={i.id}>{i.name}{i.lot ? ` — Lote: ${i.lot}` : ''}</option>)}
                   </select>
                 )}
+                {meIsTirzep ? (
+                  <div className="space-y-2">
+                    <div className="flex gap-2 items-end flex-wrap">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Frascos *</label>
+                        <input type="number" min="1" step="1" value={meFrascos} onChange={e => setMeFrascos(e.target.value)} placeholder="Ex: 3" className="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+                      </div>
+                      <span className="text-gray-400 text-lg pb-2">×</span>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">mg por frasco *</label>
+                        <input type="number" min="1" step="0.1" value={meMgFrasco} onChange={e => setMeMgFrasco(e.target.value)} placeholder="Ex: 60" className="w-28 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+                      </div>
+                      {meTotalMg !== null && (
+                        <div className="pb-2">
+                          <span className="text-sm font-bold text-violet-700 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">= {meTotalMg}mg total</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                      <input value={meLot} onChange={e => setMeLot(e.target.value)} placeholder="Lote" className="w-32 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+                      <input value={meExpiry} onChange={e => setMeExpiry(e.target.value)} placeholder="Validade (MM/AAAA)" className="w-40 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+                      <input value={meObs} onChange={e => setMeObs(e.target.value)} placeholder="Observação" className="flex-1 min-w-[140px] border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+                    </div>
+                  </div>
+                ) : (
                 <div className="flex gap-2 flex-wrap">
                   <input type="number" min="1" value={meQty} onChange={e => setMeQty(e.target.value)} placeholder="Quantidade *" className="w-28 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
                   <input value={meLot} onChange={e => setMeLot(e.target.value)} placeholder="Lote" className="w-32 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
                   <input value={meExpiry} onChange={e => setMeExpiry(e.target.value)} placeholder="Validade (MM/AAAA)" className="w-40 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
                   <input value={meObs} onChange={e => setMeObs(e.target.value)} placeholder="Observação" className="flex-1 min-w-[140px] border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
                 </div>
+                )}
               </div>
               <div className="flex gap-2 mt-3">
-                <button onClick={saveManualEntrada} disabled={meSaving || (!meItemId && (!meIsNew || !meNewName))} className="px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50">{meSaving ? 'Salvando...' : 'Salvar Entrada'}</button>
+                <button onClick={saveManualEntrada} disabled={meSaving || (!meItemId && (!meIsNew || !meNewName)) || (meIsTirzep && !meTotalMg)} className="px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50">{meSaving ? 'Salvando...' : 'Salvar Entrada'}</button>
                 <button onClick={() => setManEntrada(false)} className="px-4 py-2 border border-gray-300 text-sm text-gray-600 rounded-lg hover:bg-gray-50">Cancelar</button>
               </div>
             </div>
