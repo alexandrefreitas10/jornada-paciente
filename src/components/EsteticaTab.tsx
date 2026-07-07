@@ -363,8 +363,7 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
       canvas.width = totalW; canvas.height = totalH
       const ctx = canvas.getContext('2d')!
       ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, totalW, totalH)
-      // Logo pequena no canto superior direito
-      ctx.drawImage(logoImg, totalW - logoW - PADDING, PADDING, logoW, LOGO_H)
+      ctx.drawImage(logoImg, (totalW - logoW) / 2, PADDING, logoW, LOGO_H)
       const contentTop = PADDING + LOGO_H + LOGO_GAP
       ctx.fillStyle = '#374151'; ctx.font = 'bold 40px sans-serif'; ctx.textAlign = 'center'
       ctx.fillText('ANTES', PADDING + wA / 2, contentTop + 44)
