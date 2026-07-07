@@ -220,6 +220,19 @@ export async function initSchema() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `).catch(() => {})
+
+  // Implantes hormonais
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS implants (
+      id SERIAL PRIMARY KEY,
+      patient_id INTEGER REFERENCES patients(id) ON DELETE SET NULL,
+      patient_name TEXT NOT NULL,
+      last_implant_date DATE NOT NULL,
+      notes TEXT,
+      created_by TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(() => {})
 }
 
 export default sql
