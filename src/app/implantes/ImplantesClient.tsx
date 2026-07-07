@@ -63,7 +63,8 @@ export default function ImplantesClient({ patients }: Props) {
   useEffect(() => {
     fetch('/api/implants')
       .then(r => r.json())
-      .then(setImplants)
+      .then(data => { if (Array.isArray(data)) setImplants(data) })
+      .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
 

@@ -91,7 +91,10 @@
       "Bash(cat .nvmrc)",
       "Bash(node -e \"console.log\\('node ok'\\)\")",
       "Bash(extract-text \"C:\\\\Users\\\\alexa\\\\OneDrive\\\\Desktop\\\\ESTOQUE.docx\")",
-      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('next:', p.dependencies.next\\)\")"
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('next:', p.dependencies.next\\)\")",
+      "Bash(cat next.config.js)",
+      "Bash(cat next.config.ts)",
+      "Bash(cat next.config.mjs)"
     ]
   }
 }

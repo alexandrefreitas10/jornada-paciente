@@ -11,7 +11,7 @@ export async function PATCH(
   const body = await req.json()
   const { last_implant_date, notes, patient_name } = body
 
-  const [row] = await sql<{ id: number; patient_name: string; last_implant_date: string; next_implant_date: string; days_until: number; notes: string | null }[]>`
+  const [row] = await sql<{ id: number; patient_name: string; last_implant_date: string; next_implant_date: string; days_until: number; notes: string | null; items_used: { name: string; quantity: number; unit: string }[] }[]>`
     UPDATE implants
     SET
       last_implant_date = COALESCE(${last_implant_date ?? null}, last_implant_date),
@@ -23,7 +23,9 @@ export async function PATCH(
       last_implant_date::text,
       (last_implant_date + INTERVAL '6 months')::date::text AS next_implant_date,
       ((last_implant_date + INTERVAL '6 months')::date - CURRENT_DATE)::int AS days_until,
-      notes, created_at
+      notes,
+      COALESCE(items_used, '[]'::jsonb) AS items_used,
+      created_at
   `
   if (!row) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 })
   return NextResponse.json(row)

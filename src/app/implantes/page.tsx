@@ -10,10 +10,16 @@ export default async function ImplantesPage() {
   const session = await auth()
   if (!session?.user) redirect('/')
 
-  await initSchema()
-  const patients = await sql<{ id: number; name: string }[]>`
-    SELECT id, name FROM patients WHERE deleted_at IS NULL AND archived_at IS NULL ORDER BY name
-  `
+  try {
+    await initSchema()
+  } catch {}
+
+  let patients: { id: number; name: string }[] = []
+  try {
+    patients = await sql<{ id: number; name: string }[]>`
+      SELECT id, name FROM patients WHERE deleted_at IS NULL AND archived_at IS NULL ORDER BY name
+    `
+  } catch {}
 
   return <ImplantesClient patients={patients} />
 }
