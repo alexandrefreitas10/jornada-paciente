@@ -92,6 +92,7 @@ export function MedicationsTab({ patientId, patientName }: { patientId: number; 
               <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
                 <p className="text-xs text-gray-500">Qtd: <span className="font-medium text-gray-700">{med.quantity}</span></p>
                 {med.lot && <p className="text-xs text-gray-500">Lote: <span className="font-medium text-gray-700">{med.lot}</span></p>}
+                {med.expiry_date && <p className="text-xs text-gray-500">Val: <span className="font-medium text-gray-700">{med.expiry_date}</span></p>}
                 {med.observation && <p className="text-xs text-gray-500 italic">{med.observation}</p>}
               </div>
               <p className="text-xs text-gray-400 mt-1">
