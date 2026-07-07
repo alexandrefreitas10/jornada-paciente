@@ -218,7 +218,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
       await fetch(`/api/estoque/movements/by-measurement/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quantity: newDose, observation: `Tirzepartida ${newDose}mg` }),
+        body: JSON.stringify({ quantity: newDose, observation: `Tirzepartida ${newDose}mg`, patient_id: patientId }),
       })
     }
   }
