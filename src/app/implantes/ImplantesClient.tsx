@@ -44,6 +44,7 @@ export default function ImplantesClient({ patients }: Props) {
   const [showForm, setShowForm] = useState(false)
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [filter, setFilter] = useState<'todos' | 'atrasado' | 'em_breve' | 'ok'>('todos')
+  const [nameSearch, setNameSearch] = useState('')
   const [expandedHistory, setExpandedHistory] = useState<Set<string>>(new Set())
 
   // modal renovação
@@ -58,6 +59,8 @@ export default function ImplantesClient({ patients }: Props) {
   // form state
   const [formPatientId, setFormPatientId] = useState<string>('')
   const [formPatientName, setFormPatientName] = useState('')
+  const [formPatientSearch, setFormPatientSearch] = useState('')
+  const [formPatientOpen, setFormPatientOpen] = useState(false)
   const [formDate, setFormDate] = useState(today())
   const [formNotes, setFormNotes] = useState('')
   const [formLoading, setFormLoading] = useState(false)
@@ -156,6 +159,8 @@ export default function ImplantesClient({ patients }: Props) {
       setShowForm(false)
       setFormPatientId('')
       setFormPatientName('')
+      setFormPatientSearch('')
+      setFormPatientOpen(false)
       setFormDate(today())
       setFormNotes('')
       setSelectedStock([])
@@ -255,6 +260,7 @@ export default function ImplantesClient({ patients }: Props) {
   )
 
   const filtered = latestByPatient.filter(i => {
+    if (nameSearch && !i.patient_name.toLowerCase().includes(nameSearch.toLowerCase())) return false
     if (filter === 'atrasado') return i.days_until < 0
     if (filter === 'em_breve') return i.days_until >= 0 && i.days_until <= 30
     if (filter === 'ok')       return i.days_until > 30
@@ -283,6 +289,25 @@ export default function ImplantesClient({ patients }: Props) {
           </button>
         </div>
 
+        {/* Busca por nome */}
+        <div className="relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+            </svg>
+          </span>
+          <input
+            type="text"
+            value={nameSearch}
+            onChange={e => setNameSearch(e.target.value)}
+            placeholder="Buscar paciente pelo nome..."
+            className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 shadow-sm"
+          />
+          {nameSearch && (
+            <button onClick={() => setNameSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+          )}
+        </div>
+
         {/* Formulário de criação */}
         {showForm && (
           <form onSubmit={handleCreate} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-4">
@@ -290,29 +315,73 @@ export default function ImplantesClient({ patients }: Props) {
 
             <div>
               <label className="text-xs font-medium text-gray-600 block mb-1">Paciente</label>
-              <select
-                value={formPatientId}
-                onChange={e => {
-                  setFormPatientId(e.target.value)
-                  const p = patients.find(p => String(p.id) === e.target.value)
-                  if (p) setFormPatientName(p.name)
-                  else setFormPatientName('')
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
-              >
-                <option value="">Selecione um paciente...</option>
-                {patients.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-              {!formPatientId && (
-                <input
-                  type="text"
-                  placeholder="Ou digite o nome manualmente"
-                  value={formPatientName}
-                  onChange={e => setFormPatientName(e.target.value)}
-                  className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
-                />
+              {formPatientId ? (
+                // Paciente vinculado — mostra chip com opção de trocar
+                <div className="flex items-center gap-2 px-3 py-2 bg-violet-50 border border-violet-300 rounded-lg">
+                  <span className="flex-1 text-sm text-violet-800 font-medium">{formPatientName}</span>
+                  <button type="button" onClick={() => { setFormPatientId(''); setFormPatientName(''); setFormPatientSearch(''); setFormPatientOpen(true) }}
+                    className="text-violet-400 hover:text-violet-600 text-lg leading-none">×</button>
+                </div>
+              ) : (
+                // Busca com autocomplete
+                <div className="relative">
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+                      </svg>
+                    </span>
+                    <input
+                      type="text"
+                      value={formPatientSearch}
+                      onChange={e => { setFormPatientSearch(e.target.value); setFormPatientOpen(true) }}
+                      onFocus={() => setFormPatientOpen(true)}
+                      placeholder="Buscar paciente..."
+                      autoComplete="off"
+                      className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                    />
+                  </div>
+                  {formPatientOpen && (
+                    <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-52 overflow-y-auto">
+                      {(() => {
+                        const q = formPatientSearch.trim().toLowerCase()
+                        const matches = patients.filter(p => p.name.toLowerCase().includes(q))
+                        return (
+                          <>
+                            {matches.map(p => (
+                              <button key={p.id} type="button"
+                                onMouseDown={() => { setFormPatientId(String(p.id)); setFormPatientName(p.name); setFormPatientSearch(p.name); setFormPatientOpen(false) }}
+                                className="w-full text-left px-4 py-2.5 text-sm text-gray-800 hover:bg-violet-50 hover:text-violet-700 transition-colors">
+                                {p.name}
+                              </button>
+                            ))}
+                            {q && matches.length === 0 && (
+                              <div className="px-4 py-3">
+                                <p className="text-xs text-gray-400 mb-2">Nenhum paciente encontrado para "{formPatientSearch}"</p>
+                                <button type="button"
+                                  onMouseDown={() => { setFormPatientName(formPatientSearch.trim()); setFormPatientOpen(false) }}
+                                  className="w-full py-2 px-3 bg-violet-50 border border-violet-200 text-violet-700 text-xs font-medium rounded-lg hover:bg-violet-100 transition-colors text-left">
+                                  + Cadastrar implante para "{formPatientSearch.trim()}"
+                                </button>
+                              </div>
+                            )}
+                            {!q && matches.length === 0 && (
+                              <p className="px-4 py-3 text-xs text-gray-400">Nenhum paciente cadastrado.</p>
+                            )}
+                          </>
+                        )
+                      })()}
+                    </div>
+                  )}
+                </div>
+              )}
+              {/* Nome manual (sem vínculo) */}
+              {!formPatientId && formPatientName && !formPatientOpen && (
+                <div className="mt-2 flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+                  <span className="text-xs text-amber-600 flex-1">Nome manual: <strong>{formPatientName}</strong> (sem vínculo a paciente)</span>
+                  <button type="button" onClick={() => { setFormPatientName(''); setFormPatientSearch('') }}
+                    className="text-amber-400 hover:text-amber-600 text-lg leading-none">×</button>
+                </div>
               )}
             </div>
 
