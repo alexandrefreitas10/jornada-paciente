@@ -4,6 +4,12 @@ import { useState, useRef, useEffect } from 'react'
 
 // ── Interfaces ────────────────────────────────────────────────────────────────
 
+interface SessionCompletion {
+  session_number: number
+  observation: string | null
+  completed_at: string
+}
+
 interface AestheticSession {
   id: number
   patient_id: number
@@ -16,6 +22,7 @@ interface AestheticSession {
   created_by: string | null
   created_at: string
   completed_sessions: number[]
+  completions: SessionCompletion[]
 }
 
 interface FileRecord {
@@ -146,6 +153,14 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
   const [finalCrops, setFinalCrops] = useState<[CropRect,CropRect]>([{...FULL_CROP},{...FULL_CROP}])
   const [comparing, setComparing] = useState<FileRecord[]>([])
 
+  // Modal de sessão
+  const [sessionModal, setSessionModal] = useState<{ session: AestheticSession; num: number } | null>(null)
+  const [sessionObs, setSessionObs] = useState('')
+  const [sessionSaving, setSessionSaving] = useState(false)
+
+  // Histórico expandido
+  const [historyOpen, setHistoryOpen] = useState<Set<number>>(new Set())
+
   const endDate = formStart && formTotal && formSpw
     ? calcEndDate(formStart, Number(formTotal), Number(formSpw))
     : ''
@@ -154,7 +169,11 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
     fetch(`/api/patients/${patientId}/aesthetic-sessions`)
       .then(r => r.json())
       .then(data => {
-        if (Array.isArray(data)) setSessions(data.map(s => ({ ...s, completed_sessions: Array.isArray(s.completed_sessions) ? s.completed_sessions : [] })))
+        if (Array.isArray(data)) setSessions(data.map(s => ({
+          ...s,
+          completed_sessions: Array.isArray(s.completed_sessions) ? s.completed_sessions : [],
+          completions: Array.isArray(s.completions) ? s.completions : [],
+        })))
       })
       .finally(() => setLoading(false))
     loadPhotos()
@@ -207,19 +226,48 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
     setSessions(prev => prev.filter(s => s.id !== id))
   }
 
-  async function toggleSession(session: AestheticSession, num: number) {
-    const done = session.completed_sessions.includes(num)
-    const method = done ? 'DELETE' : 'POST'
-    await fetch(`/api/patients/${patientId}/aesthetic-sessions/${session.id}/complete`, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_number: num }),
-    })
-    setSessions(prev => prev.map(s => {
-      if (s.id !== session.id) return s
-      const cs = done ? s.completed_sessions.filter(n => n !== num) : [...s.completed_sessions, num].sort((a,b)=>a-b)
-      return { ...s, completed_sessions: cs }
-    }))
+  function openSessionModal(session: AestheticSession, num: number) {
+    const existing = session.completions.find(c => c.session_number === num)
+    setSessionObs(existing?.observation ?? '')
+    setSessionModal({ session, num })
+  }
+
+  async function handleSessionConfirm() {
+    if (!sessionModal) return
+    const { session, num } = sessionModal
+    const isDone = session.completed_sessions.includes(num)
+    setSessionSaving(true)
+    try {
+      if (isDone) {
+        // Desmarcar
+        await fetch(`/api/patients/${patientId}/aesthetic-sessions/${session.id}/complete`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_number: num }),
+        })
+        setSessions(prev => prev.map(s => s.id !== session.id ? s : {
+          ...s,
+          completed_sessions: s.completed_sessions.filter(n => n !== num),
+          completions: s.completions.filter(c => c.session_number !== num),
+        }))
+      } else {
+        // Marcar com observação
+        const res = await fetch(`/api/patients/${patientId}/aesthetic-sessions/${session.id}/complete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_number: num, observation: sessionObs || null }),
+        })
+        const newCompletion: SessionCompletion = await res.json()
+        setSessions(prev => prev.map(s => s.id !== session.id ? s : {
+          ...s,
+          completed_sessions: [...s.completed_sessions, num].sort((a,b)=>a-b),
+          completions: [...s.completions, newCompletion],
+        }))
+      }
+      setSessionModal(null)
+    } finally {
+      setSessionSaving(false)
+    }
   }
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -489,20 +537,99 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
                   <div className="flex flex-wrap gap-1.5">
                     {Array.from({ length: s.total_sessions }, (_, i) => i + 1).map(num => {
                       const isDone = s.completed_sessions.includes(num)
+                      const comp = s.completions.find(c => c.session_number === num)
                       return (
-                        <button key={num} onClick={() => toggleSession(s, num)} title={`Sessão ${num}`}
-                          className={`w-7 h-7 rounded-full border-2 text-xs font-bold transition-all ${isDone ? 'bg-violet-600 border-violet-600 text-white' : 'border-gray-300 text-gray-400 hover:border-violet-400 hover:text-violet-500'}`}>
+                        <button key={num} onClick={() => openSessionModal(s, num)}
+                          title={isDone && comp?.observation ? comp.observation : `Sessão ${num}`}
+                          className={`w-7 h-7 rounded-full border-2 text-xs font-bold transition-all relative ${isDone ? 'bg-violet-600 border-violet-600 text-white' : 'border-gray-300 text-gray-400 hover:border-violet-400 hover:text-violet-500'}`}>
                           {num}
+                          {isDone && comp?.observation && (
+                            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 rounded-full border border-white" />
+                          )}
                         </button>
                       )
                     })}
                   </div>
                 </div>
+
+                {/* Histórico de sessões concluídas */}
+                {s.completions.length > 0 && (
+                  <div className="border-t border-gray-100 pt-2">
+                    <button
+                      onClick={() => setHistoryOpen(prev => {
+                        const next = new Set(prev)
+                        next.has(s.id) ? next.delete(s.id) : next.add(s.id)
+                        return next
+                      })}
+                      className="text-xs text-violet-600 hover:text-violet-800 font-medium">
+                      {historyOpen.has(s.id) ? '▲ Ocultar histórico' : `▼ Ver histórico (${s.completions.length} sessão${s.completions.length > 1 ? 'ões' : ''})`}
+                    </button>
+                    {historyOpen.has(s.id) && (
+                      <div className="mt-2 space-y-1.5">
+                        {s.completions.slice().sort((a,b) => a.session_number - b.session_number).map(c => (
+                          <div key={c.session_number} className="flex items-start gap-2 bg-gray-50 rounded-lg px-3 py-2 text-xs">
+                            <span className="w-5 h-5 rounded-full bg-violet-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">{c.session_number}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-gray-400">{fmtDate(c.completed_at)}</p>
+                              {c.observation && <p className="text-gray-700 mt-0.5">{c.observation}</p>}
+                              {!c.observation && <p className="text-gray-300 italic">Sem observações</p>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )
           })}
         </div>
       )}
+
+      {/* Modal de sessão */}
+      {sessionModal && (() => {
+        const { session, num } = sessionModal
+        const isDone = session.completed_sessions.includes(num)
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-800">
+                  {isDone ? 'Desmarcar sessão' : 'Registrar sessão'} #{num}
+                </h3>
+                <button onClick={() => setSessionModal(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+              </div>
+              <p className="text-xs text-gray-500">{session.procedure_name}</p>
+              {!isDone && (
+                <div>
+                  <label className="text-xs font-medium text-gray-600 block mb-1">Observações (opcional)</label>
+                  <textarea
+                    value={sessionObs}
+                    onChange={e => setSessionObs(e.target.value)}
+                    rows={3}
+                    placeholder="Ex: paciente relatou melhora, área tratada, equipamento usado..."
+                    autoFocus
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 resize-none"
+                  />
+                </div>
+              )}
+              {isDone && (
+                <p className="text-sm text-gray-500">Deseja desmarcar esta sessão como concluída?</p>
+              )}
+              <div className="flex gap-2">
+                <button onClick={() => setSessionModal(null)}
+                  className="flex-1 py-2 border border-gray-300 text-sm text-gray-600 rounded-xl hover:bg-gray-50">
+                  Cancelar
+                </button>
+                <button onClick={handleSessionConfirm} disabled={sessionSaving}
+                  className={`flex-1 py-2 text-white text-sm font-medium rounded-xl disabled:opacity-50 transition-colors ${isDone ? 'bg-red-500 hover:bg-red-600' : 'bg-violet-600 hover:bg-violet-700'}`}>
+                  {sessionSaving ? '...' : isDone ? 'Desmarcar' : 'Confirmar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── Seção de fotos ────────────────────────────────────────── */}
       <div className="border-t border-gray-100 pt-5">

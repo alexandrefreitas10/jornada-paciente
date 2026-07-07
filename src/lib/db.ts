@@ -264,10 +264,12 @@ export async function initSchema() {
       id SERIAL PRIMARY KEY,
       aesthetic_session_id INTEGER NOT NULL REFERENCES aesthetic_sessions(id) ON DELETE CASCADE,
       session_number INTEGER NOT NULL,
+      observation TEXT,
       completed_at TIMESTAMPTZ DEFAULT NOW(),
       UNIQUE(aesthetic_session_id, session_number)
     )
   `).catch(() => {})
+  await sql.unsafe(`ALTER TABLE aesthetic_session_completions ADD COLUMN IF NOT EXISTS observation TEXT`).catch(() => {})
 }
 
 export default sql

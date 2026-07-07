@@ -14,7 +14,17 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       COALESCE(
         json_agg(c.session_number ORDER BY c.session_number) FILTER (WHERE c.session_number IS NOT NULL),
         '[]'
-      ) AS completed_sessions
+      ) AS completed_sessions,
+      COALESCE(
+        json_agg(
+          json_build_object(
+            'session_number', c.session_number,
+            'observation', c.observation,
+            'completed_at', c.completed_at
+          ) ORDER BY c.session_number
+        ) FILTER (WHERE c.session_number IS NOT NULL),
+        '[]'
+      ) AS completions
     FROM aesthetic_sessions s
     LEFT JOIN aesthetic_session_completions c ON c.aesthetic_session_id = s.id
     WHERE s.patient_id = ${Number(id)}
@@ -38,5 +48,5 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     VALUES (${Number(id)}, ${procedure_name}, ${Number(total_sessions)}, ${Number(sessions_per_week) || 1}, ${start_date}, ${end_date}, ${region ?? null}, ${createdBy})
     RETURNING *
   `
-  return NextResponse.json({ ...row, completed_sessions: [] }, { status: 201 })
+  return NextResponse.json({ ...row, completed_sessions: [], completions: [] }, { status: 201 })
 }

@@ -3,16 +3,17 @@ import sql from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
-// POST: marcar sessão como concluída / DELETE: desmarcar
 export async function POST(req: NextRequest, { params }: { params: Promise<{ sid: string }> }) {
   const { sid } = await params
-  const { session_number } = await req.json()
-  await sql`
-    INSERT INTO aesthetic_session_completions (aesthetic_session_id, session_number)
-    VALUES (${Number(sid)}, ${Number(session_number)})
-    ON CONFLICT DO NOTHING
+  const { session_number, observation } = await req.json()
+  const [row] = await sql`
+    INSERT INTO aesthetic_session_completions (aesthetic_session_id, session_number, observation)
+    VALUES (${Number(sid)}, ${Number(session_number)}, ${observation ?? null})
+    ON CONFLICT (aesthetic_session_id, session_number)
+    DO UPDATE SET observation = EXCLUDED.observation
+    RETURNING session_number, observation, completed_at
   `
-  return NextResponse.json({ ok: true })
+  return NextResponse.json(row)
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ sid: string }> }) {
