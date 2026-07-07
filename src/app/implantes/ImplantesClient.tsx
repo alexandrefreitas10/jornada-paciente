@@ -45,8 +45,7 @@ export default function ImplantesClient({ patients }: Props) {
   const [showForm, setShowForm] = useState(false)
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [archivingId, setArchivingId] = useState<number | null>(null)
-  const [showArchived, setShowArchived] = useState(false)
-  const [filter, setFilter] = useState<'todos' | 'atrasado' | 'em_breve' | 'ok'>('todos')
+  const [filter, setFilter] = useState<'todos' | 'atrasado' | 'em_breve' | 'ok' | 'antigos'>('todos')
   const [nameSearch, setNameSearch] = useState('')
   const [expandedHistory, setExpandedHistory] = useState<Set<string>>(new Set())
 
@@ -538,7 +537,7 @@ export default function ImplantesClient({ patients }: Props) {
 
         {/* Totalizadores */}
         {!loading && implants.length > 0 && (
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-4 gap-2">
             <button onClick={() => setFilter(f => f === 'atrasado' ? 'todos' : 'atrasado')}
               className={`rounded-xl border p-3 text-center transition-colors ${filter === 'atrasado' ? 'bg-red-600 text-white border-red-600' : 'bg-white border-gray-200 hover:border-red-300'}`}>
               <p className={`text-2xl font-bold ${filter === 'atrasado' ? 'text-white' : 'text-red-600'}`}>{atrasados}</p>
@@ -554,17 +553,65 @@ export default function ImplantesClient({ patients }: Props) {
               <p className={`text-2xl font-bold ${filter === 'ok' ? 'text-white' : 'text-emerald-600'}`}>{okCount}</p>
               <p className={`text-xs mt-0.5 ${filter === 'ok' ? 'text-emerald-100' : 'text-gray-500'}`}>Em dia</p>
             </button>
+            <button onClick={() => setFilter(f => f === 'antigos' ? 'todos' : 'antigos')}
+              className={`rounded-xl border p-3 text-center transition-colors ${filter === 'antigos' ? 'bg-gray-600 text-white border-gray-600' : 'bg-white border-gray-200 hover:border-gray-400'}`}>
+              <p className={`text-2xl font-bold ${filter === 'antigos' ? 'text-white' : 'text-gray-500'}`}>{archivedLatest.length}</p>
+              <p className={`text-xs mt-0.5 ${filter === 'antigos' ? 'text-gray-300' : 'text-gray-500'}`}>Antigos</p>
+            </button>
           </div>
         )}
 
-        {/* Lista */}
+        {/* Lista de antigos */}
+        {!loading && filter === 'antigos' && (
+          archivedLatest.length === 0 ? (
+            <div className="text-center py-12 text-gray-400 text-sm">Nenhum paciente antigo de implante.</div>
+          ) : (
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-100">
+              {archivedLatest.map(implant => (
+                <div key={implant.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    {implant.patient_id ? (
+                      <a href={`/pacientes/${implant.patient_id}`}
+                        className="text-sm font-medium text-gray-700 hover:text-violet-700 transition-colors">
+                        {implant.patient_name}
+                      </a>
+                    ) : (
+                      <p className="text-sm font-medium text-gray-700">{implant.patient_name}</p>
+                    )}
+                    <p className="text-xs text-gray-400 mt-0.5">Último implante: {fmtDate(implant.last_implant_date)}</p>
+                    {implant.notes && <p className="text-xs text-gray-400 truncate">{implant.notes}</p>}
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <button
+                      onClick={() => handleArchive(implant, false)}
+                      disabled={archivingId === implant.id}
+                      title="Reativar"
+                      className="px-3 py-1.5 border border-violet-200 text-violet-600 text-xs font-medium rounded-lg hover:bg-violet-50 disabled:opacity-50 transition-colors"
+                    >
+                      {archivingId === implant.id ? '...' : '↩ Reativar'}
+                    </button>
+                    <button
+                      onClick={() => handleDelete(implant.id)}
+                      disabled={deletingId === implant.id}
+                      className="px-3 py-1.5 border border-red-200 text-red-600 text-xs font-medium rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors"
+                    >
+                      {deletingId === implant.id ? '...' : '🗑'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        )}
+
+        {/* Lista de ativos */}
         {loading ? (
           <div className="text-center py-12 text-gray-400 text-sm animate-pulse">Carregando...</div>
-        ) : filtered.length === 0 ? (
+        ) : filter !== 'antigos' && filtered.length === 0 ? (
           <div className="text-center py-12 text-gray-400 text-sm">
             {implants.length === 0 ? 'Nenhum implante cadastrado ainda.' : 'Nenhum implante neste filtro.'}
           </div>
-        ) : (
+        ) : filter !== 'antigos' ? (
           <div className="space-y-3">
             {filtered.map(implant => {
               const s = statusInfo(implant.days_until)
@@ -704,62 +751,7 @@ export default function ImplantesClient({ patients }: Props) {
               )
             })}
           </div>
-        )}
-
-        {/* Seção de pacientes antigos (arquivados) */}
-        {archivedLatest.length > 0 && (
-          <div className="border border-gray-200 rounded-2xl bg-white shadow-sm overflow-hidden">
-            <button
-              onClick={() => setShowArchived(v => !v)}
-              className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-            >
-              <span className="flex items-center gap-2">
-                <span className="text-gray-400">📦</span>
-                Pacientes antigos de implante
-                <span className="bg-gray-100 text-gray-500 text-xs font-semibold px-2 py-0.5 rounded-full">{archivedLatest.length}</span>
-              </span>
-              <span className="text-gray-400 text-xs">{showArchived ? '▲ Ocultar' : '▼ Ver'}</span>
-            </button>
-
-            {showArchived && (
-              <div className="border-t border-gray-100 divide-y divide-gray-100">
-                {archivedLatest.map(implant => (
-                  <div key={implant.id} className="px-4 py-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      {implant.patient_id ? (
-                        <a href={`/pacientes/${implant.patient_id}`}
-                          className="text-sm font-medium text-gray-700 hover:text-violet-700 transition-colors">
-                          {implant.patient_name}
-                        </a>
-                      ) : (
-                        <p className="text-sm font-medium text-gray-700">{implant.patient_name}</p>
-                      )}
-                      <p className="text-xs text-gray-400 mt-0.5">Último implante: {fmtDate(implant.last_implant_date)}</p>
-                      {implant.notes && <p className="text-xs text-gray-400 truncate">{implant.notes}</p>}
-                    </div>
-                    <div className="flex gap-2 shrink-0">
-                      <button
-                        onClick={() => handleArchive(implant, false)}
-                        disabled={archivingId === implant.id}
-                        title="Reativar"
-                        className="px-3 py-1.5 border border-violet-200 text-violet-600 text-xs font-medium rounded-lg hover:bg-violet-50 disabled:opacity-50 transition-colors"
-                      >
-                        {archivingId === implant.id ? '...' : '↩ Reativar'}
-                      </button>
-                      <button
-                        onClick={() => handleDelete(implant.id)}
-                        disabled={deletingId === implant.id}
-                        className="px-3 py-1.5 border border-red-200 text-red-600 text-xs font-medium rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors"
-                      >
-                        {deletingId === implant.id ? '...' : '🗑'}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        ) : null}
       </div>
 
       {/* Modal de renovação */}
