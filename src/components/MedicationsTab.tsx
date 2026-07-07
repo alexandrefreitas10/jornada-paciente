@@ -80,10 +80,12 @@ export function MedicationsTab({ patientId, patientName }: { patientId: number; 
           <p className="text-xs mt-1 text-gray-300">As saídas do estoque vinculadas a este paciente aparecerão aqui.</p>
         </div>
       ) : (
-        medications.map(med => (
-          <div key={med.id} className="flex gap-3 items-start p-3 bg-gray-50 rounded-xl border border-gray-100">
-            <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center shrink-0 mt-0.5">
-              <span className="text-base">💊</span>
+        medications.map(med => {
+          const isImplant = med.observation === 'Implante hormonal'
+          return (
+          <div key={med.id} className={`flex gap-3 items-start p-3 rounded-xl border ${isImplant ? 'bg-violet-50 border-violet-200' : 'bg-gray-50 border-gray-100'}`}>
+            <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${isImplant ? 'bg-violet-200' : 'bg-violet-100'}`}>
+              <span className="text-base">{isImplant ? '🧬' : '💊'}</span>
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-gray-800 text-sm">{med.item_name}</p>
@@ -98,7 +100,7 @@ export function MedicationsTab({ patientId, patientName }: { patientId: number; 
               </p>
             </div>
           </div>
-        ))
+        )})
       )}
 
       {/* Modal relatório */}
