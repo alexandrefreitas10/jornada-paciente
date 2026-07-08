@@ -539,6 +539,7 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
                   </a>
                 ) : (
                   <img src={f.url} alt={f.original_name}
+                    onError={e => { (e.currentTarget as HTMLImageElement).src = `/api/patients/${patientId}/files/${f.id}/download?proxy=1` }}
                     className={`w-full h-40 object-cover transition-opacity ${isSelected ? 'opacity-100' : 'opacity-70'}`} />
                 )}
 
