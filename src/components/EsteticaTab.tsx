@@ -288,43 +288,54 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
     setSessionModal({ session, num })
   }
 
-  async function handleSessionConfirm() {
+  async function handleSessionSave() {
     if (!sessionModal) return
     const { session, num } = sessionModal
     const isDone = session.completed_sessions.includes(num)
     setSessionSaving(true)
     try {
-      if (isDone) {
-        // Desmarcar
-        await fetch(`/api/patients/${patientId}/aesthetic-sessions/${session.id}/complete`, {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_number: num }),
-        })
-        setSessions(prev => prev.map(s => s.id !== session.id ? s : {
-          ...s,
-          completed_sessions: s.completed_sessions.filter(n => n !== num),
-          completions: s.completions.filter(c => c.session_number !== num),
-        }))
-      } else {
-        // Marcar com observação
-        const filledMeasurements = sessionMeasurements.filter(m => m.label && m.value !== '')
-        const res = await fetch(`/api/patients/${patientId}/aesthetic-sessions/${session.id}/complete`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_number: num, observation: sessionObs || null, measurements: filledMeasurements }),
-        })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const newCompletion: SessionCompletion = await res.json()
-        setSessions(prev => prev.map(s => s.id !== session.id ? s : {
-          ...s,
-          completed_sessions: [...s.completed_sessions, num].sort((a,b)=>a-b),
-          completions: [...s.completions, { ...newCompletion, measurements: Array.isArray(newCompletion.measurements) ? newCompletion.measurements : [] }],
-        }))
-      }
+      const filledMeasurements = sessionMeasurements.filter(m => m.label && m.value !== '')
+      const res = await fetch(`/api/patients/${patientId}/aesthetic-sessions/${session.id}/complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_number: num, observation: sessionObs || null, measurements: filledMeasurements }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const newCompletion: SessionCompletion = await res.json()
+      const safeCompletion = { ...newCompletion, measurements: Array.isArray(newCompletion.measurements) ? newCompletion.measurements : [] }
+      setSessions(prev => prev.map(s => s.id !== session.id ? s : {
+        ...s,
+        completed_sessions: isDone ? s.completed_sessions : [...s.completed_sessions, num].sort((a,b)=>a-b),
+        completions: isDone
+          ? s.completions.map(c => c.session_number === num ? safeCompletion : c)
+          : [...s.completions, safeCompletion],
+      }))
       setSessionModal(null)
     } catch {
       // silencia erros de API para não derrubar a página
+    } finally {
+      setSessionSaving(false)
+    }
+  }
+
+  async function handleSessionUnmark() {
+    if (!sessionModal) return
+    const { session, num } = sessionModal
+    setSessionSaving(true)
+    try {
+      await fetch(`/api/patients/${patientId}/aesthetic-sessions/${session.id}/complete`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_number: num }),
+      })
+      setSessions(prev => prev.map(s => s.id !== session.id ? s : {
+        ...s,
+        completed_sessions: s.completed_sessions.filter(n => n !== num),
+        completions: s.completions.filter(c => c.session_number !== num),
+      }))
+      setSessionModal(null)
+    } catch {
+      // silencia erros
     } finally {
       setSessionSaving(false)
     }
@@ -760,52 +771,53 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
                 <button onClick={() => setSessionModal(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
               </div>
               <p className="text-xs text-gray-500">{session.procedure_name}</p>
-              {!isDone && (
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-xs font-medium text-gray-600 block mb-1">Observações (opcional)</label>
-                    <textarea
-                      value={sessionObs}
-                      onChange={e => setSessionObs(e.target.value)}
-                      rows={2}
-                      placeholder="Ex: paciente relatou melhora, área tratada, equipamento usado..."
-                      autoFocus
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 resize-none"
-                    />
-                  </div>
-                  {sessionMeasurements.length > 0 && (
-                    <div>
-                      <label className="text-xs font-medium text-gray-600 block mb-2">Medidas desta sessão</label>
-                      <div className="space-y-2">
-                        {sessionMeasurements.map((m, idx) => (
-                          <div key={idx} className="flex items-center gap-2">
-                            <span className="text-xs text-gray-600 w-24 shrink-0 truncate">{m.label}</span>
-                            <input
-                              type="number"
-                              value={m.value}
-                              onChange={e => setSessionMeasurements(prev => prev.map((x, i) => i === idx ? { ...x, value: e.target.value } : x))}
-                              placeholder="0"
-                              className="flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
-                            />
-                            <span className="text-xs text-gray-400 shrink-0">{m.unit}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-medium text-gray-600 block mb-1">Observações (opcional)</label>
+                  <textarea
+                    value={sessionObs}
+                    onChange={e => setSessionObs(e.target.value)}
+                    rows={2}
+                    placeholder="Ex: paciente relatou melhora, área tratada, equipamento usado..."
+                    autoFocus
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 resize-none"
+                  />
                 </div>
-              )}
-              {isDone && (
-                <p className="text-sm text-gray-500">Deseja desmarcar esta sessão como concluída?</p>
-              )}
+                {sessionMeasurements.length > 0 && (
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 block mb-2">Medidas desta sessão</label>
+                    <div className="space-y-2">
+                      {sessionMeasurements.map((m, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <span className="text-xs text-gray-600 w-24 shrink-0 truncate">{m.label}</span>
+                          <input
+                            type="number"
+                            value={m.value}
+                            onChange={e => setSessionMeasurements(prev => prev.map((x, i) => i === idx ? { ...x, value: e.target.value } : x))}
+                            placeholder="0"
+                            className="flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                          />
+                          <span className="text-xs text-gray-400 shrink-0">{m.unit}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
               <div className="flex gap-2">
+                {isDone && (
+                  <button onClick={handleSessionUnmark} disabled={sessionSaving}
+                    className="py-2 px-3 border border-red-300 text-sm text-red-600 rounded-xl hover:bg-red-50 disabled:opacity-50">
+                    Desmarcar
+                  </button>
+                )}
                 <button onClick={() => setSessionModal(null)}
                   className="flex-1 py-2 border border-gray-300 text-sm text-gray-600 rounded-xl hover:bg-gray-50">
                   Cancelar
                 </button>
-                <button onClick={handleSessionConfirm} disabled={sessionSaving}
-                  className={`flex-1 py-2 text-white text-sm font-medium rounded-xl disabled:opacity-50 transition-colors ${isDone ? 'bg-red-500 hover:bg-red-600' : 'bg-violet-600 hover:bg-violet-700'}`}>
-                  {sessionSaving ? '...' : isDone ? 'Desmarcar' : 'Confirmar'}
+                <button onClick={handleSessionSave} disabled={sessionSaving}
+                  className="flex-1 py-2 bg-violet-600 text-white text-sm font-medium rounded-xl hover:bg-violet-700 disabled:opacity-50">
+                  {sessionSaving ? '...' : isDone ? 'Atualizar' : 'Confirmar'}
                 </button>
               </div>
             </div>
