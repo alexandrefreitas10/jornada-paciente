@@ -198,7 +198,7 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
       })
       .catch(() => {})
       .finally(() => setLoading(false))
-    loadPhotos()
+    loadPhotos().catch(() => {})
   }, [patientId])
 
   async function loadPhotos() {
@@ -209,6 +209,8 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
         const data = await res.json()
         if (Array.isArray(data)) setPhotos(data)
       }
+    } catch {
+      // ignora erros de foto para não derrubar a página
     } finally {
       setPhotosLoading(false)
     }
@@ -287,6 +289,7 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ session_number: num, observation: sessionObs || null, measurements: filledMeasurements }),
         })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const newCompletion: SessionCompletion = await res.json()
         setSessions(prev => prev.map(s => s.id !== session.id ? s : {
           ...s,
