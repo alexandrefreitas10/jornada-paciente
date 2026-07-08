@@ -7,6 +7,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sid
   const { sid } = await params
   const { session_number, observation, measurements } = await req.json()
   const measJson = JSON.stringify(measurements ?? [])
+  // Garante que a coluna existe antes de tentar salvar
+  await sql.unsafe(`ALTER TABLE aesthetic_session_completions ADD COLUMN IF NOT EXISTS measurements JSONB DEFAULT '[]'`).catch(() => {})
   try {
     const [row] = await sql`
       INSERT INTO aesthetic_session_completions (aesthetic_session_id, session_number, observation, measurements)
