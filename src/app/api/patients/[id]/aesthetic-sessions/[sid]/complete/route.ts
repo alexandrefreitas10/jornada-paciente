@@ -20,7 +20,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sid
        RETURNING session_number, observation, measurements, completed_at`,
       [Number(sid), Number(session_number), observation ?? null, measJson]
     )
-    return NextResponse.json(row)
+    const parsedMeasurements = typeof row.measurements === 'string'
+      ? JSON.parse(row.measurements)
+      : (Array.isArray(row.measurements) ? row.measurements : [])
+    return NextResponse.json({ ...row, measurements: parsedMeasurements })
   } catch (err) {
     primaryError = String(err)
     console.error('[complete] primary insert error:', err)
