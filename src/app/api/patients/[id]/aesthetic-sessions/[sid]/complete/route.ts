@@ -7,14 +7,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sid
   const { sid } = await params
   const { session_number, observation, measurements } = await req.json()
   const measJson = JSON.stringify(measurements ?? [])
-  const [row] = await sql`
-    INSERT INTO aesthetic_session_completions (aesthetic_session_id, session_number, observation, measurements)
-    VALUES (${Number(sid)}, ${Number(session_number)}, ${observation ?? null}, ${measJson}::jsonb)
-    ON CONFLICT (aesthetic_session_id, session_number)
-    DO UPDATE SET observation = EXCLUDED.observation, measurements = EXCLUDED.measurements
-    RETURNING session_number, observation, measurements, completed_at
-  `
-  return NextResponse.json(row)
+  try {
+    const [row] = await sql`
+      INSERT INTO aesthetic_session_completions (aesthetic_session_id, session_number, observation, measurements)
+      VALUES (${Number(sid)}, ${Number(session_number)}, ${observation ?? null}, ${measJson}::jsonb)
+      ON CONFLICT (aesthetic_session_id, session_number)
+      DO UPDATE SET observation = EXCLUDED.observation, measurements = EXCLUDED.measurements
+      RETURNING session_number, observation, measurements, completed_at
+    `
+    return NextResponse.json(row)
+  } catch {
+    // Fallback: coluna measurements pode não existir ainda em produção
+    const [row] = await sql`
+      INSERT INTO aesthetic_session_completions (aesthetic_session_id, session_number, observation)
+      VALUES (${Number(sid)}, ${Number(session_number)}, ${observation ?? null})
+      ON CONFLICT (aesthetic_session_id, session_number)
+      DO UPDATE SET observation = EXCLUDED.observation
+      RETURNING session_number, observation, completed_at
+    `
+    return NextResponse.json({ ...row, measurements: [] })
+  }
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ sid: string }> }) {

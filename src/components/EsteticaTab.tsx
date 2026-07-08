@@ -295,6 +295,8 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
         }))
       }
       setSessionModal(null)
+    } catch {
+      // silencia erros de API para não derrubar a página
     } finally {
       setSessionSaving(false)
     }
