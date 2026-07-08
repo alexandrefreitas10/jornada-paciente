@@ -184,7 +184,7 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
 
   useEffect(() => {
     fetch(`/api/patients/${patientId}/aesthetic-sessions`)
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
       .then(data => {
         if (Array.isArray(data)) setSessions(data.map(s => ({
           ...s,
@@ -196,6 +196,7 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
           })) : [],
         })))
       })
+      .catch(() => {})
       .finally(() => setLoading(false))
     loadPhotos()
   }, [patientId])
