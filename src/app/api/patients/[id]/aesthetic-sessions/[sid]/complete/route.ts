@@ -6,29 +6,34 @@ export const dynamic = 'force-dynamic'
 export async function POST(req: NextRequest, { params }: { params: Promise<{ sid: string }> }) {
   const { sid } = await params
   const { session_number, observation, measurements } = await req.json()
-  const measJson = JSON.stringify(measurements ?? [])
+  const measArr = Array.isArray(measurements) ? measurements : []
   // Garante que a coluna existe antes de tentar salvar
   await sql.unsafe(`ALTER TABLE aesthetic_session_completions ADD COLUMN IF NOT EXISTS measurements JSONB DEFAULT '[]'`).catch(() => {})
+  let primaryError = ''
   try {
-    const [row] = await sql`
-      INSERT INTO aesthetic_session_completions (aesthetic_session_id, session_number, observation, measurements)
-      VALUES (${Number(sid)}, ${Number(session_number)}, ${observation ?? null}, ${measJson}::jsonb)
-      ON CONFLICT (aesthetic_session_id, session_number)
-      DO UPDATE SET observation = EXCLUDED.observation, measurements = EXCLUDED.measurements
-      RETURNING session_number, observation, measurements, completed_at
-    `
+    const measJson = JSON.stringify(measArr)
+    const [row] = await sql.unsafe(
+      `INSERT INTO aesthetic_session_completions (aesthetic_session_id, session_number, observation, measurements)
+       VALUES ($1, $2, $3, $4::jsonb)
+       ON CONFLICT (aesthetic_session_id, session_number)
+       DO UPDATE SET observation = EXCLUDED.observation, measurements = EXCLUDED.measurements
+       RETURNING session_number, observation, measurements, completed_at`,
+      [Number(sid), Number(session_number), observation ?? null, measJson]
+    )
     return NextResponse.json(row)
-  } catch {
-    // Fallback: coluna measurements pode não existir ainda em produção
-    const [row] = await sql`
-      INSERT INTO aesthetic_session_completions (aesthetic_session_id, session_number, observation)
-      VALUES (${Number(sid)}, ${Number(session_number)}, ${observation ?? null})
-      ON CONFLICT (aesthetic_session_id, session_number)
-      DO UPDATE SET observation = EXCLUDED.observation
-      RETURNING session_number, observation, completed_at
-    `
-    return NextResponse.json({ ...row, measurements: [] })
+  } catch (err) {
+    primaryError = String(err)
+    console.error('[complete] primary insert error:', err)
   }
+  // Fallback: salva sem medidas
+  const [row] = await sql`
+    INSERT INTO aesthetic_session_completions (aesthetic_session_id, session_number, observation)
+    VALUES (${Number(sid)}, ${Number(session_number)}, ${observation ?? null})
+    ON CONFLICT (aesthetic_session_id, session_number)
+    DO UPDATE SET observation = EXCLUDED.observation
+    RETURNING session_number, observation, completed_at
+  `
+  return NextResponse.json({ ...row, measurements: [], _error: primaryError })
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ sid: string }> }) {
