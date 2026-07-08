@@ -188,8 +188,12 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
       .then(data => {
         if (Array.isArray(data)) setSessions(data.map(s => ({
           ...s,
+          initial_measurements: Array.isArray(s.initial_measurements) ? s.initial_measurements : [],
           completed_sessions: Array.isArray(s.completed_sessions) ? s.completed_sessions : [],
-          completions: Array.isArray(s.completions) ? s.completions : [],
+          completions: Array.isArray(s.completions) ? s.completions.map((c: SessionCompletion) => ({
+            ...c,
+            measurements: Array.isArray(c.measurements) ? c.measurements : [],
+          })) : [],
         })))
       })
       .finally(() => setLoading(false))

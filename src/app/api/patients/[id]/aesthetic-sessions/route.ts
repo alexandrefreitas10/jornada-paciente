@@ -20,7 +20,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
           json_build_object(
             'session_number', c.session_number,
             'observation', c.observation,
-            'measurements', COALESCE(c.measurements, '[]'::jsonb),
+            'measurements', COALESCE(c.measurements, '[]'::jsonb)::jsonb,
             'completed_at', c.completed_at
           ) ORDER BY c.session_number
         ) FILTER (WHERE c.session_number IS NOT NULL),
