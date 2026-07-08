@@ -1,6 +1,31 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, Component, type ReactNode, type ErrorInfo } from 'react'
+
+class RenderErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props)
+    this.state = { error: null }
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { error: error.message }
+  }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('[EsteticaTab render error]', error, info)
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+          <p className="font-semibold mb-1">Erro ao renderizar histórico</p>
+          <p className="text-xs text-red-500">{this.state.error}</p>
+          <button onClick={() => this.setState({ error: null })} className="mt-2 text-xs underline">Tentar novamente</button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 // ── Interfaces ────────────────────────────────────────────────────────────────
 
@@ -255,7 +280,7 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
     const existing = session.completions.find(c => c.session_number === num)
     setSessionObs(existing?.observation ?? '')
     // Pré-preenche com medidas existentes ou copia estrutura das medidas iniciais
-    if (existing?.measurements && existing.measurements.length > 0) {
+    if (Array.isArray(existing?.measurements) && existing.measurements.length > 0) {
       setSessionMeasurements(existing.measurements.map(m => ({ ...m })))
     } else {
       setSessionMeasurements((session.initial_measurements ?? []).map(m => ({ ...m, value: '' })))
@@ -294,7 +319,7 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
         setSessions(prev => prev.map(s => s.id !== session.id ? s : {
           ...s,
           completed_sessions: [...s.completed_sessions, num].sort((a,b)=>a-b),
-          completions: [...s.completions, { ...newCompletion, measurements: newCompletion.measurements ?? [] }],
+          completions: [...s.completions, { ...newCompletion, measurements: Array.isArray(newCompletion.measurements) ? newCompletion.measurements : [] }],
         }))
       }
       setSessionModal(null)
@@ -686,27 +711,32 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
                       {historyOpen.has(s.id) ? '▲ Ocultar histórico' : `▼ Ver histórico (${s.completions.length} sessão${s.completions.length > 1 ? 'ões' : ''})`}
                     </button>
                     {historyOpen.has(s.id) && (
-                      <div className="mt-2 space-y-1.5">
-                        {s.completions.slice().sort((a,b) => a.session_number - b.session_number).map(c => (
-                          <div key={c.session_number} className="flex items-start gap-2 bg-gray-50 rounded-lg px-3 py-2 text-xs">
-                            <span className="w-5 h-5 rounded-full bg-violet-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">{c.session_number}</span>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-gray-400">{fmtDate(c.completed_at)}</p>
-                              {c.observation && <p className="text-gray-700 mt-0.5">{c.observation}</p>}
-                              {c.measurements && c.measurements.length > 0 && (
-                                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-                                  {c.measurements.map((m, mi) => (
-                                    <span key={mi} className="text-violet-600">{m.label}: {m.value} {m.unit}</span>
-                                  ))}
+                      <RenderErrorBoundary>
+                        <div className="mt-2 space-y-1.5">
+                          {s.completions.slice().sort((a,b) => Number(a.session_number) - Number(b.session_number)).map((c, ci) => {
+                            const meds = Array.isArray(c.measurements) ? c.measurements : []
+                            return (
+                              <div key={c.session_number ?? ci} className="flex items-start gap-2 bg-gray-50 rounded-lg px-3 py-2 text-xs">
+                                <span className="w-5 h-5 rounded-full bg-violet-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">{c.session_number}</span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-gray-400">{fmtDate(String(c.completed_at ?? ''))}</p>
+                                  {c.observation && <p className="text-gray-700 mt-0.5">{c.observation}</p>}
+                                  {meds.length > 0 && (
+                                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                                      {meds.map((m, mi) => (
+                                        <span key={mi} className="text-violet-600">{m.label}: {m.value} {m.unit}</span>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {!c.observation && meds.length === 0 && (
+                                    <p className="text-gray-300 italic">Sem observações</p>
+                                  )}
                                 </div>
-                              )}
-                              {!c.observation && (!c.measurements || c.measurements.length === 0) && (
-                                <p className="text-gray-300 italic">Sem observações</p>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </RenderErrorBoundary>
                     )}
                   </div>
                 )}
