@@ -4,9 +4,12 @@ import { useState, useRef, useEffect } from 'react'
 
 // ── Interfaces ────────────────────────────────────────────────────────────────
 
+interface Measurement { label: string; value: string; unit: string }
+
 interface SessionCompletion {
   session_number: number
   observation: string | null
+  measurements: Measurement[]
   completed_at: string
 }
 
@@ -19,6 +22,7 @@ interface AestheticSession {
   start_date: string
   end_date: string
   region: string | null
+  initial_measurements: Measurement[]
   created_by: string | null
   created_at: string
   completed_sessions: number[]
@@ -137,6 +141,17 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
   const [formRegion, setFormRegion] = useState('')
   const [formSaving, setFormSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [formMeasurements, setFormMeasurements] = useState<Measurement[]>([])
+
+  function addFormMeasurement() {
+    setFormMeasurements(prev => [...prev, { label: '', value: '', unit: 'cm' }])
+  }
+  function updateFormMeasurement(idx: number, field: keyof Measurement, val: string) {
+    setFormMeasurements(prev => prev.map((m, i) => i === idx ? { ...m, [field]: val } : m))
+  }
+  function removeFormMeasurement(idx: number) {
+    setFormMeasurements(prev => prev.filter((_, i) => i !== idx))
+  }
 
   // Photos state
   const [photos, setPhotos] = useState<FileRecord[]>([])
@@ -156,7 +171,9 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
   // Modal de sessão
   const [sessionModal, setSessionModal] = useState<{ session: AestheticSession; num: number } | null>(null)
   const [sessionObs, setSessionObs] = useState('')
+  const [sessionMeasurements, setSessionMeasurements] = useState<Measurement[]>([])
   const [sessionSaving, setSessionSaving] = useState(false)
+  const [diagOpen, setDiagOpen] = useState<Set<number>>(new Set())
 
   // Histórico expandido
   const [historyOpen, setHistoryOpen] = useState<Set<number>>(new Set())
@@ -206,13 +223,14 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
           start_date: formStart,
           end_date: endDate,
           region: formRegion || null,
+          initial_measurements: formMeasurements.filter(m => m.label.trim()),
         }),
       })
       if (!res.ok) throw new Error((await res.json()).error || 'Erro')
       const newSession: AestheticSession = await res.json()
       setSessions(prev => [newSession, ...prev])
       setShowForm(false)
-      setFormName(''); setFormTotal('10'); setFormSpw('1'); setFormStart(today()); setFormRegion('')
+      setFormName(''); setFormTotal('10'); setFormSpw('1'); setFormStart(today()); setFormRegion(''); setFormMeasurements([])
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Erro')
     } finally {
@@ -229,6 +247,12 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
   function openSessionModal(session: AestheticSession, num: number) {
     const existing = session.completions.find(c => c.session_number === num)
     setSessionObs(existing?.observation ?? '')
+    // Pré-preenche com medidas existentes ou copia estrutura das medidas iniciais
+    if (existing?.measurements && existing.measurements.length > 0) {
+      setSessionMeasurements(existing.measurements.map(m => ({ ...m })))
+    } else {
+      setSessionMeasurements((session.initial_measurements ?? []).map(m => ({ ...m, value: '' })))
+    }
     setSessionModal({ session, num })
   }
 
@@ -252,16 +276,17 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
         }))
       } else {
         // Marcar com observação
+        const filledMeasurements = sessionMeasurements.filter(m => m.label && m.value !== '')
         const res = await fetch(`/api/patients/${patientId}/aesthetic-sessions/${session.id}/complete`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_number: num, observation: sessionObs || null }),
+          body: JSON.stringify({ session_number: num, observation: sessionObs || null, measurements: filledMeasurements }),
         })
         const newCompletion: SessionCompletion = await res.json()
         setSessions(prev => prev.map(s => s.id !== session.id ? s : {
           ...s,
           completed_sessions: [...s.completed_sessions, num].sort((a,b)=>a-b),
-          completions: [...s.completions, newCompletion],
+          completions: [...s.completions, { ...newCompletion, measurements: newCompletion.measurements ?? [] }],
         }))
       }
       setSessionModal(null)
@@ -485,6 +510,47 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
               placeholder="Ex: Abdômen, flancos, coxa..."
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
           </div>
+
+          {/* Medidas iniciais */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-medium text-gray-600">Medidas iniciais (opcional)</label>
+              <button type="button" onClick={addFormMeasurement}
+                className="text-xs text-violet-600 hover:text-violet-800 font-medium">+ Adicionar medida</button>
+            </div>
+            {formMeasurements.length === 0 && (
+              <p className="text-xs text-gray-400 italic">Ex: Abdômen, Coxa D, Braço... clique em "+ Adicionar medida"</p>
+            )}
+            <div className="space-y-2">
+              {formMeasurements.map((m, idx) => (
+                <div key={idx} className="flex gap-2 items-center">
+                  <input
+                    value={m.label}
+                    onChange={e => updateFormMeasurement(idx, 'label', e.target.value)}
+                    placeholder="Ex: Abdômen"
+                    className="flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                  />
+                  <input
+                    type="number"
+                    value={m.value}
+                    onChange={e => updateFormMeasurement(idx, 'value', e.target.value)}
+                    placeholder="0"
+                    className="w-20 px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                  />
+                  <select value={m.unit} onChange={e => updateFormMeasurement(idx, 'unit', e.target.value)}
+                    className="w-16 px-1 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+                    <option value="cm">cm</option>
+                    <option value="kg">kg</option>
+                    <option value="mm">mm</option>
+                    <option value="%">%</option>
+                  </select>
+                  <button type="button" onClick={() => removeFormMeasurement(idx)}
+                    className="text-red-400 hover:text-red-600 text-lg leading-none shrink-0">×</button>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {formError && <p className="text-sm text-red-600">{formError}</p>}
           <div className="flex gap-2">
             <button type="button" onClick={() => setShowForm(false)}
@@ -552,6 +618,51 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
                   </div>
                 </div>
 
+                {/* Diagnóstico comparativo de medidas */}
+                {(s.initial_measurements ?? []).length > 0 && (() => {
+                  const lastComp = s.completions.slice().sort((a,b) => b.session_number - a.session_number)
+                    .find(c => c.measurements && c.measurements.length > 0)
+                  const isDiagOpen = diagOpen.has(s.id)
+                  return (
+                    <div className="border-t border-gray-100 pt-2">
+                      <button onClick={() => setDiagOpen(prev => { const n = new Set(prev); n.has(s.id) ? n.delete(s.id) : n.add(s.id); return n })}
+                        className="flex items-center gap-1.5 text-xs font-medium text-emerald-700 hover:text-emerald-900">
+                        📊 {isDiagOpen ? '▲ Ocultar diagnóstico' : '▼ Ver diagnóstico de evolução'}
+                      </button>
+                      {isDiagOpen && (
+                        <div className="mt-2 bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                          <p className="text-xs font-semibold text-emerald-800 mb-2">
+                            Evolução das medidas {lastComp ? `(sessão ${lastComp.session_number} de ${s.total_sessions})` : '— sem medidas registradas ainda'}
+                          </p>
+                          <div className="space-y-1.5">
+                            {(s.initial_measurements ?? []).map((im, i) => {
+                              const lastVal = lastComp?.measurements?.find(m => m.label === im.label)?.value
+                              const ini = parseFloat(im.value)
+                              const last = lastVal !== undefined ? parseFloat(lastVal) : null
+                              const diff = last !== null && !isNaN(ini) && !isNaN(last) ? last - ini : null
+                              return (
+                                <div key={i} className="flex items-center gap-2 text-xs">
+                                  <span className="text-gray-600 font-medium w-28 shrink-0 truncate">{im.label}</span>
+                                  <span className="text-gray-500">{im.value} {im.unit}</span>
+                                  <span className="text-gray-400">→</span>
+                                  <span className={`font-semibold ${last !== null ? 'text-gray-800' : 'text-gray-300 italic'}`}>
+                                    {last !== null ? `${lastVal} ${im.unit}` : 'não registrada'}
+                                  </span>
+                                  {diff !== null && (
+                                    <span className={`ml-auto font-bold ${diff < 0 ? 'text-emerald-600' : diff > 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                                      {diff < 0 ? `▼ ${Math.abs(diff).toFixed(1)}` : diff > 0 ? `▲ ${diff.toFixed(1)}` : '='} {im.unit}
+                                    </span>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
+
                 {/* Histórico de sessões concluídas */}
                 {s.completions.length > 0 && (
                   <div className="border-t border-gray-100 pt-2">
@@ -572,7 +683,16 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
                             <div className="flex-1 min-w-0">
                               <p className="text-gray-400">{fmtDate(c.completed_at)}</p>
                               {c.observation && <p className="text-gray-700 mt-0.5">{c.observation}</p>}
-                              {!c.observation && <p className="text-gray-300 italic">Sem observações</p>}
+                              {c.measurements && c.measurements.length > 0 && (
+                                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                                  {c.measurements.map((m, mi) => (
+                                    <span key={mi} className="text-violet-600">{m.label}: {m.value} {m.unit}</span>
+                                  ))}
+                                </div>
+                              )}
+                              {!c.observation && (!c.measurements || c.measurements.length === 0) && (
+                                <p className="text-gray-300 italic">Sem observações</p>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -601,16 +721,38 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
               </div>
               <p className="text-xs text-gray-500">{session.procedure_name}</p>
               {!isDone && (
-                <div>
-                  <label className="text-xs font-medium text-gray-600 block mb-1">Observações (opcional)</label>
-                  <textarea
-                    value={sessionObs}
-                    onChange={e => setSessionObs(e.target.value)}
-                    rows={3}
-                    placeholder="Ex: paciente relatou melhora, área tratada, equipamento usado..."
-                    autoFocus
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 resize-none"
-                  />
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 block mb-1">Observações (opcional)</label>
+                    <textarea
+                      value={sessionObs}
+                      onChange={e => setSessionObs(e.target.value)}
+                      rows={2}
+                      placeholder="Ex: paciente relatou melhora, área tratada, equipamento usado..."
+                      autoFocus
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 resize-none"
+                    />
+                  </div>
+                  {sessionMeasurements.length > 0 && (
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 block mb-2">Medidas desta sessão</label>
+                      <div className="space-y-2">
+                        {sessionMeasurements.map((m, idx) => (
+                          <div key={idx} className="flex items-center gap-2">
+                            <span className="text-xs text-gray-600 w-24 shrink-0 truncate">{m.label}</span>
+                            <input
+                              type="number"
+                              value={m.value}
+                              onChange={e => setSessionMeasurements(prev => prev.map((x, i) => i === idx ? { ...x, value: e.target.value } : x))}
+                              placeholder="0"
+                              className="flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                            />
+                            <span className="text-xs text-gray-400 shrink-0">{m.unit}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               {isDone && (

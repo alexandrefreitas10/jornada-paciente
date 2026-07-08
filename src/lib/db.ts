@@ -273,6 +273,10 @@ export async function initSchema() {
 
   // Arquivamento de implantes (pacientes antigos)
   await sql.unsafe(`ALTER TABLE implants ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`).catch(() => {})
+
+  // Medidas dos procedimentos estéticos
+  await sql.unsafe(`ALTER TABLE aesthetic_sessions ADD COLUMN IF NOT EXISTS initial_measurements JSONB DEFAULT '[]'`).catch(() => {})
+  await sql.unsafe(`ALTER TABLE aesthetic_session_completions ADD COLUMN IF NOT EXISTS measurements JSONB DEFAULT '[]'`).catch(() => {})
 }
 
 export default sql

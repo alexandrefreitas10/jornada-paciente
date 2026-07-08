@@ -20,6 +20,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
           json_build_object(
             'session_number', c.session_number,
             'observation', c.observation,
+            'measurements', COALESCE(c.measurements, '[]'::jsonb),
             'completed_at', c.completed_at
           ) ORDER BY c.session_number
         ) FILTER (WHERE c.session_number IS NOT NULL),
@@ -39,13 +40,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params
   const session = await auth()
   const createdBy = session?.user?.name ?? null
-  const { procedure_name, total_sessions, sessions_per_week, start_date, end_date, region } = await req.json()
+  const { procedure_name, total_sessions, sessions_per_week, start_date, end_date, region, initial_measurements } = await req.json()
   if (!procedure_name || !total_sessions || !start_date || !end_date) {
     return NextResponse.json({ error: 'Campos obrigatórios faltando' }, { status: 400 })
   }
+  const measJson = JSON.stringify(initial_measurements ?? [])
   const [row] = await sql`
-    INSERT INTO aesthetic_sessions (patient_id, procedure_name, total_sessions, sessions_per_week, start_date, end_date, region, created_by)
-    VALUES (${Number(id)}, ${procedure_name}, ${Number(total_sessions)}, ${Number(sessions_per_week) || 1}, ${start_date}, ${end_date}, ${region ?? null}, ${createdBy})
+    INSERT INTO aesthetic_sessions (patient_id, procedure_name, total_sessions, sessions_per_week, start_date, end_date, region, created_by, initial_measurements)
+    VALUES (${Number(id)}, ${procedure_name}, ${Number(total_sessions)}, ${Number(sessions_per_week) || 1}, ${start_date}, ${end_date}, ${region ?? null}, ${createdBy}, ${measJson}::jsonb)
     RETURNING *
   `
   return NextResponse.json({ ...row, completed_sessions: [], completions: [] }, { status: 201 })

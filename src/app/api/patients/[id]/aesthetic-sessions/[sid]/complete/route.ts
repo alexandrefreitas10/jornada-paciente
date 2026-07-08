@@ -5,13 +5,14 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ sid: string }> }) {
   const { sid } = await params
-  const { session_number, observation } = await req.json()
+  const { session_number, observation, measurements } = await req.json()
+  const measJson = JSON.stringify(measurements ?? [])
   const [row] = await sql`
-    INSERT INTO aesthetic_session_completions (aesthetic_session_id, session_number, observation)
-    VALUES (${Number(sid)}, ${Number(session_number)}, ${observation ?? null})
+    INSERT INTO aesthetic_session_completions (aesthetic_session_id, session_number, observation, measurements)
+    VALUES (${Number(sid)}, ${Number(session_number)}, ${observation ?? null}, ${measJson}::jsonb)
     ON CONFLICT (aesthetic_session_id, session_number)
-    DO UPDATE SET observation = EXCLUDED.observation
-    RETURNING session_number, observation, completed_at
+    DO UPDATE SET observation = EXCLUDED.observation, measurements = EXCLUDED.measurements
+    RETURNING session_number, observation, measurements, completed_at
   `
   return NextResponse.json(row)
 }
