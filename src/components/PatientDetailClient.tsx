@@ -47,12 +47,13 @@ interface Props {
   initialEvolutionPhotos: FileRecord[]
   initialPrescriptions: FileRecord[]
   currentUserName: string
+  readOnly?: boolean
 }
 
-export function PatientDetailClient({ patient, initialMeasurements, initialPhotos, initialBioimpedances, initialExams, initialDiets, initialEvolutionPhotos, initialPrescriptions, currentUserName }: Props) {
+export function PatientDetailClient({ patient, initialMeasurements, initialPhotos, initialBioimpedances, initialExams, initialDiets, initialEvolutionPhotos, initialPrescriptions, currentUserName, readOnly = false }: Props) {
   const [completedKeys, setCompletedKeys] = useState<string[]>(patient.completed_task_keys)
   const [editOpen, setEditOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState<Tab>('tasks')
+  const [activeTab, setActiveTab] = useState<Tab>(readOnly ? 'evolution' : 'tasks')
   const router = useRouter()
 
   const TAB_KEY = `patient-tab-${patient.id}`
@@ -86,7 +87,7 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
   }
 
   const tabs: { key: Tab; label: string }[] = [
-    { key: 'tasks', label: 'Tarefas' },
+    ...(readOnly ? [] : [{ key: 'tasks' as Tab, label: 'Tarefas' }]),
     { key: 'evolution', label: 'Evolução' },
     { key: 'photos', label: 'Fotos' },
     { key: 'bioimpedance', label: 'Bioimpedância' },
@@ -121,17 +122,20 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
               <p className="text-sm text-gray-500 italic mt-1">{patient.notes}</p>
             )}
           </div>
-          <div className="flex gap-2 flex-shrink-0">
-            <button
-              onClick={() => setEditOpen(true)}
-              className="text-sm px-3 py-1 border border-gray-300 rounded-lg hover:bg-gray-50"
-            >
-              ✏️ Editar
-            </button>
-            <DeleteButton patientId={patient.id} patientName={patient.name} />
-          </div>
+          {!readOnly && (
+            <div className="flex gap-2 flex-shrink-0">
+              <button
+                onClick={() => setEditOpen(true)}
+                className="text-sm px-3 py-1 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                ✏️ Editar
+              </button>
+              <DeleteButton patientId={patient.id} patientName={patient.name} />
+            </div>
+          )}
         </div>
         <ProgressBar completed={completedKeys.length} total={ALL_TASK_KEYS.length} />
+        {!readOnly && <PortalAccessBlock patientId={patient.id} />}
       </div>
 
       {/* Abas */}
@@ -166,32 +170,32 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
           ))
         )}
         {activeTab === 'evolution' && (
-          <EvolutionTab patientId={patient.id} initialMeasurements={initialMeasurements} initialEvolutionPhotos={initialEvolutionPhotos} initialPrescriptions={initialPrescriptions} currentUserName={currentUserName} />
+          <EvolutionTab patientId={patient.id} initialMeasurements={initialMeasurements} initialEvolutionPhotos={initialEvolutionPhotos} initialPrescriptions={initialPrescriptions} currentUserName={currentUserName} readOnly={readOnly} />
         )}
         {activeTab === 'photos' && (
-          <FilesTab patientId={patient.id} fileType="photo" initialFiles={initialPhotos} />
+          <FilesTab patientId={patient.id} fileType="photo" initialFiles={initialPhotos} readOnly={readOnly} />
         )}
         {activeTab === 'bioimpedance' && (
-          <FilesTab patientId={patient.id} fileType="bioimpedance" initialFiles={initialBioimpedances} />
+          <FilesTab patientId={patient.id} fileType="bioimpedance" initialFiles={initialBioimpedances} readOnly={readOnly} />
         )}
         {activeTab === 'exams' && (
-          <ExamsTab patientId={patient.id} initialFiles={initialExams} />
+          <ExamsTab patientId={patient.id} initialFiles={initialExams} readOnly={readOnly} />
         )}
         {activeTab === 'diet' && (
-          <FilesTab patientId={patient.id} fileType="diet" initialFiles={initialDiets} />
+          <FilesTab patientId={patient.id} fileType="diet" initialFiles={initialDiets} readOnly={readOnly} />
         )}
 {activeTab === 'terms' && (
-          <TermsTab patientId={patient.id} />
+          <TermsTab patientId={patient.id} readOnly={readOnly} />
         )}
         {activeTab === 'medications' && (
-          <MedicationsTab patientId={patient.id} patientName={patient.name} />
+          <MedicationsTab patientId={patient.id} patientName={patient.name} readOnly={readOnly} />
         )}
         {activeTab === 'estetica' && (
-          <EsteticaTab patientId={patient.id} />
+          <EsteticaTab patientId={patient.id} readOnly={readOnly} />
         )}
       </div>
 
-      {editOpen && (
+      {!readOnly && editOpen && (
         <PatientModal
           title="Editar Paciente"
           initial={{
@@ -205,5 +209,122 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
         />
       )}
     </main>
+  )
+}
+
+function PortalAccessBlock({ patientId }: { patientId: number }) {
+  const [status, setStatus] = useState<'loading' | 'none' | 'pending' | 'active'>('loading')
+  const [email, setEmail] = useState('')
+  const [token, setToken] = useState('')
+  const [link, setLink] = useState('')
+  const [copied, setCopied] = useState(false)
+  const [emailInput, setEmailInput] = useState('')
+  const [generating, setGenerating] = useState(false)
+  const [revoking, setRevoking] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch(`/api/patients/${patientId}/portal-invite`)
+      .then(r => r.json())
+      .then(data => {
+        setStatus(data.status)
+        if (data.email) setEmail(data.email)
+        if (data.token) {
+          setToken(data.token)
+          setLink(`${window.location.origin}/portal/ativar/${data.token}`)
+        }
+      })
+      .catch(() => setStatus('none'))
+  }, [patientId])
+
+  async function handleGenerate(e: React.FormEvent) {
+    e.preventDefault()
+    setGenerating(true)
+    setError(null)
+    const res = await fetch(`/api/patients/${patientId}/portal-invite`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: emailInput }),
+    })
+    const data = await res.json()
+    if (!res.ok) { setError(data.error || 'Erro ao gerar convite'); setGenerating(false); return }
+    setEmail(emailInput)
+    setToken(data.token)
+    setLink(data.link)
+    setStatus('pending')
+    setGenerating(false)
+  }
+
+  async function handleRevoke() {
+    if (!confirm('Revogar acesso do paciente ao portal?')) return
+    setRevoking(true)
+    await fetch(`/api/patients/${patientId}/portal-invite`, { method: 'DELETE' })
+    setStatus('none')
+    setEmail('')
+    setToken('')
+    setLink('')
+    setEmailInput('')
+    setRevoking(false)
+  }
+
+  function copyLink() {
+    navigator.clipboard.writeText(link).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  if (status === 'loading') return null
+
+  return (
+    <div className="border-t border-gray-100 pt-4 mt-4">
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Acesso do Paciente ao Portal</p>
+
+      {status === 'none' && (
+        <form onSubmit={handleGenerate} className="space-y-2">
+          <input
+            type="email"
+            value={emailInput}
+            onChange={e => setEmailInput(e.target.value)}
+            required
+            placeholder="E-mail do paciente"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+          />
+          {error && <p className="text-xs text-red-600">{error}</p>}
+          <button type="submit" disabled={generating}
+            className="w-full py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
+            {generating ? 'Gerando...' : '🔗 Gerar link de convite'}
+          </button>
+        </form>
+      )}
+
+      {status === 'pending' && (
+        <div className="space-y-2">
+          <p className="text-xs text-amber-600 font-medium">⏳ Aguardando ativação — {email}</p>
+          <div className="flex gap-2">
+            <input readOnly value={link}
+              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-500 bg-gray-50" />
+            <button onClick={copyLink}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-xs hover:bg-gray-50 transition-colors shrink-0">
+              {copied ? '✓ Copiado' : '📋 Copiar'}
+            </button>
+          </div>
+          <button onClick={handleRevoke} disabled={revoking}
+            className="text-xs text-red-500 hover:text-red-700 transition-colors">
+            {revoking ? 'Revogando...' : '× Revogar convite'}
+          </button>
+        </div>
+      )}
+
+      {status === 'active' && (
+        <div className="space-y-2">
+          <p className="text-xs text-emerald-600 font-medium">✅ Portal ativo — {email}</p>
+          <button onClick={handleRevoke} disabled={revoking}
+            className="text-xs text-red-500 hover:text-red-700 transition-colors">
+            {revoking ? 'Revogando...' : '× Revogar acesso'}
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
