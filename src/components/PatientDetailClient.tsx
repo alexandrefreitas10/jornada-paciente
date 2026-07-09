@@ -134,7 +134,7 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
             </div>
           )}
         </div>
-        <ProgressBar completed={completedKeys.length} total={ALL_TASK_KEYS.length} />
+        {!readOnly && <ProgressBar completed={completedKeys.length} total={ALL_TASK_KEYS.length} />}
         {!readOnly && <PortalAccessBlock patientId={patient.id} />}
       </div>
 
