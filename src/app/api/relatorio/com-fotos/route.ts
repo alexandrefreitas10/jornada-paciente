@@ -6,7 +6,8 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: NextRequest) {
   await initSchema()
 
-  const type = req.nextUrl.searchParams.get('type') === 'evolution' ? 'evolution' : 'photo'
+  const raw = req.nextUrl.searchParams.get('type')
+  const type = raw === 'evolution' ? 'evolution' : raw === 'estetica' ? 'estetica' : 'photo'
 
   const rows = await sql<{ id: number; name: string; photo_count: string; last_photo: string }[]>`
     SELECT

@@ -449,7 +449,7 @@ function SemAtualizacao() {
 // ── Aba: Pacientes com fotos ─────────────────────────────────────────────────
 
 function ComFotos() {
-  const [tipo, setTipo] = useState<'photo' | 'evolution'>('photo')
+  const [tipo, setTipo] = useState<'photo' | 'evolution' | 'estetica'>('photo')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<{
     total: number
@@ -471,10 +471,11 @@ function ComFotos() {
 
         <div>
           <label className="text-xs text-gray-500 mb-2 block">Origem das fotos</label>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {([
               { key: 'photo', label: '🖼 Aba Fotos' },
               { key: 'evolution', label: '📈 Aba Evolução' },
+              { key: 'estetica', label: '✨ Aba Estética' },
             ] as const).map(t => (
               <button
                 key={t.key}
@@ -502,7 +503,7 @@ function ComFotos() {
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
             <span className="text-sm font-semibold text-gray-700">
-              {tipo === 'photo' ? 'Com fotos (aba Fotos)' : 'Com fotos (aba Evolução)'}
+              {tipo === 'photo' ? 'Com fotos (aba Fotos)' : tipo === 'evolution' ? 'Com fotos (aba Evolução)' : 'Com fotos (aba Estética)'}
             </span>
             <span className="text-sm font-bold text-violet-700">{result.total} paciente{result.total !== 1 ? 's' : ''}</span>
           </div>
