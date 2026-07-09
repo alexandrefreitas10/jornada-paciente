@@ -34,8 +34,11 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   try {
     const token = await createPortalInvite(Number(id), email)
-    const baseUrl = req.nextUrl.origin
-    const link = `${baseUrl}/portal/ativar/${token}`
+    // Atrás de proxy (Railway), nextUrl.origin retorna o host interno (localhost:PORT).
+    // Usa os headers de forwarded para montar o domínio público real.
+    const proto = req.headers.get('x-forwarded-proto') ?? 'https'
+    const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? req.nextUrl.host
+    const link = `${proto}://${host}/portal/ativar/${token}`
     return NextResponse.json({ ok: true, token, link })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)

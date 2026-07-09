@@ -250,7 +250,8 @@ function PortalAccessBlock({ patientId }: { patientId: number }) {
     if (!res.ok) { setError(data.error || 'Erro ao gerar convite'); setGenerating(false); return }
     setEmail(emailInput)
     setToken(data.token)
-    setLink(data.link)
+    // Monta o link no navegador — o servidor atrás de proxy (Railway) não conhece o domínio público
+    setLink(`${window.location.origin}/portal/ativar/${data.token}`)
     setStatus('pending')
     setGenerating(false)
   }
