@@ -6,6 +6,7 @@ import { getSignedDownloadUrl } from '@/lib/s3'
 import { PatientDetailClient } from '@/components/PatientDetailClient'
 import { portalAuth } from '@/auth-portal'
 import { findPortalUserByPatientId } from '@/lib/patient-portal'
+import { hasAnsweredNps } from '@/lib/feedback'
 import { logoutPortal } from './actions'
 
 export const dynamic = 'force-dynamic'
@@ -21,6 +22,9 @@ export default async function PortalPatientPage() {
   // cobre revogação e redefinição de senha com sessão antiga ainda válida
   const portalUser = await findPortalUserByPatientId(patientId)
   if (!portalUser || !portalUser.password_hash) redirect('/portal/login')
+
+  // Primeiro acesso: responder o NPS antes de entrar
+  if (!(await hasAnsweredNps(patientId))) redirect('/portal/paciente/nps')
 
   const [patient, measurements, photos, bioimpedances, exams, diets, evolutionPhotos, prescriptions] = await Promise.all([
     getPatient(patientId),

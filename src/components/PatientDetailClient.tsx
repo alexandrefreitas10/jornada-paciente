@@ -15,6 +15,7 @@ import { ExamsTab } from './ExamsTab'
 import { TermsTab } from './TermsTab'
 import { MedicationsTab } from './MedicationsTab'
 import { EsteticaTab } from './EsteticaTab'
+import { OuvidoriaTab } from './OuvidoriaTab'
 
 const AVATAR_COLORS = [
   'bg-violet-500', 'bg-blue-500', 'bg-emerald-500',
@@ -24,7 +25,7 @@ function avatarColor(name: string) {
   return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]
 }
 
-type Tab = 'tasks' | 'evolution' | 'photos' | 'bioimpedance' | 'exams' | 'diet' | 'terms' | 'medications' | 'estetica'
+type Tab = 'tasks' | 'evolution' | 'photos' | 'bioimpedance' | 'exams' | 'diet' | 'terms' | 'medications' | 'estetica' | 'ouvidoria'
 
 interface FileRecord {
   id: number
@@ -96,6 +97,8 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
 { key: 'terms', label: '📄 Termos' },
     { key: 'medications', label: '💊 Medicações' },
     { key: 'estetica', label: '✨ Estética' },
+    // Ouvidoria só existe no portal do paciente
+    ...(readOnly ? [{ key: 'ouvidoria' as Tab, label: '📣 Ouvidoria' }] : []),
   ]
 
   return (
@@ -192,6 +195,9 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
         )}
         {activeTab === 'estetica' && (
           <EsteticaTab patientId={patient.id} readOnly={readOnly} />
+        )}
+        {activeTab === 'ouvidoria' && (
+          <OuvidoriaTab patientId={patient.id} />
         )}
       </div>
 

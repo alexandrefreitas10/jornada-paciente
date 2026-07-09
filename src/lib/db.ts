@@ -291,6 +291,25 @@ export async function initSchema() {
       created_at       TIMESTAMPTZ DEFAULT NOW()
     )
   `).catch(() => {})
+
+  // NPS e ouvidoria do portal do paciente
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS patient_nps (
+      id          SERIAL PRIMARY KEY,
+      patient_id  INTEGER UNIQUE NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      score       INTEGER NOT NULL CHECK (score BETWEEN 0 AND 10),
+      comment     TEXT,
+      created_at  TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(() => {})
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS patient_feedback (
+      id          SERIAL PRIMARY KEY,
+      patient_id  INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      message     TEXT NOT NULL,
+      created_at  TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(() => {})
 }
 
 export default sql

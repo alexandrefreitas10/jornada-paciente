@@ -19,6 +19,7 @@ export function NavMenu({ userName, isAdmin, canEstoque }: Props) {
     { href: '/implantes', label: 'Implantes' },
     { href: '/relatorios', label: 'Relatórios' },
     ...(isAdmin || canEstoque ? [{ href: '/estoque', label: 'Estoque' }] : []),
+    ...(isAdmin ? [{ href: '/feedbacks', label: 'Feedbacks' }] : []),
     { href: '/pacientes-antigos', label: 'Pacientes Antigos' },
   ]
 
