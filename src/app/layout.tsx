@@ -1,14 +1,28 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { auth } from '../auth'
 import { NavMenu } from '@/components/NavMenu'
 import { SessionProviderWrapper } from '@/components/SessionProviderWrapper'
+import { RegisterSW } from './portal/RegisterSW'
 
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'Instituto Torres',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Equipe Instituto',
+  },
+  icons: {
+    apple: '/apple-touch-icon.png',
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#ffffff',
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -17,6 +31,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="pt-BR">
       <body className={`${inter.className} bg-gray-50 min-h-screen`}>
+        <RegisterSW />
         <SessionProviderWrapper>
           {session?.user && (
             <header className="bg-white border-b border-gray-200 px-4 py-2">

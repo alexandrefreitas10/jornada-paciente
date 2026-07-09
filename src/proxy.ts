@@ -16,9 +16,10 @@ export default auth(async (req) => {
     pathname.startsWith('/portal/login') ||
     pathname.startsWith('/portal/ativar') ||
     pathname.startsWith('/api/portal') ||
-    // Arquivos do PWA do portal
+    // Arquivos dos PWAs (portal e sistema interno)
     pathname === '/sw.js' ||
-    pathname === '/portal-manifest.json'
+    pathname === '/portal-manifest.json' ||
+    pathname === '/manifest.json'
 
   if (isPublic) return NextResponse.next()
 
