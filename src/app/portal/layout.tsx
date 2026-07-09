@@ -2,12 +2,12 @@ import type { Metadata, Viewport } from 'next'
 import { RegisterSW } from './RegisterSW'
 
 export const metadata: Metadata = {
-  title: 'Minha Área — Instituto Torres',
+  title: 'Instituto Torres - Paciente',
   manifest: '/portal-manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Minha Área',
+    title: 'Instituto Torres - Paciente',
   },
   icons: {
     apple: '/apple-touch-icon.png',
