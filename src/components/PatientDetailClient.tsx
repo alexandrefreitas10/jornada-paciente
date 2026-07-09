@@ -60,8 +60,8 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
 
   useEffect(() => {
     const saved = sessionStorage.getItem(TAB_KEY)
-    if (saved) setActiveTab(saved as Tab)
-  }, [TAB_KEY])
+    if (saved && !(readOnly && saved === 'tasks')) setActiveTab(saved as Tab)
+  }, [TAB_KEY, readOnly])
 
   function handleTabChange(tab: Tab) {
     setActiveTab(tab)
