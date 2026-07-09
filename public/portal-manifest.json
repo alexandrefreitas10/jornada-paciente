@@ -1,6 +1,6 @@
 {
-  "name": "Instituto Torres - Paciente",
-  "short_name": "Instituto Torres - Paciente",
+  "name": "Instituto - Pacientes",
+  "short_name": "Instituto - Pacientes",
   "description": "Acompanhe seu tratamento no Instituto Torres",
   "start_url": "/portal/paciente",
   "scope": "/portal/",
