@@ -183,6 +183,7 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
   const [photosLoading, setPhotosLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [lightboxPhoto, setLightboxPhoto] = useState<FileRecord | null>(null)
 
   // Compare state
   const [compareMode, setCompareMode] = useState(false)
@@ -859,26 +860,65 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
           <p className="text-xs text-gray-400 text-center py-4">Nenhuma foto adicionada ainda.</p>
         ) : (
           <div className="grid grid-cols-3 gap-2">
-            {photos.map((f, idx) => {
+            {photos.map((f) => {
               const selIdx = selected.findIndex(p => p.id === f.id)
               const isSel = selIdx !== -1
               return (
                 <div key={f.id} className="relative group rounded-xl overflow-hidden border border-gray-200 bg-gray-50 aspect-square">
-                  <img src={f.url} alt="" className="w-full h-full object-cover" />
                   {compareMode ? (
-                    <button onClick={() => toggleSelect(f)}
-                      className={`absolute inset-0 flex items-center justify-center text-xl font-bold transition-all ${isSel ? 'bg-violet-600/70 text-white' : 'bg-black/20 text-transparent hover:bg-violet-400/50 hover:text-white'}`}>
-                      {isSel ? selIdx + 1 : ''}
-                    </button>
+                    <>
+                      <img src={f.url} alt="" className="w-full h-full object-cover" />
+                      <button onClick={() => toggleSelect(f)}
+                        className={`absolute inset-0 flex items-center justify-center text-xl font-bold transition-all ${isSel ? 'bg-violet-600/70 text-white' : 'bg-black/20 text-transparent hover:bg-violet-400/50 hover:text-white'}`}>
+                        {isSel ? selIdx + 1 : ''}
+                      </button>
+                    </>
                   ) : (
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-end justify-between p-1.5 opacity-0 group-hover:opacity-100">
-                      <span className="text-white text-xs">{fmtDate(f.created_at)}</span>
-                      <button onClick={() => handleDeletePhoto(f.id)} className="text-white text-sm hover:text-red-300">🗑</button>
-                    </div>
+                    <>
+                      <button onClick={() => setLightboxPhoto(f)} className="w-full h-full block">
+                        <img src={f.url} alt="" className="w-full h-full object-cover" />
+                      </button>
+                      {/* overlay desktop (hover) */}
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-end justify-between p-1.5 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto">
+                        <span className="text-white text-xs">{fmtDate(f.created_at)}</span>
+                        <button onClick={(e) => { e.stopPropagation(); handleDeletePhoto(f.id) }} className="text-white text-sm hover:text-red-300">🗑</button>
+                      </div>
+                    </>
                   )}
                 </div>
               )
             })}
+          </div>
+        )}
+
+        {/* Lightbox */}
+        {lightboxPhoto && (
+          <div
+            className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center"
+            onClick={() => setLightboxPhoto(null)}
+          >
+            <div className="relative w-full h-full flex flex-col items-center justify-center p-4" onClick={e => e.stopPropagation()}>
+              <button
+                onClick={() => setLightboxPhoto(null)}
+                className="absolute top-4 right-4 text-white text-2xl bg-black/40 rounded-full w-10 h-10 flex items-center justify-center z-10"
+              >
+                ✕
+              </button>
+              <img
+                src={lightboxPhoto.url}
+                alt=""
+                className="max-w-full max-h-[80vh] object-contain rounded-lg"
+              />
+              <div className="mt-3 flex items-center gap-4">
+                <span className="text-white/70 text-sm">{fmtDate(lightboxPhoto.created_at)}</span>
+                <button
+                  onClick={() => { handleDeletePhoto(lightboxPhoto.id); setLightboxPhoto(null) }}
+                  className="text-red-400 text-sm px-3 py-1.5 bg-white/10 rounded-lg hover:bg-white/20"
+                >
+                  🗑 Excluir
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

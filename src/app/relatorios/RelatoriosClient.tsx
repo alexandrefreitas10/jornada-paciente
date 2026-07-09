@@ -607,22 +607,22 @@ function ResumoPaciente() {
           Data específica
         </label>
         {useSpecific ? (
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-medium text-gray-500 w-10">Data</label>
+          <div>
+            <label className="text-xs font-medium text-gray-500 mb-1 block">Data</label>
             <input type="date" value={specificDate} onChange={e => setSpecificDate(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
           </div>
         ) : (
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <label className="text-xs font-medium text-gray-500 w-10">Início</label>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-gray-500 mb-1 block">Início</label>
               <input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
             </div>
-            <div className="flex items-center gap-2">
-              <label className="text-xs font-medium text-gray-500 w-10">Fim</label>
+            <div>
+              <label className="text-xs font-medium text-gray-500 mb-1 block">Fim</label>
               <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
             </div>
           </div>
         )}
@@ -988,20 +988,22 @@ export function RelatoriosClient({ patients }: { patients: PatientOption[] }) {
   return (
     <div className="space-y-5">
       {/* Abas */}
-      <div className="flex gap-1 bg-white rounded-xl border border-gray-200 p-1 shadow-sm">
-        {tabs.map(t => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
-              tab === t.key
-                ? 'bg-violet-600 text-white shadow-sm'
-                : 'text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-1 overflow-x-auto">
+        <div className="flex gap-1 min-w-max">
+          {tabs.map(t => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`shrink-0 px-3 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
+                tab === t.key
+                  ? 'bg-violet-600 text-white shadow-sm'
+                  : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {tab === 'resumo_paciente' && <ResumoPaciente />}

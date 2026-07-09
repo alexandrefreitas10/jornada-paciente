@@ -7,7 +7,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const { username, password } = await req.json()
+  const { username: rawUsername, password } = await req.json()
+  const username = (rawUsername ?? '').trim()
 
   if (!username || !password) {
     return NextResponse.json({ error: 'Usuário e senha são obrigatórios' }, { status: 400 })

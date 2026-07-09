@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
       AND pf.deleted_at IS NULL
       AND p.deleted_at IS NULL
     GROUP BY p.id, p.name
-    ORDER BY p.name ASC
+    ORDER BY last_photo DESC
   `
 
   const patients = rows.map(r => ({

@@ -36,7 +36,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sid
     DO UPDATE SET observation = EXCLUDED.observation
     RETURNING session_number, observation, completed_at
   `
-  return NextResponse.json({ ...row, measurements: [], _error: primaryError })
+  return NextResponse.json({ ...row, measurements: [] })
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ sid: string }> }) {
