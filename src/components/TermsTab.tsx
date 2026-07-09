@@ -26,6 +26,7 @@ interface PatientTerm {
 
 interface Props {
   patientId: number
+  readOnly?: boolean
 }
 
 const STATUS: Record<string, { label: string; color: string }> = {
@@ -255,7 +256,7 @@ function PhysicalUploadSection({
   )
 }
 
-export function TermsTab({ patientId }: Props) {
+export function TermsTab({ patientId, readOnly = false }: Props) {
   const [templates, setTemplates] = useState<Template[]>([])
   const [terms, setTerms] = useState<PatientTerm[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState<number | null>(null)
@@ -339,6 +340,7 @@ export function TermsTab({ patientId }: Props) {
   return (
     <div className="space-y-4">
       {/* Enviar novo termo */}
+      {!readOnly && (
       <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
         <div>
           <label className="block text-xs font-semibold text-gray-700 mb-2">Enviar termo para assinatura</label>
@@ -373,15 +375,16 @@ export function TermsTab({ patientId }: Props) {
           )}
         </div>
       </div>
+      )}
 
       {/* Upload físico */}
-      <PhysicalUploadSection patientId={patientId} onAdded={handleAdded} />
+      {!readOnly && <PhysicalUploadSection patientId={patientId} onAdded={handleAdded} />}
 
       {/* Termos enviados */}
       <div>
         <div className="flex items-center gap-3 mb-3">
           <h3 className="text-sm font-semibold text-gray-700">Termos deste paciente</h3>
-          <DeletedItemsButton patientId={patientId} entityTypes={['term']} />
+          {!readOnly && <DeletedItemsButton patientId={patientId} entityTypes={['term']} />}
         </div>
 
         {terms.length === 0 ? (
@@ -402,18 +405,20 @@ export function TermsTab({ patientId }: Props) {
                     <span className={`text-xs font-medium px-2 py-1 rounded-full whitespace-nowrap ${STATUS[term.status].color}`}>
                       {STATUS[term.status].label}
                     </span>
-                    <button
-                      onClick={() => handleDelete(term.id)}
-                      disabled={deleting === term.id}
-                      className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded font-medium transition-colors disabled:opacity-50 border border-red-200"
-                      title="Excluir este termo"
-                    >
-                      {deleting === term.id ? '⏳' : '🗑 Excluir'}
-                    </button>
+                    {!readOnly && (
+                      <button
+                        onClick={() => handleDelete(term.id)}
+                        disabled={deleting === term.id}
+                        className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded font-medium transition-colors disabled:opacity-50 border border-red-200"
+                        title="Excluir este termo"
+                      >
+                        {deleting === term.id ? '⏳' : '🗑 Excluir'}
+                      </button>
+                    )}
                   </div>
                 </div>
 
-                {term.status === 'sent' && term.sign_token && (
+                {!readOnly && term.status === 'sent' && term.sign_token && (
                   <div className="flex gap-2">
                     <button
                       onClick={() => shareWhatsApp(term)}
@@ -442,7 +447,7 @@ export function TermsTab({ patientId }: Props) {
                   </a>
                 )}
 
-                {term.status !== 'signed' && (
+                {!readOnly && term.status !== 'signed' && (
                   <PhysicalSignRow
                     term={term}
                     patientId={patientId}

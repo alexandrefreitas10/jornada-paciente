@@ -161,9 +161,10 @@ interface Props {
   patientId: number
   fileType: 'photo' | 'bioimpedance' | 'diet'
   initialFiles: FileRecord[]
+  readOnly?: boolean
 }
 
-export function FilesTab({ patientId, fileType, initialFiles }: Props) {
+export function FilesTab({ patientId, fileType, initialFiles, readOnly = false }: Props) {
   const [files, setFiles] = useState<FileRecord[]>(initialFiles)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -440,9 +441,9 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3 flex-wrap">
-        <DeletedItemsButton patientId={patientId} entityTypes={['file']} fileType={fileType} />
+        {!readOnly && <DeletedItemsButton patientId={patientId} entityTypes={['file']} fileType={fileType} />}
         <input ref={fileInputRef} type="file" accept={accept} className="hidden" onChange={handleFileChange} />
-        {!compareMode && (
+        {!readOnly && !compareMode && (
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
@@ -555,7 +556,7 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
                   )}
                 </div>
 
-                {!compareMode && (
+                {!readOnly && !compareMode && (
                   <button
                     onClick={() => handleDelete(f.id)}
                     className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
@@ -589,15 +590,17 @@ export function FilesTab({ patientId, fileType, initialFiles }: Props) {
                 <button onClick={() => handleDownload(f.id)} className="text-xs text-violet-600 hover:text-violet-800 shrink-0" title="Baixar">
                   ⬇️
                 </button>
-                <button onClick={() => handleDelete(f.id)} className="text-xs text-gray-400 hover:text-red-500 shrink-0" title="Apagar">
-                  🗑️
-                </button>
+                {!readOnly && (
+                  <button onClick={() => handleDelete(f.id)} className="text-xs text-gray-400 hover:text-red-500 shrink-0" title="Apagar">
+                    🗑️
+                  </button>
+                )}
               </div>
             )
           })}
         </div>
       )}
-      <NotesSection patientId={patientId} tab={fileType} />
+      <NotesSection patientId={patientId} tab={fileType} readOnly={readOnly} />
     </div>
   )
 }

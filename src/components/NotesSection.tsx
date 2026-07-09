@@ -12,9 +12,10 @@ interface Note {
 interface Props {
   patientId: number
   tab: string
+  readOnly?: boolean
 }
 
-export function NotesSection({ patientId, tab }: Props) {
+export function NotesSection({ patientId, tab, readOnly = false }: Props) {
   const [notes, setNotes] = useState<Note[]>([])
   const [text, setText] = useState('')
   const [saving, setSaving] = useState(false)
@@ -90,35 +91,41 @@ export function NotesSection({ patientId, tab }: Props) {
                   {note.created_by} · {formatDate(note.created_at)}
                 </p>
               </div>
-              <button
-                onClick={() => handleDelete(note.id)}
-                className="text-gray-300 hover:text-red-400 transition-colors shrink-0 mt-0.5"
-                title="Apagar observação"
-              >
-                ✕
-              </button>
+              {!readOnly && (
+                <button
+                  onClick={() => handleDelete(note.id)}
+                  className="text-gray-300 hover:text-red-400 transition-colors shrink-0 mt-0.5"
+                  title="Apagar observação"
+                >
+                  ✕
+                </button>
+              )}
             </div>
           ))}
 
-          <div className="flex gap-2 items-end">
-            <textarea
-              ref={textareaRef}
-              value={text}
-              onChange={e => setText(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleSave() }}
-              placeholder="Escrever observação…"
-              rows={2}
-              className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-300"
-            />
-            <button
-              onClick={handleSave}
-              disabled={saving || !text.trim()}
-              className="px-3 py-2 bg-amber-500 text-white text-sm font-medium rounded-lg hover:bg-amber-600 disabled:opacity-40 transition-colors shrink-0"
-            >
-              {saving ? '…' : 'Salvar'}
-            </button>
-          </div>
-          <p className="text-xs text-gray-400">Ctrl+Enter para salvar rapidamente</p>
+          {!readOnly && (
+            <>
+              <div className="flex gap-2 items-end">
+                <textarea
+                  ref={textareaRef}
+                  value={text}
+                  onChange={e => setText(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleSave() }}
+                  placeholder="Escrever observação…"
+                  rows={2}
+                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-300"
+                />
+                <button
+                  onClick={handleSave}
+                  disabled={saving || !text.trim()}
+                  className="px-3 py-2 bg-amber-500 text-white text-sm font-medium rounded-lg hover:bg-amber-600 disabled:opacity-40 transition-colors shrink-0"
+                >
+                  {saving ? '…' : 'Salvar'}
+                </button>
+              </div>
+              <p className="text-xs text-gray-400">Ctrl+Enter para salvar rapidamente</p>
+            </>
+          )}
         </div>
       )}
     </div>

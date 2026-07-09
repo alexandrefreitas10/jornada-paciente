@@ -22,6 +22,7 @@ interface Props {
   initialEvolutionPhotos: EvolutionPhoto[]
   initialPrescriptions: EvolutionPhoto[]
   currentUserName: string
+  readOnly?: boolean
 }
 
 const emptyInput = (): MeasurementInput => ({
@@ -33,7 +34,7 @@ const emptyInput = (): MeasurementInput => ({
   tirzepatide_dose: null,
 })
 
-export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionPhotos, initialPrescriptions, currentUserName }: Props) {
+export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionPhotos, initialPrescriptions, currentUserName, readOnly = false }: Props) {
   const [measurements, setMeasurements] = useState<Measurement[]>(initialMeasurements)
   const [evolutionPhotos, setEvolutionPhotos] = useState<EvolutionPhoto[]>(initialEvolutionPhotos)
   const [prescriptions, setPrescriptions] = useState<EvolutionPhoto[]>(initialPrescriptions)
@@ -349,12 +350,13 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
       )}
       {/* Upload de foto da tabela + prescrição */}
       <div className="flex flex-wrap items-center gap-3">
-        <DeletedItemsButton patientId={patientId} entityTypes={['measurement', 'measurements']} />
+        {!readOnly && <DeletedItemsButton patientId={patientId} entityTypes={['measurement', 'measurements']} />}
         {/* inputs hidden */}
         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={e => { setShowPhotoMenu(false); handlePhotoChange(e) }} />
         <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { setShowPhotoMenu(false); handlePhotoChange(e) }} />
 
         {/* Botão foto da tabela com menu */}
+        {!readOnly && (
         <div className="relative" ref={photoMenuRef}>
           <button
             onClick={() => setShowPhotoMenu(v => !v)}
@@ -386,10 +388,12 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
             </div>
           )}
         </div>
+        )}
 
         <input ref={prescriptionInputRef} type="file" accept="image/*" className="hidden" onChange={e => { setShowPrescriptionMenu(false); handlePrescriptionChange(e) }} />
         <input ref={prescriptionCameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { setShowPrescriptionMenu(false); handlePrescriptionChange(e) }} />
 
+        {!readOnly && (
         <div className="relative" ref={prescriptionMenuRef}>
           <button
             onClick={() => setShowPrescriptionMenu(v => !v)}
@@ -421,6 +425,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
             </div>
           )}
         </div>
+        )}
 
         {/* Botão relatório de prontuário */}
         <button
@@ -432,12 +437,14 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
         </button>
 
         {/* Saída manual Tirzepartida */}
-        <button
-          onClick={openTirzManual}
-          className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white text-sm font-medium rounded-lg hover:bg-amber-600 transition-colors"
-        >
-          💉 Saída Tirzepartida
-        </button>
+        {!readOnly && (
+          <button
+            onClick={openTirzManual}
+            className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white text-sm font-medium rounded-lg hover:bg-amber-600 transition-colors"
+          >
+            💉 Saída Tirzepartida
+          </button>
+        )}
 
         {uploadError && <p className="text-sm text-red-600">{uploadError}</p>}
         {prescriptionError && <p className="text-sm text-red-600">{prescriptionError}</p>}
@@ -623,20 +630,24 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
                   <td className="py-2 px-2">{m.waist_circumference ?? '—'}</td>
                   <td className="py-2 px-2">{m.tirzepatide_dose ?? '—'}</td>
                   <td className="py-2 px-2 whitespace-nowrap">
-                    <button
-                      onClick={() => startEdit(m)}
-                      className="text-xs text-gray-400 hover:text-violet-600 mr-2"
-                      title="Editar"
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      onClick={() => handleDelete(m.id)}
-                      className="text-xs text-gray-400 hover:text-red-500"
-                      title="Apagar"
-                    >
-                      🗑️
-                    </button>
+                    {!readOnly && (
+                      <>
+                        <button
+                          onClick={() => startEdit(m)}
+                          className="text-xs text-gray-400 hover:text-violet-600 mr-2"
+                          title="Editar"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={() => handleDelete(m.id)}
+                          className="text-xs text-gray-400 hover:text-red-500"
+                          title="Apagar"
+                        >
+                          🗑️
+                        </button>
+                      </>
+                    )}
                   </td>
                 </tr>
               )
@@ -686,7 +697,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
           </tbody>
         </table>
 
-        {!addingNew && (
+        {!readOnly && !addingNew && (
           <button
             onClick={() => setAddingNew(true)}
             className="mt-3 text-sm text-violet-600 hover:text-violet-800 font-medium"
@@ -813,13 +824,15 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
                     >
                       ⬇️
                     </a>
-                    <button
-                      onClick={() => handleDeleteTable()}
-                      className="text-xs text-gray-400 hover:text-red-500"
-                      title="Excluir tabela e medições"
-                    >
-                      🗑️
-                    </button>
+                    {!readOnly && (
+                      <button
+                        onClick={() => handleDeleteTable()}
+                        className="text-xs text-gray-400 hover:text-red-500"
+                        title="Excluir tabela e medições"
+                      >
+                        🗑️
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -827,7 +840,7 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
           </div>
         </div>
       )}
-      <NotesSection patientId={patientId} tab="evolution" />
+      <NotesSection patientId={patientId} tab="evolution" readOnly={readOnly} />
     </div>
   )
 }

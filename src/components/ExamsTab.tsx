@@ -16,6 +16,7 @@ interface ExamFile {
 interface Props {
   patientId: number
   initialFiles: ExamFile[]
+  readOnly?: boolean
 }
 
 function stripMd(text: string): string {
@@ -39,7 +40,7 @@ function formatSummaryCompact(summary: string): string {
   return items.join('\n')
 }
 
-export function ExamsTab({ patientId, initialFiles }: Props) {
+export function ExamsTab({ patientId, initialFiles, readOnly = false }: Props) {
   const [files, setFiles] = useState<ExamFile[]>(initialFiles)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -142,7 +143,7 @@ export function ExamsTab({ patientId, initialFiles }: Props) {
         <div className="space-y-4">
           {/* Upload */}
           <div className="flex items-center gap-3 flex-wrap">
-            <DeletedItemsButton patientId={patientId} entityTypes={['file']} fileType="exam" />
+            {!readOnly && <DeletedItemsButton patientId={patientId} entityTypes={['file']} fileType="exam" />}
             <input
               ref={fileInputRef}
               type="file"
@@ -150,21 +151,23 @@ export function ExamsTab({ patientId, initialFiles }: Props) {
               className="hidden"
               onChange={handleFileChange}
             />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {uploading ? (
-                <>
-                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                  </svg>
-                  Enviando e analisando...
-                </>
-              ) : '🔬 Enviar exame'}
-            </button>
+            {!readOnly && (
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {uploading ? (
+                  <>
+                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                    </svg>
+                    Enviando e analisando...
+                  </>
+                ) : '🔬 Enviar exame'}
+              </button>
+            )}
             {files.length > 0 && (
               <button
                 onClick={() => { window.location.href = `/api/patients/${patientId}/files/download-all?type=exam` }}
@@ -196,16 +199,22 @@ export function ExamsTab({ patientId, initialFiles }: Props) {
                           <p className="text-xs text-gray-400">por <span className="font-medium text-gray-600">{f.created_by}</span></p>
                         )}
                         {f.summary && (
-                          <button
-                            onClick={() => handleRegenerate(f.id)}
-                            disabled={regenerating === f.id}
-                            className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full hover:bg-green-200 disabled:opacity-50 transition-colors"
-                            title="Regenerar resumo"
-                          >
-                            {regenerating === f.id ? '⏳ Gerando...' : '✓ Resumo gerado · 🔄'}
-                          </button>
+                          readOnly ? (
+                            <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">
+                              ✓ Resumo gerado
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => handleRegenerate(f.id)}
+                              disabled={regenerating === f.id}
+                              className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full hover:bg-green-200 disabled:opacity-50 transition-colors"
+                              title="Regenerar resumo"
+                            >
+                              {regenerating === f.id ? '⏳ Gerando...' : '✓ Resumo gerado · 🔄'}
+                            </button>
+                          )
                         )}
-                        {!f.summary && (
+                        {!f.summary && !readOnly && (
                           <button
                             onClick={() => handleRegenerate(f.id)}
                             disabled={regenerating === f.id}
@@ -231,13 +240,15 @@ export function ExamsTab({ patientId, initialFiles }: Props) {
                     >
                       ⬇️
                     </button>
-                    <button
-                      onClick={() => handleDelete(f.id)}
-                      className="text-xs text-gray-400 hover:text-red-500 shrink-0"
-                      title="Apagar"
-                    >
-                      🗑️
-                    </button>
+                    {!readOnly && (
+                      <button
+                        onClick={() => handleDelete(f.id)}
+                        className="text-xs text-gray-400 hover:text-red-500 shrink-0"
+                        title="Apagar"
+                      >
+                        🗑️
+                      </button>
+                    )}
                   </div>
                 )
               })}
@@ -273,7 +284,7 @@ export function ExamsTab({ patientId, initialFiles }: Props) {
           )}
         </div>
       )}
-      <NotesSection patientId={patientId} tab="exam" />
+      <NotesSection patientId={patientId} tab="exam" readOnly={readOnly} />
     </div>
   )
 }

@@ -153,7 +153,7 @@ function CroppedPreview({ url, crop, label }: { url: string; crop: CropRect; lab
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export function EsteticaTab({ patientId }: { patientId: number }) {
+export function EsteticaTab({ patientId, readOnly = false }: { patientId: number; readOnly?: boolean }) {
   const [sessions, setSessions] = useState<AestheticSession[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -511,10 +511,12 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-gray-700">Procedimentos Estéticos</h2>
-        <button onClick={() => setShowForm(v => !v)}
-          className="px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-xl hover:bg-violet-700 transition-colors">
-          CRIAR
-        </button>
+        {!readOnly && (
+          <button onClick={() => setShowForm(v => !v)}
+            className="px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-xl hover:bg-violet-700 transition-colors">
+            CRIAR
+          </button>
+        )}
       </div>
 
       {/* Formulário de criação */}
@@ -627,7 +629,9 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
                     <h3 className="text-sm font-semibold text-gray-800">{s.procedure_name}</h3>
                     {s.region && <p className="text-xs text-gray-400 mt-0.5">📍 {s.region}</p>}
                   </div>
-                  <button onClick={() => handleDelete(s.id)} className="text-red-400 hover:text-red-600 text-sm shrink-0">🗑</button>
+                  {!readOnly && (
+                    <button onClick={() => handleDelete(s.id)} className="text-red-400 hover:text-red-600 text-sm shrink-0">🗑</button>
+                  )}
                 </div>
 
                 {/* Datas */}
@@ -652,9 +656,10 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
                       const isDone = s.completed_sessions.includes(num)
                       const comp = s.completions.find(c => c.session_number === num)
                       return (
-                        <button key={num} onClick={() => openSessionModal(s, num)}
+                        <button key={num} onClick={readOnly ? undefined : () => openSessionModal(s, num)}
+                          disabled={readOnly}
                           title={isDone && comp?.observation ? comp.observation : `Sessão ${num}`}
-                          className={`w-7 h-7 rounded-full border-2 text-xs font-bold transition-all relative ${isDone ? 'bg-violet-600 border-violet-600 text-white' : 'border-gray-300 text-gray-400 hover:border-violet-400 hover:text-violet-500'}`}>
+                          className={`w-7 h-7 rounded-full border-2 text-xs font-bold transition-all relative ${isDone ? 'bg-violet-600 border-violet-600 text-white' : 'border-gray-300 text-gray-400 hover:border-violet-400 hover:text-violet-500'} ${readOnly ? 'cursor-default' : ''}`}>
                           {num}
                           {isDone && comp?.observation && (
                             <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 rounded-full border border-white" />
@@ -837,10 +842,12 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
                 🔍 {compareMode ? 'Cancelar' : 'Comparar fotos'}
               </button>
             )}
-            <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
-              className="text-xs px-3 py-1.5 bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
-              {uploading ? 'Enviando...' : '+ Adicionar foto'}
-            </button>
+            {!readOnly && (
+              <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+                className="text-xs px-3 py-1.5 bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
+                {uploading ? 'Enviando...' : '+ Adicionar foto'}
+              </button>
+            )}
             <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleUpload} />
           </div>
         </div>
@@ -881,7 +888,9 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
                       {/* overlay desktop (hover) */}
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-end justify-between p-1.5 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto">
                         <span className="text-white text-xs">{fmtDate(f.created_at)}</span>
-                        <button onClick={(e) => { e.stopPropagation(); handleDeletePhoto(f.id) }} className="text-white text-sm hover:text-red-300">🗑</button>
+                        {!readOnly && (
+                          <button onClick={(e) => { e.stopPropagation(); handleDeletePhoto(f.id) }} className="text-white text-sm hover:text-red-300">🗑</button>
+                        )}
                       </div>
                     </>
                   )}
@@ -911,12 +920,14 @@ export function EsteticaTab({ patientId }: { patientId: number }) {
               />
               <div className="mt-3 flex items-center gap-4">
                 <span className="text-white/70 text-sm">{fmtDate(lightboxPhoto.created_at)}</span>
-                <button
-                  onClick={() => { handleDeletePhoto(lightboxPhoto.id); setLightboxPhoto(null) }}
-                  className="text-red-400 text-sm px-3 py-1.5 bg-white/10 rounded-lg hover:bg-white/20"
-                >
-                  🗑 Excluir
-                </button>
+                {!readOnly && (
+                  <button
+                    onClick={() => { handleDeletePhoto(lightboxPhoto.id); setLightboxPhoto(null) }}
+                    className="text-red-400 text-sm px-3 py-1.5 bg-white/10 rounded-lg hover:bg-white/20"
+                  >
+                    🗑 Excluir
+                  </button>
+                )}
               </div>
             </div>
           </div>

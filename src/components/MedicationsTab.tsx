@@ -20,7 +20,8 @@ function formatDate(iso: string) {
   })
 }
 
-export function MedicationsTab({ patientId, patientName }: { patientId: number; patientName?: string }) {
+export function MedicationsTab({ patientId, patientName, readOnly = false }: { patientId: number; patientName?: string; readOnly?: boolean }) {
+  void readOnly // sem controles de escrita nesta aba (medicações vêm das saídas de estoque)
   const [medications, setMedications] = useState<Medication[]>([])
   const [loading, setLoading] = useState(true)
   const [showReport, setShowReport] = useState(false)
