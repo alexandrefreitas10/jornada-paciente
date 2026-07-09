@@ -277,6 +277,20 @@ export async function initSchema() {
   // Medidas dos procedimentos estéticos
   await sql.unsafe(`ALTER TABLE aesthetic_sessions ADD COLUMN IF NOT EXISTS initial_measurements JSONB DEFAULT '[]'`).catch(() => {})
   await sql.unsafe(`ALTER TABLE aesthetic_session_completions ADD COLUMN IF NOT EXISTS measurements JSONB DEFAULT '[]'`).catch(() => {})
+
+  // Portal do paciente
+  await sql.unsafe(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS email TEXT`).catch(() => {})
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS patient_users (
+      id               SERIAL PRIMARY KEY,
+      patient_id       INTEGER UNIQUE NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      email            TEXT UNIQUE NOT NULL,
+      password_hash    TEXT,
+      invite_token     UUID UNIQUE,
+      invite_used_at   TIMESTAMPTZ,
+      created_at       TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(() => {})
 }
 
 export default sql
