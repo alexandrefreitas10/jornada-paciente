@@ -5,6 +5,7 @@ import { listPatientFiles } from '@/lib/patient-files'
 import { getSignedDownloadUrl } from '@/lib/s3'
 import { PatientDetailClient } from '@/components/PatientDetailClient'
 import { portalAuth } from '@/auth-portal'
+import { findPortalUserByPatientId } from '@/lib/patient-portal'
 import { logoutPortal } from './actions'
 
 export const dynamic = 'force-dynamic'
@@ -15,6 +16,11 @@ export default async function PortalPatientPage() {
   const patientId = (session?.user as any)?.patient_id as number | undefined
 
   if (!patientId) redirect('/portal/login')
+
+  // Valida que o acesso ainda existe e está ativo no banco —
+  // cobre revogação e redefinição de senha com sessão antiga ainda válida
+  const portalUser = await findPortalUserByPatientId(patientId)
+  if (!portalUser || !portalUser.password_hash) redirect('/portal/login')
 
   const [patient, measurements, photos, bioimpedances, exams, diets, evolutionPhotos, prescriptions] = await Promise.all([
     getPatient(patientId),

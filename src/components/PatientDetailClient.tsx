@@ -221,6 +221,7 @@ function PortalAccessBlock({ patientId }: { patientId: number }) {
   const [emailInput, setEmailInput] = useState('')
   const [generating, setGenerating] = useState(false)
   const [revoking, setRevoking] = useState(false)
+  const [resetting, setResetting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -254,6 +255,7 @@ function PortalAccessBlock({ patientId }: { patientId: number }) {
     setLink(`${window.location.origin}/portal/ativar/${data.token}`)
     setStatus('pending')
     setGenerating(false)
+    setResetting(false)
   }
 
   async function handleRevoke() {
@@ -275,7 +277,42 @@ function PortalAccessBlock({ patientId }: { patientId: number }) {
     })
   }
 
+  function openReset() {
+    setEmailInput(email)
+    setError(null)
+    setResetting(true)
+  }
+
   if (status === 'loading') return null
+
+  const resetForm = (
+    <form onSubmit={handleGenerate} className="space-y-2 bg-violet-50 border border-violet-100 rounded-lg p-3">
+      <p className="text-xs text-gray-600">
+        {status === 'active'
+          ? 'Um novo link será gerado e a senha atual deixará de funcionar. Você pode manter ou trocar o e-mail.'
+          : 'O convite será gerado novamente para o e-mail abaixo.'}
+      </p>
+      <input
+        type="email"
+        value={emailInput}
+        onChange={e => setEmailInput(e.target.value)}
+        required
+        placeholder="E-mail do paciente"
+        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+      />
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      <div className="flex gap-2">
+        <button type="submit" disabled={generating}
+          className="flex-1 py-2 bg-violet-600 text-white text-xs font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
+          {generating ? 'Gerando...' : '🔗 Gerar novo link'}
+        </button>
+        <button type="button" onClick={() => setResetting(false)}
+          className="px-3 py-2 border border-gray-300 rounded-lg text-xs hover:bg-gray-50 transition-colors">
+          Cancelar
+        </button>
+      </div>
+    </form>
+  )
 
   return (
     <div className="border-t border-gray-100 pt-4 mt-4">
@@ -310,20 +347,36 @@ function PortalAccessBlock({ patientId }: { patientId: number }) {
               {copied ? '✓ Copiado' : '📋 Copiar'}
             </button>
           </div>
-          <button onClick={handleRevoke} disabled={revoking}
-            className="text-xs text-red-500 hover:text-red-700 transition-colors">
-            {revoking ? 'Revogando...' : '× Revogar convite'}
-          </button>
+          {resetting ? resetForm : (
+            <div className="flex gap-3">
+              <button onClick={openReset}
+                className="text-xs text-violet-600 hover:text-violet-800 transition-colors">
+                ✏️ Trocar e-mail
+              </button>
+              <button onClick={handleRevoke} disabled={revoking}
+                className="text-xs text-red-500 hover:text-red-700 transition-colors">
+                {revoking ? 'Revogando...' : '× Revogar convite'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
       {status === 'active' && (
         <div className="space-y-2">
           <p className="text-xs text-emerald-600 font-medium">✅ Portal ativo — {email}</p>
-          <button onClick={handleRevoke} disabled={revoking}
-            className="text-xs text-red-500 hover:text-red-700 transition-colors">
-            {revoking ? 'Revogando...' : '× Revogar acesso'}
-          </button>
+          {resetting ? resetForm : (
+            <div className="flex gap-3">
+              <button onClick={openReset}
+                className="text-xs text-violet-600 hover:text-violet-800 transition-colors">
+                🔄 Redefinir acesso (nova senha / trocar e-mail)
+              </button>
+              <button onClick={handleRevoke} disabled={revoking}
+                className="text-xs text-red-500 hover:text-red-700 transition-colors">
+                {revoking ? 'Revogando...' : '× Revogar acesso'}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
