@@ -939,6 +939,14 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
               className={`flex-shrink-0 px-3 py-2.5 rounded-xl border transition-colors text-sm font-medium ${docxMode ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
               📄 DOCX
             </button>
+            <a href="/api/estoque/report?format=pdf" download title="Baixar relatório do estoque em PDF"
+              className="flex-shrink-0 px-3 py-2.5 rounded-xl border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 transition-colors text-sm font-medium">
+              📕 PDF
+            </a>
+            <a href="/api/estoque/report?format=xlsx" download title="Baixar relatório do estoque em Excel"
+              className="flex-shrink-0 px-3 py-2.5 rounded-xl border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 transition-colors text-sm font-medium">
+              📊 Excel
+            </a>
             <button onClick={() => setShowReset(true)} title="Zerar estoque"
               className="flex-shrink-0 px-3 py-2.5 bg-red-50 border border-red-200 text-red-500 rounded-xl hover:bg-red-100 transition-colors text-base">
               🗑️
