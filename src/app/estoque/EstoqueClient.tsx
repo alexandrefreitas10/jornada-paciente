@@ -217,6 +217,7 @@ function PatientExitGroups({ groups, onEdit, onDelete, formatDate }: {
 
 // ── Edit movement modal ───────────────────────────────────────
 function EditMovementModal({ mov, onClose, onSaved }: { mov: StockMovement; onClose: () => void; onSaved: (m: StockMovement) => void }) {
+  const [name, setName] = useState(mov.item_name)
   const [quantity, setQuantity] = useState(String(mov.quantity))
   const [lot, setLot] = useState(mov.lot ?? '')
   const [expiry, setExpiry] = useState(mov.expiry_date ?? '')
@@ -226,6 +227,17 @@ function EditMovementModal({ mov, onClose, onSaved }: { mov: StockMovement; onCl
 
   async function handleSave() {
     setSaving(true)
+    // Renomeia o ativo se o nome mudou (afeta o item e todos os seus movimentos)
+    if (name.trim() && name.trim() !== mov.item_name) {
+      const ir = await fetch(`/api/estoque/items/${mov.item_id}`)
+      if (ir.ok) {
+        const item = await ir.json()
+        await fetch(`/api/estoque/items/${mov.item_id}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name.trim(), unit: item.unit || 'un', notes: item.notes ?? null }),
+        })
+      }
+    }
     const res = await fetch(`/api/estoque/movements/${mov.id}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ quantity: Number(quantity), lot: lot || null, expiry_date: expiry || null, patient_name: patient || null, observation: obs || null }),
@@ -237,9 +249,15 @@ function EditMovementModal({ mov, onClose, onSaved }: { mov: StockMovement; onCl
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
-        <h3 className="font-bold text-gray-800 text-lg mb-1">Editar {mov.type === 'entrada' ? 'Entrada' : 'Saída'}</h3>
-        <p className="text-sm text-gray-500 mb-4">{mov.item_name}</p>
+        <h3 className="font-bold text-gray-800 text-lg mb-4">Editar {mov.type === 'entrada' ? 'Entrada' : 'Saída'}</h3>
         <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Nome do ativo</label>
+            <input value={name} onChange={e => setName(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            {name.trim() !== mov.item_name && (
+              <p className="text-[10px] text-amber-600 mt-1">⚠️ Renomeia o ativo em todas as entradas e saídas dele.</p>
+            )}
+          </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Quantidade *</label>
             <input type="number" min="1" value={quantity} onChange={e => setQuantity(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
@@ -1402,9 +1420,13 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
         }} />
       )}
       {editMov && (
-        <EditMovementModal mov={editMov} onClose={() => setEditMov(null)} onSaved={updated => {
+        <EditMovementModal mov={editMov} onClose={() => setEditMov(null)} onSaved={async updated => {
+          // Recarrega tudo: rename afeta vários movimentos e a troca de lote pode mover a entrada de card
           setMovements(p => p.map(m => m.id === updated.id ? { ...m, ...updated } : m))
           setEditMov(null)
+          const [ir, mr] = await Promise.all([fetch('/api/estoque/items'), fetch('/api/estoque/movements')])
+          if (ir.ok) setItems(await ir.json())
+          if (mr.ok) setMovements(await mr.json())
         }} />
       )}
 
