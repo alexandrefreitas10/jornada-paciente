@@ -356,7 +356,11 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
     const savedIds: number[] = []
     try {
       for (const nfItem of nfItems) {
-        let stockItem = items.find(i => i.name.toLowerCase() === nfItem.name.toLowerCase())
+        // Prioriza o item com mesmo nome E mesmo lote (um card = um lote)
+        let stockItem = items.find(i =>
+          i.name.toLowerCase() === nfItem.name.toLowerCase() &&
+          (i.lot ?? '').trim().toLowerCase() === (nfItem.lot ?? '').trim().toLowerCase()
+        ) ?? items.find(i => i.name.toLowerCase() === nfItem.name.toLowerCase())
         if (!stockItem) {
           const res = await fetch('/api/estoque/items', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -372,7 +376,9 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
           body: JSON.stringify({ item_id: stockItem.id, type: 'entrada', quantity: nfItem.quantity, lot: nfItem.lot, expiry_date: nfItem.expiry_date }),
         })
         if (!movRes.ok) { setNfError(`Erro ao registrar entrada: ${nfItem.name}`); setNfSaving(false); return }
-        savedIds.push(stockItem.id)
+        // O servidor pode ter redirecionado a entrada para outro item (regra um card = um lote)
+        const savedMov = await movRes.json()
+        savedIds.push(savedMov.item_id ?? stockItem.id)
       }
       // Create entry log
       const logRes = await fetch('/api/estoque/entry-logs', {

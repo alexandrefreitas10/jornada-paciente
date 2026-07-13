@@ -146,10 +146,49 @@ export async function createMovement(data: {
   measurement_id?: number | null
 }): Promise<StockMovement> {
   await initSchema()
+
+  // REGRA CRÍTICA: um item de estoque = um lote. Entradas com lote diferente
+  // dos lotes já registrados no item NUNCA podem se misturar — redireciona
+  // para o item de mesmo nome com aquele lote, ou cria um item novo.
+  let itemId = data.item_id
+  if (data.type === 'entrada' && data.lot && data.lot.trim()) {
+    const newLot = data.lot.trim().toLowerCase()
+    const existingLots = await sql<{ lot: string }[]>`
+      SELECT DISTINCT lot FROM stock_movements
+      WHERE item_id = ${itemId} AND type = 'entrada' AND lot IS NOT NULL AND TRIM(lot) <> ''
+    `
+    const lots = existingLots.map(r => r.lot.trim().toLowerCase())
+    if (lots.length > 0 && !lots.includes(newLot)) {
+      const [item] = await sql<{ name: string; unit: string; notes: string | null }[]>`
+        SELECT name, unit, notes FROM stock_items WHERE id = ${itemId}
+      `
+      if (item) {
+        // Existe outro item com o mesmo nome e esse lote?
+        const [match] = await sql<{ id: number }[]>`
+          SELECT DISTINCT i.id FROM stock_items i
+          JOIN stock_movements m ON m.item_id = i.id AND m.type = 'entrada'
+          WHERE LOWER(TRIM(i.name)) = ${item.name.trim().toLowerCase()}
+            AND LOWER(TRIM(m.lot)) = ${newLot}
+          LIMIT 1
+        `
+        if (match) {
+          itemId = match.id
+        } else {
+          const [created] = await sql<{ id: number }[]>`
+            INSERT INTO stock_items (name, unit, notes, created_by)
+            VALUES (${item.name}, ${item.unit}, ${item.notes}, ${data.created_by ?? null})
+            RETURNING id
+          `
+          itemId = created.id
+        }
+      }
+    }
+  }
+
   const [row] = await sql<StockMovement[]>`
     INSERT INTO stock_movements (item_id, type, quantity, lot, expiry_date, patient_id, patient_name, observation, nf_s3_key, created_by, measurement_id)
     VALUES (
-      ${data.item_id}, ${data.type}, ${data.quantity},
+      ${itemId}, ${data.type}, ${data.quantity},
       ${data.lot ?? null}, ${data.expiry_date ?? null}, ${data.patient_id ?? null}, ${data.patient_name ?? null},
       ${data.observation ?? null}, ${data.nf_s3_key ?? null}, ${data.created_by ?? null}, ${data.measurement_id ?? null}
     )
@@ -195,13 +234,59 @@ export async function updateMovement(
   data: { quantity: number; lot?: string | null; expiry_date?: string | null; patient_name?: string | null; observation?: string | null }
 ): Promise<StockMovement | null> {
   await initSchema()
+
+  // Mesma regra crítica da criação: se a edição muda o lote de uma entrada e o
+  // item tem OUTRAS entradas com lote diferente, move a entrada para o item
+  // do lote certo (ou cria um novo) — lotes nunca se misturam no mesmo card.
+  const [current] = await sql<{ item_id: number; type: string }[]>`
+    SELECT item_id, type FROM stock_movements WHERE id = ${id}
+  `
+  if (!current) return null
+
+  let itemId = current.item_id
+  if (current.type === 'entrada' && data.lot && data.lot.trim()) {
+    const newLot = data.lot.trim().toLowerCase()
+    const otherLots = await sql<{ lot: string }[]>`
+      SELECT DISTINCT lot FROM stock_movements
+      WHERE item_id = ${itemId} AND type = 'entrada' AND id <> ${id}
+        AND lot IS NOT NULL AND TRIM(lot) <> ''
+    `
+    const lots = otherLots.map(r => r.lot.trim().toLowerCase())
+    if (lots.length > 0 && !lots.includes(newLot)) {
+      const [item] = await sql<{ name: string; unit: string; notes: string | null }[]>`
+        SELECT name, unit, notes FROM stock_items WHERE id = ${itemId}
+      `
+      if (item) {
+        const [match] = await sql<{ id: number }[]>`
+          SELECT DISTINCT i.id FROM stock_items i
+          JOIN stock_movements m ON m.item_id = i.id AND m.type = 'entrada'
+          WHERE LOWER(TRIM(i.name)) = ${item.name.trim().toLowerCase()}
+            AND LOWER(TRIM(m.lot)) = ${newLot}
+            AND i.id <> ${itemId}
+          LIMIT 1
+        `
+        if (match) {
+          itemId = match.id
+        } else {
+          const [created] = await sql<{ id: number }[]>`
+            INSERT INTO stock_items (name, unit, notes, created_by)
+            VALUES (${item.name}, ${item.unit}, ${item.notes}, ${null})
+            RETURNING id
+          `
+          itemId = created.id
+        }
+      }
+    }
+  }
+
   const [row] = await sql<StockMovement[]>`
     UPDATE stock_movements
     SET quantity = ${data.quantity},
         lot = ${data.lot ?? null},
         expiry_date = ${data.expiry_date ?? null},
         patient_name = ${data.patient_name ?? null},
-        observation = ${data.observation ?? null}
+        observation = ${data.observation ?? null},
+        item_id = ${itemId}
     WHERE id = ${id}
     RETURNING *
   `
