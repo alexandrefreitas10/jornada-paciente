@@ -31,7 +31,7 @@ export interface StockMovement {
 
 export async function listStockItems(): Promise<StockItem[]> {
   await initSchema()
-  return sql<StockItem[]>`
+  const rows = await sql<StockItem[]>`
     SELECT
       i.*,
       COALESCE(
@@ -51,6 +51,7 @@ export async function listStockItems(): Promise<StockItem[]> {
     ) > 0
     ORDER BY i.name ASC
   `
+  return rows.map(r => ({ ...r, quantity: Number(r.quantity) }))
 }
 
 export async function getStockItem(id: number): Promise<StockItem | null> {
@@ -70,7 +71,7 @@ export async function getStockItem(id: number): Promise<StockItem | null> {
     WHERE i.id = ${id}
     GROUP BY i.id
   `
-  return row ?? null
+  return row ? { ...row, quantity: Number(row.quantity) } : null
 }
 
 export async function createStockItem(
@@ -93,36 +94,42 @@ export async function updateStockItem(
   return getStockItem(id)
 }
 
+// A coluna quantity é NUMERIC — o driver devolve string; normaliza para number
+function normalizeMovement(m: StockMovement): StockMovement {
+  return { ...m, quantity: Number(m.quantity) }
+}
+
 export async function listMovements(type?: 'entrada' | 'saida'): Promise<StockMovement[]> {
   await initSchema()
-  if (type) {
-    return sql<StockMovement[]>`
-      SELECT m.*, i.name AS item_name
-      FROM stock_movements m
-      JOIN stock_items i ON i.id = m.item_id
-      WHERE m.type = ${type}
-      ORDER BY m.created_at DESC
-    `
-  }
-  return sql<StockMovement[]>`
-    SELECT m.*, i.name AS item_name
-    FROM stock_movements m
-    JOIN stock_items i ON i.id = m.item_id
-    ORDER BY m.created_at DESC
-  `
+  const rows = type
+    ? await sql<StockMovement[]>`
+        SELECT m.*, i.name AS item_name
+        FROM stock_movements m
+        JOIN stock_items i ON i.id = m.item_id
+        WHERE m.type = ${type}
+        ORDER BY m.created_at DESC
+      `
+    : await sql<StockMovement[]>`
+        SELECT m.*, i.name AS item_name
+        FROM stock_movements m
+        JOIN stock_items i ON i.id = m.item_id
+        ORDER BY m.created_at DESC
+      `
+  return rows.map(normalizeMovement)
 }
 
 export async function listMovementsByPatient(patientId: number): Promise<StockMovement[]> {
   await initSchema()
 
   // Apenas saídas reais do estoque vinculadas ao paciente
-  return sql<StockMovement[]>`
+  const rows = await sql<StockMovement[]>`
     SELECT m.*, i.name AS item_name
     FROM stock_movements m
     JOIN stock_items i ON i.id = m.item_id
     WHERE m.patient_id = ${patientId} AND m.type = 'saida'
     ORDER BY m.created_at DESC
   `
+  return rows.map(normalizeMovement)
 }
 
 export async function createMovement(data: {
@@ -148,7 +155,7 @@ export async function createMovement(data: {
     )
     RETURNING *
   `
-  return row
+  return normalizeMovement(row)
 }
 
 // Cria movimento de ajuste para corrigir quantidade diretamente
@@ -198,5 +205,5 @@ export async function updateMovement(
     WHERE id = ${id}
     RETURNING *
   `
-  return row ?? null
+  return row ? normalizeMovement(row) : null
 }
