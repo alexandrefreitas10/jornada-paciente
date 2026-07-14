@@ -37,7 +37,9 @@ export default async function PortalPatientPage() {
     listPatientFiles(patientId, 'prescription'),
   ])
 
-  if (!patient) redirect('/portal/login')
+  // Paciente excluído (lixeira) ou arquivado não acessa o portal
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (!patient || (patient as any).deleted_at || (patient as any).archived_at) redirect('/portal/login')
 
   const withUrls = async (files: typeof photos) =>
     Promise.all(files.map(async (f) => ({ ...f, url: await getSignedDownloadUrl(f.s3_key) })))
