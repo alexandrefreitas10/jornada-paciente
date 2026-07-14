@@ -5,7 +5,20 @@ const sql = postgres(process.env.DATABASE_URL!, {
   max: 10,
 })
 
-export async function initSchema() {
+// Memoiza a migração: roda UMA vez por processo, não em toda request.
+// Em falha, zera o cache para tentar de novo na próxima chamada.
+let schemaReady: Promise<void> | null = null
+export function initSchema(): Promise<void> {
+  if (!schemaReady) {
+    schemaReady = runMigrations().catch((err) => {
+      schemaReady = null
+      throw err
+    })
+  }
+  return schemaReady
+}
+
+async function runMigrations() {
   await sql.unsafe(`
     CREATE TABLE IF NOT EXISTS patients (
       id SERIAL PRIMARY KEY,

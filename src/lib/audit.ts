@@ -22,7 +22,7 @@ export async function logAudit(params: {
   details?: string
   deletedData?: object | null
 }) {
-  try {
+  const insert = async () => {
     await initSchema()
     await sql`
       INSERT INTO audit_logs (user_name, action, entity_type, entity_id, patient_id, details, deleted_data)
@@ -36,8 +36,26 @@ export async function logAudit(params: {
         ${params.deletedData != null ? sql.json(params.deletedData as never) : null}
       )
     `
-  } catch (err) {
-    console.error('[logAudit] erro ao salvar log:', err)
+  }
+
+  // A trilha de auditoria não pode sumir em silêncio (conformidade/PHI).
+  // Tenta 2x; se falhar, emite um marcador destacado para alerta operacional.
+  try {
+    await insert()
+  } catch {
+    try {
+      await insert()
+    } catch (err) {
+      // [AUDIT-FAILURE] é o marcador para configurar alerta no Render/logs.
+      console.error('[AUDIT-FAILURE] log de auditoria NÃO gravado:', {
+        userName: params.userName,
+        action: params.action,
+        entityType: params.entityType,
+        entityId: params.entityId?.toString() ?? null,
+        patientId: params.patientId ?? null,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
   }
 }
 
