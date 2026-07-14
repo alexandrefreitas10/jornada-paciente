@@ -149,6 +149,8 @@ async function runMigrations() {
   await sql.unsafe(`ALTER TABLE patient_terms ADD COLUMN IF NOT EXISTS fields JSONB DEFAULT '[]'`).catch(() => {})
   await sql.unsafe(`ALTER TABLE patient_terms ADD COLUMN IF NOT EXISTS filled_fields JSONB DEFAULT '{}'`).catch(() => {})
   await sql.unsafe(`ALTER TABLE patient_terms ADD COLUMN IF NOT EXISTS signed_file_s3_key TEXT`).catch(() => {})
+  // Hash de integridade do arquivo assinado (detecta troca do PDF no S3)
+  await sql.unsafe(`ALTER TABLE patient_terms ADD COLUMN IF NOT EXISTS signed_file_sha256 TEXT`).catch(() => {})
 
   // Tabela de observações por aba
   await sql.unsafe(`

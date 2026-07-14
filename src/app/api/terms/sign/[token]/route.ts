@@ -3,7 +3,7 @@ import { getTermByToken, signTerm, signTermWithFile } from '@/lib/patient-terms'
 import { uploadFile, downloadFile } from '@/lib/s3'
 import { embedSignatureInPdf, buildSignatureCertificate, generatePdfFromText } from '@/lib/pdf-sign'
 import { embedSignatureInDocx } from '@/lib/docx-sign'
-import { randomUUID } from 'crypto'
+import { randomUUID, createHash } from 'crypto'
 
 export async function GET(
   _req: NextRequest,
@@ -29,7 +29,7 @@ async function generateSignedFile(
   signatureData: string,
   filledFields: Record<string, string>,
   signedAt: string,
-): Promise<{ key: string; mime: string; name: string } | null> {
+): Promise<{ key: string; mime: string; name: string; sha256: string } | null> {
   try {
     const block = {
       termTitle,
@@ -75,8 +75,8 @@ async function generateSignedFile(
 
     const key = `terms/signed/${randomUUID()}.${ext}`
     await uploadFile(key, fileBytes, mime)
-    console.log('[terms] signed file generated:', key)
-    return { key, mime, name: nameSuffix }
+    const sha256 = createHash('sha256').update(fileBytes).digest('hex')
+    return { key, mime, name: nameSuffix, sha256 }
   } catch (err) {
     console.error('[terms] Failed to generate signed file:', err)
     return null
@@ -114,12 +114,14 @@ export async function POST(
       await uploadFile(s3Key, buffer, filledFile.type as never)
 
       const signed = await generateSignedFile(s3Key, filledFile.type, null, term.title, signerName, signatureData, filledFields, signedAt)
-      const updated = await signTermWithFile(token, signerName, signatureData, s3Key, filledFile.name, filledFields, signed?.key ?? null)
+      const updated = await signTermWithFile(token, signerName, signatureData, s3Key, filledFile.name, filledFields, signed?.key ?? null, signed?.sha256 ?? null)
+      if (!updated) return Response.json({ error: 'Termo ja assinado' }, { status: 409 })
       return Response.json(updated)
     }
 
     const signed = await generateSignedFile(term.file_s3_key, term.file_mime, term.content ?? null, term.title, signerName, signatureData, filledFields, signedAt)
-    const updated = await signTerm(token, signerName, signatureData, filledFields, signed?.key ?? null)
+    const updated = await signTerm(token, signerName, signatureData, filledFields, signed?.key ?? null, signed?.sha256 ?? null)
+    if (!updated) return Response.json({ error: 'Termo ja assinado' }, { status: 409 })
     return Response.json(updated)
   }
 
@@ -130,6 +132,7 @@ export async function POST(
     return Response.json({ error: 'Nome e assinatura obrigatorios' }, { status: 400 })
   }
   const signed = await generateSignedFile(term.file_s3_key, term.file_mime, term.content ?? null, term.title, signerName.trim(), signatureData, {}, signedAt)
-  const updated = await signTerm(token, signerName.trim(), signatureData, {}, signed?.key ?? null)
+  const updated = await signTerm(token, signerName.trim(), signatureData, {}, signed?.key ?? null, signed?.sha256 ?? null)
+  if (!updated) return Response.json({ error: 'Termo ja assinado' }, { status: 409 })
   return Response.json(updated)
 }

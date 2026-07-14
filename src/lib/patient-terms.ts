@@ -11,6 +11,7 @@ export interface PatientTerm {
   fields: string[]
   filled_fields: Record<string, string>
   signed_file_s3_key: string | null
+  signed_file_sha256: string | null
   status: 'draft' | 'sent' | 'signed'
   created_by: string
   created_at: string
@@ -79,44 +80,56 @@ export async function getTermById(id: number): Promise<PatientTerm | null> {
   return row ?? null
 }
 
+// Só retorna termo assinável: token válido, ainda não assinado e dentro de 30
+// dias do envio. Após assinar, sign_token vira NULL (link de uso único).
 export async function getTermByToken(token: string): Promise<PatientTerm | null> {
   await initSchema()
-  const [row] = await sql<PatientTerm[]>`SELECT * FROM patient_terms WHERE sign_token = ${token}`
+  const [row] = await sql<PatientTerm[]>`
+    SELECT * FROM patient_terms
+    WHERE sign_token = ${token}
+      AND status = 'sent'
+      AND sent_at > NOW() - INTERVAL '30 days'
+  `
   return row ?? null
 }
 
 export async function signTerm(
   token: string, signerName: string, signatureData: string,
-  filledFields: Record<string, string> = {}, signedFileS3Key: string | null = null
-): Promise<PatientTerm> {
+  filledFields: Record<string, string> = {}, signedFileS3Key: string | null = null,
+  signedFileSha256: string | null = null
+): Promise<PatientTerm | null> {
   await initSchema()
+  // Guard atômico anti double-sign: só assina se ainda não estava assinado.
   const [row] = await sql<PatientTerm[]>`
     UPDATE patient_terms
     SET status = 'signed', signed_at = NOW(), signer_name = ${signerName},
         signature_data = ${signatureData}, filled_fields = ${JSON.stringify(filledFields)},
-        signed_file_s3_key = ${signedFileS3Key}
-    WHERE sign_token = ${token}
+        signed_file_s3_key = ${signedFileS3Key}, signed_file_sha256 = ${signedFileSha256},
+        sign_token = NULL
+    WHERE sign_token = ${token} AND status <> 'signed'
     RETURNING *
   `
-  return row
+  return row ?? null
 }
 
 export async function signTermWithFile(
   token: string, signerName: string, signatureData: string,
   filledS3Key: string, filledFileName: string,
-  filledFields: Record<string, string> = {}, signedFileS3Key: string | null = null
-): Promise<PatientTerm> {
+  filledFields: Record<string, string> = {}, signedFileS3Key: string | null = null,
+  signedFileSha256: string | null = null
+): Promise<PatientTerm | null> {
   await initSchema()
   const [row] = await sql<PatientTerm[]>`
     UPDATE patient_terms
     SET status = 'signed', signed_at = NOW(), signer_name = ${signerName},
         signature_data = ${signatureData}, filled_fields = ${JSON.stringify(filledFields)},
         file_s3_key = ${filledS3Key}, file_name = ${filledFileName},
-        signed_file_s3_key = ${signedFileS3Key}
-    WHERE sign_token = ${token}
+        signed_file_s3_key = ${signedFileS3Key}, signed_file_sha256 = ${signedFileSha256},
+        sign_token = NULL
+    WHERE sign_token = ${token} AND status <> 'signed'
     RETURNING *
   `
-  return row
+  return row ?? null
 }
 
 export async function getPatientTermById(id: number): Promise<PatientTerm | null> {
