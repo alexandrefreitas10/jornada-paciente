@@ -41,11 +41,16 @@ export async function generateExamSummary(buffer: Buffer, mimeType: string, file
         { type: 'text', text: EXAM_PROMPT },
       ]
 
-  const message = await getClient().messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 16384,
-    messages: [{ role: 'user', content }],
-  })
+  // Streaming: exames longos (50+ páginas) demoram mais que o timeout de
+  // requisições não-streaming — o stream mantém a conexão viva até o fim
+  const message = await getClient().messages
+    .stream({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 16384,
+      messages: [{ role: 'user', content }],
+    })
+    .finalMessage()
 
-  return (message.content[0] as { type: string; text: string }).text
+  const textBlock = message.content.find(b => b.type === 'text') as { type: 'text'; text: string } | undefined
+  return textBlock?.text ?? ''
 }

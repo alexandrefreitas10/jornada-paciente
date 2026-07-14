@@ -85,8 +85,9 @@ export function ExamsTab({ patientId, initialFiles, readOnly = false }: Props) {
     setRegenerating(id)
     try {
       const res = await fetch(`/api/patients/${patientId}/files/${id}`, { method: 'PATCH' })
-      if (!res.ok) throw new Error('Erro ao regenerar')
-      const { summary } = await res.json()
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ? `Erro ao regenerar: ${data.error}` : `Erro ao regenerar (HTTP ${res.status})`)
+      const { summary } = data
       setFiles(prev => prev.map(f => f.id === id ? { ...f, summary } : f))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao regenerar resumo')
