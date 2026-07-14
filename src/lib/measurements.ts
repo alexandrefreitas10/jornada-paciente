@@ -21,6 +21,24 @@ export interface MeasurementInput {
   tirzepatide_dose?: number | null
 }
 
+// As colunas de medida são NUMERIC — o driver devolve string. Normaliza para
+// number para que somas/médias/gráficos de evolução não concatenem texto.
+function toNum(v: unknown): number | null {
+  if (v == null) return null
+  const n = typeof v === 'number' ? v : Number(v)
+  return Number.isFinite(n) ? n : null
+}
+function normalizeMeasurement(m: Measurement): Measurement {
+  return {
+    ...m,
+    week: toNum(m.week),
+    weight: toNum(m.weight),
+    abdominal_circumference: toNum(m.abdominal_circumference),
+    waist_circumference: toNum(m.waist_circumference),
+    tirzepatide_dose: toNum(m.tirzepatide_dose),
+  }
+}
+
 export async function listMeasurements(patientId: number): Promise<Measurement[]> {
   await initSchema()
   const rows = await sql<Measurement[]>`
@@ -28,7 +46,7 @@ export async function listMeasurements(patientId: number): Promise<Measurement[]
     WHERE patient_id = ${patientId}
     ORDER BY week ASC NULLS LAST, created_at ASC
   `
-  return rows
+  return rows.map(normalizeMeasurement)
 }
 
 export async function createMeasurement(
@@ -54,7 +72,7 @@ export async function createMeasurement(
         tirzepatide_dose = EXCLUDED.tirzepatide_dose
       RETURNING *
     `
-    return row
+    return normalizeMeasurement(row)
   }
 
   // Sem semana definida, insere normalmente
@@ -67,7 +85,7 @@ export async function createMeasurement(
        ${input.tirzepatide_dose ?? null})
     RETURNING *
   `
-  return row
+  return normalizeMeasurement(row)
 }
 
 export async function updateMeasurement(
@@ -86,13 +104,13 @@ export async function updateMeasurement(
     WHERE id = ${id}
     RETURNING *
   `
-  return row
+  return normalizeMeasurement(row)
 }
 
 export async function getMeasurementById(id: number): Promise<Measurement | null> {
   await initSchema()
   const [row] = await sql<Measurement[]>`SELECT * FROM weekly_measurements WHERE id = ${id}`
-  return row ?? null
+  return row ? normalizeMeasurement(row) : null
 }
 
 export async function deleteMeasurement(id: number): Promise<void> {
