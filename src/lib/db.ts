@@ -333,6 +333,20 @@ async function runMigrations() {
       created_at  TIMESTAMPTZ DEFAULT NOW()
     )
   `).catch(() => {})
+
+  // Rate-limiting de login (multi-instância): contador + lockout por (scope, identifier)
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS login_attempts (
+      scope         TEXT NOT NULL,
+      identifier    TEXT NOT NULL,
+      fail_count    INTEGER NOT NULL DEFAULT 0,
+      first_fail_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_fail_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      locked_until  TIMESTAMPTZ,
+      PRIMARY KEY (scope, identifier)
+    )
+  `).catch(() => {})
+  await sql.unsafe(`CREATE INDEX IF NOT EXISTS login_attempts_last_fail_idx ON login_attempts(last_fail_at)`).catch(() => {})
 }
 
 export default sql

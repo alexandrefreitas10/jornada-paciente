@@ -1,7 +1,12 @@
-import NextAuth from 'next-auth'
+import NextAuth, { CredentialsSignin } from 'next-auth'
 import Credentials from 'next-auth/providers/credentials'
 import bcrypt from 'bcryptjs'
 import { findUserByUsername } from './lib/users'
+import { assertNotLocked, registerFailure, clearAttempts } from './lib/rate-limit'
+
+class RateLimitedError extends CredentialsSignin {
+  code = 'rate_limited'
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -12,10 +17,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
       async authorize(credentials) {
         if (!credentials?.username || !credentials?.password) return null
-        const user = await findUserByUsername((credentials.username as string).trim())
-        if (!user) return null
+        const username = (credentials.username as string).trim()
+        // Rate-limit: barra brute-force antes de gastar o bcrypt
+        if ((await assertNotLocked('staff', username)).blocked) throw new RateLimitedError()
+        const user = await findUserByUsername(username)
+        if (!user) { await registerFailure('staff', username); return null }
         const valid = await bcrypt.compare(credentials.password as string, user.password_hash)
-        if (!valid) return null
+        if (!valid) {
+          if ((await registerFailure('staff', username)).blocked) throw new RateLimitedError()
+          return null
+        }
+        await clearAttempts('staff', username)
         return { id: String(user.id), name: user.username, is_admin: user.is_admin, can_estoque: user.can_estoque }
       },
     }),

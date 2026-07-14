@@ -4,6 +4,7 @@ import sql, { initSchema } from '@/lib/db'
 import bcrypt from 'bcryptjs'
 import { findUserByUsername } from '@/lib/users'
 import { deleteFile } from '@/lib/s3'
+import { assertNotLocked, registerFailure, clearAttempts } from '@/lib/rate-limit'
 
 export async function DELETE(
   req: NextRequest,
@@ -34,10 +35,21 @@ export async function DELETE(
       return NextResponse.json({ error: 'Acesso restrito' }, { status: 403 })
     }
 
+    // Rate-limit por admin (reauth): trava brute-force da senha
+    const gate = await assertNotLocked('reauth', user.username)
+    if (gate.blocked) {
+      return NextResponse.json(
+        { error: 'Muitas tentativas. Aguarde alguns minutos.' },
+        { status: 429, headers: { 'Retry-After': String(gate.retryAfterSec) } }
+      )
+    }
+
     const passwordMatch = await bcrypt.compare(adminPassword, user.password_hash)
     if (!passwordMatch) {
+      await registerFailure('reauth', user.username)
       return NextResponse.json({ error: 'Senha incorreta' }, { status: 401 })
     }
+    await clearAttempts('reauth', user.username)
 
     await initSchema()
 
