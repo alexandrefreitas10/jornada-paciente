@@ -190,6 +190,9 @@ export async function createMovement(data: {
           SELECT name, unit, notes FROM stock_items WHERE id = ${itemId}
         `
         if (item) {
+          // Lock por (nome+lote): serializa entradas concorrentes do mesmo
+          // nome+lote novo, impedindo que duas criem itens duplicados (M4).
+          await tx`SELECT pg_advisory_xact_lock(hashtext(${item.name.trim().toLowerCase() + '|' + newLot}))`
           const [match] = await tx<{ id: number }[]>`
             SELECT DISTINCT i.id FROM stock_items i
             JOIN stock_movements m ON m.item_id = i.id AND m.type = 'entrada'
@@ -245,33 +248,42 @@ export async function createMovement(data: {
 // Cria movimento de ajuste para corrigir quantidade diretamente
 export async function adjustStockQuantity(
   itemId: number,
-  currentQty: number,
+  _currentQty: number, // ignorado — o saldo real é recalculado dentro do lock (anti-TOCTOU)
   targetQty: number,
   lot: string | null,
   expiryDate: string | null,
   createdBy: string | null
 ): Promise<void> {
   await initSchema()
-  const diff = targetQty - currentQty
-  if (diff !== 0) {
-    const type = diff > 0 ? 'entrada' : 'saida'
-    await sql`
-      INSERT INTO stock_movements (item_id, type, quantity, lot, expiry_date, observation, created_by)
-      VALUES (${itemId}, ${type}, ${Math.abs(diff)}, ${lot}, ${expiryDate}, ${'Ajuste manual'}, ${createdBy})
+  await sql.begin(async (tx) => {
+    // Lock por item: serializa contra saídas/entradas concorrentes durante o ajuste
+    await tx`SELECT pg_advisory_xact_lock(${itemId})`
+    // Recalcula o saldo ATUAL dentro da transação — não confia no valor lido antes
+    const [{ balance }] = await tx<{ balance: string }[]>`
+      SELECT COALESCE(SUM(CASE WHEN type = 'entrada' THEN quantity ELSE -quantity END), 0) AS balance
+      FROM stock_movements WHERE item_id = ${itemId}
     `
-  } else {
-    // Quantidade não mudou: atualiza lote/validade direto na última entrada
-    await sql`
-      UPDATE stock_movements
-      SET lot = ${lot}, expiry_date = ${expiryDate}
-      WHERE id = (
-        SELECT id FROM stock_movements
-        WHERE item_id = ${itemId} AND type = 'entrada'
-        ORDER BY created_at DESC
-        LIMIT 1
-      )
-    `
-  }
+    const diff = targetQty - Number(balance)
+    if (diff !== 0) {
+      const type = diff > 0 ? 'entrada' : 'saida'
+      await tx`
+        INSERT INTO stock_movements (item_id, type, quantity, lot, expiry_date, observation, created_by)
+        VALUES (${itemId}, ${type}, ${Math.abs(diff)}, ${lot}, ${expiryDate}, ${'Ajuste manual'}, ${createdBy})
+      `
+    } else {
+      // Quantidade não mudou: atualiza lote/validade direto na última entrada
+      await tx`
+        UPDATE stock_movements
+        SET lot = ${lot}, expiry_date = ${expiryDate}
+        WHERE id = (
+          SELECT id FROM stock_movements
+          WHERE item_id = ${itemId} AND type = 'entrada'
+          ORDER BY created_at DESC, id DESC
+          LIMIT 1
+        )
+      `
+    }
+  })
 }
 
 export async function updateMovement(
