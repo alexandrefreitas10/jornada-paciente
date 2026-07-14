@@ -72,5 +72,8 @@ export default auth(async (req) => {
 })
 
 export const config = {
-  matcher: ['/((?!api/auth|api/terms|_next/static|_next/image|favicon\\.ico|.*\\.png|.*\\.jpg|.*\\.jpeg|.*\\.svg|.*\\.webp|.*\\.ico).*)'],
+  // Exclui do middleware apenas: auth do NextAuth, a rota PÚBLICA de assinatura
+  // de termo (paciente assina via link), estáticos. As rotas de GESTÃO de termos
+  // (/api/terms, /api/terms/[id]) NÃO são excluídas — passam pelo guardião.
+  matcher: ['/((?!api/auth|api/portal/auth|api/terms/sign|_next/static|_next/image|favicon\\.ico|.*\\.png|.*\\.jpg|.*\\.jpeg|.*\\.svg|.*\\.webp|.*\\.ico).*)'],
 }

@@ -6,6 +6,8 @@ import { uploadTermToS3 } from '@/lib/s3'
 export const dynamic = 'force-dynamic'
 
 export async function GET(_req: NextRequest) {
+  const session = await auth()
+  if (!session?.user) return Response.json({ error: 'Não autenticado' }, { status: 401 })
   const terms = await listTerms()
   return Response.json(terms)
 }
@@ -13,7 +15,8 @@ export async function GET(_req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const session = await auth()
-    const createdBy = session?.user?.name ?? 'Desconhecido'
+    if (!session?.user) return Response.json({ error: 'Não autenticado' }, { status: 401 })
+    const createdBy = session.user.name ?? 'Desconhecido'
 
     const formData = await req.formData()
     const title = (formData.get('title') as string | null)?.trim()
