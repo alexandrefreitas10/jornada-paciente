@@ -88,6 +88,39 @@ export async function createMeasurement(
   return normalizeMeasurement(row)
 }
 
+// Usado na restauração da lixeira: NÃO sobrescreve uma medição mais nova que já
+// exista na mesma semana (ON CONFLICT DO NOTHING). Retorna null se não inseriu.
+export async function restoreMeasurement(
+  patientId: number,
+  input: MeasurementInput
+): Promise<Measurement | null> {
+  await initSchema()
+  if (input.week != null) {
+    const [row] = await sql<Measurement[]>`
+      INSERT INTO weekly_measurements
+        (patient_id, week, date, weight, abdominal_circumference, waist_circumference, tirzepatide_dose)
+      VALUES
+        (${patientId}, ${input.week}, ${input.date ?? null}, ${input.weight ?? null},
+         ${input.abdominal_circumference ?? null}, ${input.waist_circumference ?? null},
+         ${input.tirzepatide_dose ?? null})
+      ON CONFLICT (patient_id, week) WHERE week IS NOT NULL DO NOTHING
+      RETURNING *
+    `
+    return row ? normalizeMeasurement(row) : null
+  }
+  // Sem semana: insere normalmente (não há chave de conflito)
+  const [row] = await sql<Measurement[]>`
+    INSERT INTO weekly_measurements
+      (patient_id, week, date, weight, abdominal_circumference, waist_circumference, tirzepatide_dose)
+    VALUES
+      (${patientId}, ${null}, ${input.date ?? null}, ${input.weight ?? null},
+       ${input.abdominal_circumference ?? null}, ${input.waist_circumference ?? null},
+       ${input.tirzepatide_dose ?? null})
+    RETURNING *
+  `
+  return row ? normalizeMeasurement(row) : null
+}
+
 export async function updateMeasurement(
   id: number,
   input: MeasurementInput

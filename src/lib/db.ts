@@ -347,6 +347,8 @@ async function runMigrations() {
     )
   `).catch(() => {})
   await sql.unsafe(`CREATE INDEX IF NOT EXISTS login_attempts_last_fail_idx ON login_attempts(last_fail_at)`).catch(() => {})
+  // Retenção: lockouts duram 15 min, então linhas com >1 dia são lixo
+  await sql.unsafe(`DELETE FROM login_attempts WHERE last_fail_at < NOW() - INTERVAL '1 day'`).catch(() => {})
 
   // Observabilidade: falhas silenciosas relevantes (resumo IA, S3 órfão, auditoria)
   await sql.unsafe(`
@@ -359,6 +361,8 @@ async function runMigrations() {
     )
   `).catch(() => {})
   await sql.unsafe(`CREATE INDEX IF NOT EXISTS system_errors_created_idx ON system_errors(created_at DESC)`).catch(() => {})
+  // Retenção: mantém ~90 dias de erros do sistema (roda 1x por boot do processo)
+  await sql.unsafe(`DELETE FROM system_errors WHERE created_at < NOW() - INTERVAL '90 days'`).catch(() => {})
 
   // FKs faltantes em stock_movements (ON DELETE SET NULL — preserva o histórico
   // e o patient_name denormalizado; patients é soft-delete, CASCADE não cabe).

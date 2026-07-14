@@ -71,6 +71,7 @@ export function DeletedItemsButton({ patientId, entityTypes, fileType }: Props) 
       const res = await fetch(`/api/admin/audit/${log.id}/restore`, { method: 'POST' })
       const data = await res.json()
       if (!res.ok) { alert(data.error || 'Erro ao restaurar'); return }
+      if (data.warning) alert(data.warning)
       setLogs(prev => prev ? prev.filter(l => l.id !== log.id) : prev)
       window.location.reload()
     } finally {

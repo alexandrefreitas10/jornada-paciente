@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuditLog, deleteAuditLog } from '@/lib/audit'
-import { createMeasurement, MeasurementInput } from '@/lib/measurements'
+import { restoreMeasurement, MeasurementInput } from '@/lib/measurements'
 import { createEvolutionSummary, SummaryTopics } from '@/lib/evolution-summaries'
 import { createTextTerm, restorePatientTerm } from '@/lib/patient-terms'
 import { restorePatient } from '@/lib/patients'
@@ -21,13 +21,16 @@ export async function POST(
   }
 
   const data = log.deleted_data
+  let skipped = 0 // medições não restauradas por já existir uma na mesma semana
 
   try {
     if (log.entity_type === 'measurement' && log.patient_id) {
-      await createMeasurement(log.patient_id, data as MeasurementInput)
+      const restored = await restoreMeasurement(log.patient_id, data as MeasurementInput)
+      if (!restored) skipped++
     } else if (log.entity_type === 'measurements' && log.patient_id) {
       const rows = (data as { rows: MeasurementInput[] }).rows
-      await Promise.all(rows.map(r => createMeasurement(log.patient_id!, r)))
+      const results = await Promise.all(rows.map(r => restoreMeasurement(log.patient_id!, r)))
+      skipped = results.filter(r => r === null).length
     } else if (log.entity_type === 'evolution_summary' && log.patient_id) {
       const s = data as { transcription: string; summary: SummaryTopics; audio_name: string | null }
       await createEvolutionSummary(log.patient_id, s.transcription, s.summary, null, s.audio_name)
@@ -74,5 +77,8 @@ export async function POST(
   // Remove o log de auditoria após restauração bem-sucedida
   await deleteAuditLog(Number(logId))
 
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({
+    ok: true,
+    ...(skipped > 0 ? { skipped, warning: `${skipped} medição(ões) não foram restauradas por já existir uma mais recente na mesma semana.` } : {}),
+  })
 }

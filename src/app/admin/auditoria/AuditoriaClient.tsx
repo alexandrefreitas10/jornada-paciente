@@ -64,6 +64,7 @@ export function AuditoriaClient({ logs: initialLogs }: Props) {
       const res = await fetch(`/api/admin/audit/${log.id}/restore`, { method: 'POST' })
       const data = await res.json()
       if (!res.ok) { alert(data.error || 'Erro ao restaurar'); return }
+      if (data.warning) alert(data.warning)
       setLogs(prev => prev.filter(l => l.id !== log.id))
     } finally {
       setRestoring(null)
