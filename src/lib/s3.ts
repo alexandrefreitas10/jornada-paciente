@@ -28,7 +28,7 @@ export async function deleteFile(key: string): Promise<void> {
   await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }))
 }
 
-export async function getSignedDownloadUrl(key: string, expiresIn = 43200): Promise<string> {
+export async function getSignedDownloadUrl(key: string, expiresIn = 900): Promise<string> {
   return getSignedUrl(s3, new GetObjectCommand({ Bucket: BUCKET, Key: key }), { expiresIn })
 }
 
@@ -49,7 +49,7 @@ export async function getFileStream(key: string): Promise<{ body: ReadableStream
 export async function getSignedDownloadUrlWithFilename(
   key: string,
   filename: string,
-  expiresIn = 43200
+  expiresIn = 900
 ): Promise<string> {
   return getSignedUrl(
     s3,

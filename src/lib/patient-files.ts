@@ -41,7 +41,8 @@ export async function createPatientFile(
 
 export async function getFileById(id: number): Promise<PatientFile | null> {
   await initSchema()
-  const [row] = await sql<PatientFile[]>`SELECT * FROM patient_files WHERE id = ${id}`
+  // Nunca devolve arquivo soft-deletado: um "excluído" não pode ser baixado/servido
+  const [row] = await sql<PatientFile[]>`SELECT * FROM patient_files WHERE id = ${id} AND deleted_at IS NULL`
   return row ?? null
 }
 
