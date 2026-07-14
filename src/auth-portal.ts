@@ -31,7 +31,10 @@ export const {
     }),
   ],
   pages: { signIn: '/portal/login' },
-  session: { strategy: 'jwt' },
+  // JWT curto (2h): o middleware roda no Edge e não consulta o banco, então a
+  // revogação instantânea acontece na página do card (valida patient_users no
+  // servidor). O maxAge limita a janela residual de acesso via API após revogar.
+  session: { strategy: 'jwt', maxAge: 60 * 60 * 2 },
   cookies: {
     sessionToken: {
       name: 'portal-session-token',
