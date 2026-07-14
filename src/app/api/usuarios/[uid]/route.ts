@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { deleteUser, updateUsername, updatePassword, setCanEstoque } from '@/lib/users'
+import { isAdminSession } from '@/lib/authz'
 
 type Params = { params: Promise<{ uid: string }> }
 
 export async function PUT(req: NextRequest, { params }: Params) {
+  if (!(await isAdminSession())) {
+    return NextResponse.json({ error: 'Acesso restrito' }, { status: 403 })
+  }
   const { uid } = await params
   const body = await req.json()
 
@@ -40,6 +44,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: Params) {
+  if (!(await isAdminSession())) {
+    return NextResponse.json({ error: 'Acesso restrito' }, { status: 403 })
+  }
   const { uid } = await params
   await deleteUser(Number(uid))
   return NextResponse.json({ ok: true })

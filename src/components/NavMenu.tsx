@@ -14,7 +14,7 @@ export function NavMenu({ userName, isAdmin, canEstoque }: Props) {
 
   const links = [
     { href: '/', label: 'Início' },
-    { href: '/usuarios', label: 'Usuários' },
+    ...(isAdmin ? [{ href: '/usuarios', label: 'Usuários' }] : []),
     { href: '/termos', label: 'Termos' },
     { href: '/implantes', label: 'Implantes' },
     { href: '/relatorios', label: 'Relatórios' },

@@ -1,3 +1,13 @@
+import { auth } from '@/auth'
+
+// Retorna true se a sessão de staff atual é admin. Use no início de handlers
+// sensíveis (gestão de usuários, exclusão permanente de auditoria).
+export async function isAdminSession(): Promise<boolean> {
+  const session = await auth()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return !!(session?.user as any)?.is_admin
+}
+
 // Helpers de autorização por propriedade (defesa contra IDOR).
 //
 // O proxy garante que o paciente do portal só acessa /api/patients/{seuProprioId}/*.
