@@ -359,6 +359,34 @@ async function runMigrations() {
     )
   `).catch(() => {})
   await sql.unsafe(`CREATE INDEX IF NOT EXISTS system_errors_created_idx ON system_errors(created_at DESC)`).catch(() => {})
+
+  // FKs faltantes em stock_movements (ON DELETE SET NULL — preserva o histórico
+  // e o patient_name denormalizado; patients é soft-delete, CASCADE não cabe).
+  // Limpa órfãos ANTES e guarda contra recriação da constraint (pg_constraint).
+  await sql.unsafe(`
+    DO $$
+    BEGIN
+      UPDATE stock_movements SET patient_id = NULL
+        WHERE patient_id IS NOT NULL AND patient_id NOT IN (SELECT id FROM patients);
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_stock_movements_patient') THEN
+        ALTER TABLE stock_movements
+          ADD CONSTRAINT fk_stock_movements_patient
+          FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE SET NULL;
+      END IF;
+    END $$;
+  `).catch(() => {})
+  await sql.unsafe(`
+    DO $$
+    BEGIN
+      UPDATE stock_movements SET measurement_id = NULL
+        WHERE measurement_id IS NOT NULL AND measurement_id NOT IN (SELECT id FROM weekly_measurements);
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_stock_movements_measurement') THEN
+        ALTER TABLE stock_movements
+          ADD CONSTRAINT fk_stock_movements_measurement
+          FOREIGN KEY (measurement_id) REFERENCES weekly_measurements(id) ON DELETE SET NULL;
+      END IF;
+    END $$;
+  `).catch(() => {})
 }
 
 export default sql
