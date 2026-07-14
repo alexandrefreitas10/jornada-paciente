@@ -209,6 +209,12 @@ export async function initSchema() {
   await sql.unsafe(`ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS patient_id INTEGER`).catch(() => {})
   await sql.unsafe(`ALTER TABLE stock_movements ALTER COLUMN quantity TYPE NUMERIC USING quantity::numeric`).catch(() => {})
   await sql.unsafe(`ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS measurement_id INTEGER`).catch(() => {})
+  // Idempotência: evita movimento duplicado por duplo clique / retry
+  await sql.unsafe(`ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS idempotency_key UUID`).catch(() => {})
+  await sql.unsafe(`CREATE UNIQUE INDEX IF NOT EXISTS stock_movements_idem_idx ON stock_movements(idempotency_key) WHERE idempotency_key IS NOT NULL`).catch(() => {})
+  // Índices de performance para o cálculo de saldo e listagens
+  await sql.unsafe(`CREATE INDEX IF NOT EXISTS stock_movements_item_idx ON stock_movements(item_id)`).catch(() => {})
+  await sql.unsafe(`CREATE INDEX IF NOT EXISTS stock_movements_patient_idx ON stock_movements(patient_id)`).catch(() => {})
 
   // Log de entradas de estoque (NF, importação, manual)
   await sql.unsafe(`

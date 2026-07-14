@@ -470,7 +470,8 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   }
 
   // ── Manual saída ────────────────────────────────────────────
-  interface ManualCartEntry { item: StockItem; quantity: number }
+  interface ManualCartEntry { item: StockItem; quantity: number; idem: string }
+  const newIdem = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`
   const [manSaida, setManSaida] = useState(false)
   const [msCart, setMsCart] = useState<ManualCartEntry[]>([])
   const [msItemId, setMsItemId] = useState('')
@@ -489,7 +490,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
       const exists = prev.find(e => e.item.id === found.id)
       return exists
         ? prev.map(e => e.item.id === found.id ? { ...e, quantity: e.quantity + qty } : e)
-        : [...prev, { item: found, quantity: qty }]
+        : [...prev, { item: found, quantity: qty, idem: newIdem() }]
     })
     setMsItemId(''); setMsItemSearch(''); setMsQty('1')
   }
@@ -502,11 +503,18 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   const msFilteredPatients = patients.filter(p => p.name.toLowerCase().includes(msPatientSearch.toLowerCase()))
 
   async function saveManualSaida() {
-    if (msCart.length === 0) return
+    if (msCart.length === 0 || msSaving) return
     setMsSaving(true)
-    await Promise.all(msCart.map(entry =>
-      fetch('/api/estoque/movements', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: entry.item.id, type: 'saida', quantity: entry.quantity, lot: entry.item.lot ?? null, expiry_date: entry.item.expiry_date ?? null, patient_id: msPatientId ? Number(msPatientId) : null, patient_name: msSelectedPatient?.name ?? null, observation: msObs || null }) })
+    const results = await Promise.all(msCart.map(entry =>
+      fetch('/api/estoque/movements', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: entry.item.id, type: 'saida', quantity: entry.quantity, lot: entry.item.lot ?? null, expiry_date: entry.item.expiry_date ?? null, patient_id: msPatientId ? Number(msPatientId) : null, patient_name: msSelectedPatient?.name ?? null, observation: msObs || null, idempotency_key: entry.idem }) })
     ))
+    const failed = results.find(r => !r.ok)
+    if (failed) {
+      const data = await failed.json().catch(() => ({}))
+      alert(data.error || 'Erro ao registrar saída.')
+      setMsSaving(false)
+      return
+    }
     const [ir, mr] = await Promise.all([fetch('/api/estoque/items'), fetch('/api/estoque/movements')])
     setItems(await ir.json()); setMovements(await mr.json())
     setManSaida(false); setMsCart([]); setMsItemId(''); setMsItemSearch(''); setMsQty('1'); setMsPatientId(''); setMsPatientSearch(''); setMsObs('')

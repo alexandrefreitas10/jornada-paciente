@@ -132,6 +132,14 @@ export async function listMovementsByPatient(patientId: number): Promise<StockMo
   return rows.map(normalizeMovement)
 }
 
+// Erro de negócio: saída maior que o saldo disponível.
+export class InsufficientStockError extends Error {
+  constructor(public available: number, public requested: number) {
+    super('Saldo insuficiente em estoque')
+    this.name = 'InsufficientStockError'
+  }
+}
+
 export async function createMovement(data: {
   item_id: number
   type: 'entrada' | 'saida'
@@ -144,57 +152,92 @@ export async function createMovement(data: {
   nf_s3_key?: string | null
   created_by?: string | null
   measurement_id?: number | null
+  idempotency_key?: string | null
 }): Promise<StockMovement> {
   await initSchema()
 
-  // REGRA CRÍTICA: um item de estoque = um lote. Entradas com lote diferente
-  // dos lotes já registrados no item NUNCA podem se misturar — redireciona
-  // para o item de mesmo nome com aquele lote, ou cria um item novo.
-  let itemId = data.item_id
-  if (data.type === 'entrada' && data.lot && data.lot.trim()) {
-    const newLot = data.lot.trim().toLowerCase()
-    const existingLots = await sql<{ lot: string }[]>`
-      SELECT DISTINCT lot FROM stock_movements
-      WHERE item_id = ${itemId} AND type = 'entrada' AND lot IS NOT NULL AND TRIM(lot) <> ''
+  if (!(data.quantity > 0)) {
+    throw new Error('Quantidade deve ser maior que zero')
+  }
+
+  // Idempotência: se já existe um movimento com essa chave, devolve-o sem
+  // gravar de novo (protege contra duplo clique / retry de rede).
+  if (data.idempotency_key) {
+    const [existing] = await sql<StockMovement[]>`
+      SELECT * FROM stock_movements WHERE idempotency_key = ${data.idempotency_key}::uuid
     `
-    const lots = existingLots.map(r => r.lot.trim().toLowerCase())
-    if (lots.length > 0 && !lots.includes(newLot)) {
-      const [item] = await sql<{ name: string; unit: string; notes: string | null }[]>`
-        SELECT name, unit, notes FROM stock_items WHERE id = ${itemId}
+    if (existing) return normalizeMovement(existing)
+  }
+
+  // Tudo numa transação com lock por item, para que saldo e regra de lote
+  // sejam consistentes sob concorrência.
+  const row = await sql.begin(async (tx) => {
+    let itemId = data.item_id
+
+    // REGRA CRÍTICA: um item de estoque = um lote. Entrada com lote diferente
+    // dos lotes já registrados é redirecionada para o item certo (ou cria um).
+    if (data.type === 'entrada' && data.lot && data.lot.trim()) {
+      const newLot = data.lot.trim().toLowerCase()
+      const existingLots = await tx<{ lot: string }[]>`
+        SELECT DISTINCT lot FROM stock_movements
+        WHERE item_id = ${itemId} AND type = 'entrada' AND lot IS NOT NULL AND TRIM(lot) <> ''
       `
-      if (item) {
-        // Existe outro item com o mesmo nome e esse lote?
-        const [match] = await sql<{ id: number }[]>`
-          SELECT DISTINCT i.id FROM stock_items i
-          JOIN stock_movements m ON m.item_id = i.id AND m.type = 'entrada'
-          WHERE LOWER(TRIM(i.name)) = ${item.name.trim().toLowerCase()}
-            AND LOWER(TRIM(m.lot)) = ${newLot}
-          LIMIT 1
+      const lots = existingLots.map(r => r.lot.trim().toLowerCase())
+      if (lots.length > 0 && !lots.includes(newLot)) {
+        const [item] = await tx<{ name: string; unit: string; notes: string | null }[]>`
+          SELECT name, unit, notes FROM stock_items WHERE id = ${itemId}
         `
-        if (match) {
-          itemId = match.id
-        } else {
-          const [created] = await sql<{ id: number }[]>`
-            INSERT INTO stock_items (name, unit, notes, created_by)
-            VALUES (${item.name}, ${item.unit}, ${item.notes}, ${data.created_by ?? null})
-            RETURNING id
+        if (item) {
+          const [match] = await tx<{ id: number }[]>`
+            SELECT DISTINCT i.id FROM stock_items i
+            JOIN stock_movements m ON m.item_id = i.id AND m.type = 'entrada'
+            WHERE LOWER(TRIM(i.name)) = ${item.name.trim().toLowerCase()}
+              AND LOWER(TRIM(m.lot)) = ${newLot}
+            LIMIT 1
           `
-          itemId = created.id
+          if (match) {
+            itemId = match.id
+          } else {
+            const [created] = await tx<{ id: number }[]>`
+              INSERT INTO stock_items (name, unit, notes, created_by)
+              VALUES (${item.name}, ${item.unit}, ${item.notes}, ${data.created_by ?? null})
+              RETURNING id
+            `
+            itemId = created.id
+          }
         }
       }
     }
-  }
 
-  const [row] = await sql<StockMovement[]>`
-    INSERT INTO stock_movements (item_id, type, quantity, lot, expiry_date, patient_id, patient_name, observation, nf_s3_key, created_by, measurement_id)
-    VALUES (
-      ${itemId}, ${data.type}, ${data.quantity},
-      ${data.lot ?? null}, ${data.expiry_date ?? null}, ${data.patient_id ?? null}, ${data.patient_name ?? null},
-      ${data.observation ?? null}, ${data.nf_s3_key ?? null}, ${data.created_by ?? null}, ${data.measurement_id ?? null}
-    )
-    RETURNING *
-  `
-  return normalizeMovement(row)
+    // Lock por item (serializa saídas concorrentes do mesmo item)
+    await tx`SELECT pg_advisory_xact_lock(${itemId})`
+
+    // Saída nunca pode deixar o saldo negativo
+    if (data.type === 'saida') {
+      const [{ balance }] = await tx<{ balance: string }[]>`
+        SELECT COALESCE(SUM(CASE WHEN type = 'entrada' THEN quantity ELSE -quantity END), 0) AS balance
+        FROM stock_movements WHERE item_id = ${itemId}
+      `
+      const available = Number(balance)
+      if (available - data.quantity < 0) {
+        throw new InsufficientStockError(available, data.quantity)
+      }
+    }
+
+    const [inserted] = await tx<StockMovement[]>`
+      INSERT INTO stock_movements (item_id, type, quantity, lot, expiry_date, patient_id, patient_name, observation, nf_s3_key, created_by, measurement_id, idempotency_key)
+      VALUES (
+        ${itemId}, ${data.type}, ${data.quantity},
+        ${data.lot ?? null}, ${data.expiry_date ?? null}, ${data.patient_id ?? null}, ${data.patient_name ?? null},
+        ${data.observation ?? null}, ${data.nf_s3_key ?? null}, ${data.created_by ?? null}, ${data.measurement_id ?? null},
+        ${data.idempotency_key ?? null}
+      )
+      RETURNING *
+    `
+    return inserted
+  })
+
+  return normalizeMovement(row as StockMovement)
 }
 
 // Cria movimento de ajuste para corrigir quantidade diretamente

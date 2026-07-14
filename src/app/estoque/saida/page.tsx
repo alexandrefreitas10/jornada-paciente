@@ -6,13 +6,23 @@ import jsQR from 'jsqr'
 
 interface StockItem { id: number; name: string; unit: string; quantity: number; lot: string | null; expiry_date: string | null }
 interface Patient { id: number; name: string }
-interface CartEntry { item: StockItem; quantity: number }
+interface CartEntry { item: StockItem; quantity: number; idem?: string }
+
+function newIdem(): string {
+  return (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
 type Step = 'confirm' | 'ask-cart' | 'cart' | 'form' | 'done'
 
 const CART_KEY = 'saida_cart'
 
 function saveCart(cart: CartEntry[]) { localStorage.setItem(CART_KEY, JSON.stringify(cart)) }
-function loadCart(): CartEntry[] { try { return JSON.parse(localStorage.getItem(CART_KEY) ?? '[]') } catch { return [] } }
+function loadCart(): CartEntry[] {
+  try {
+    const cart: CartEntry[] = JSON.parse(localStorage.getItem(CART_KEY) ?? '[]')
+    // Backfill de idempotência para carrinhos antigos
+    return cart.map(e => ({ ...e, idem: e.idem ?? newIdem() }))
+  } catch { return [] }
+}
 function clearCart() { localStorage.removeItem(CART_KEY) }
 
 function ImplanteCard({ patientId, patientName }: { patientId: number | null; patientName: string | null }) {
@@ -102,6 +112,8 @@ function SaidaForm() {
 
   // Single-item form quantity
   const [singleQty, setSingleQty] = useState(1)
+  // Chave de idempotência estável para a saída de item único (dedupe duplo clique/refresh)
+  const singleIdemRef = useRef(newIdem())
   // Form state
   const [patientId, setPatientId] = useState('')
   const [patientSearch, setPatientSearch] = useState('')
@@ -126,7 +138,7 @@ function SaidaForm() {
       if (existingCart.length > 0) {
         const already = existingCart.find(e => e.item.id === loadedItem.id)
         if (!already) {
-          const newCart = [...existingCart, { item: loadedItem, quantity: 1 }]
+          const newCart = [...existingCart, { item: loadedItem, quantity: 1, idem: newIdem() }]
           saveCart(newCart)
           setCart(newCart)
         } else {
@@ -185,7 +197,7 @@ function SaidaForm() {
                 const already = prev.find(e => e.item.id === scannedItem.id)
                 const next = already
                   ? prev.map(e => e.item.id === scannedItem.id ? { ...e, quantity: e.quantity + 1 } : e)
-                  : [...prev, { item: scannedItem, quantity: 1 }]
+                  : [...prev, { item: scannedItem, quantity: 1, idem: newIdem() }]
                 saveCart(next)
                 return next
               })
@@ -209,7 +221,7 @@ function SaidaForm() {
 
   function enterCartMode() {
     if (!item) return
-    const newCart = [{ item, quantity: 1 }]
+    const newCart = [{ item, quantity: 1, idem: newIdem() }]
     saveCart(newCart)
     setCart(newCart)
     setStep('cart')
@@ -231,12 +243,15 @@ function SaidaForm() {
   const selectedPatient = patients.find(p => String(p.id) === patientId)
 
   async function handleSubmit() {
-    setSaving(true); setError('')
-    const itemsToSubmit = cart.length > 0 ? cart : (item ? [{ item, quantity: singleQty }] : [])
+    const itemsToSubmit: CartEntry[] = cart.length > 0
+      ? cart
+      : (item ? [{ item, quantity: singleQty, idem: singleIdemRef.current }] : [])
     if (itemsToSubmit.length === 0) return
+    if (saving) return
+    setSaving(true); setError('')
 
     try {
-      await Promise.all(itemsToSubmit.map(entry =>
+      const results = await Promise.all(itemsToSubmit.map(entry =>
         fetch('/api/estoque/movements', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -249,9 +264,17 @@ function SaidaForm() {
             patient_id: patientId ? Number(patientId) : null,
             patient_name: selectedPatient?.name ?? null,
             observation: observation || null,
+            idempotency_key: entry.idem ?? newIdem(),
           }),
         })
       ))
+      const failed = results.find(r => !r.ok)
+      if (failed) {
+        const data = await failed.json().catch(() => ({}))
+        setError(data.error || 'Erro ao registrar saída.')
+        setSaving(false)
+        return
+      }
       clearCart()
       setStep('done')
     } catch {
@@ -264,6 +287,7 @@ function SaidaForm() {
     clearCart()
     setCart([])
     setSingleQty(1)
+    singleIdemRef.current = newIdem()
     setStep('confirm')
     setPatientId(''); setPatientSearch(''); setObservation(''); setError('')
   }
