@@ -347,6 +347,18 @@ async function runMigrations() {
     )
   `).catch(() => {})
   await sql.unsafe(`CREATE INDEX IF NOT EXISTS login_attempts_last_fail_idx ON login_attempts(last_fail_at)`).catch(() => {})
+
+  // Observabilidade: falhas silenciosas relevantes (resumo IA, S3 órfão, auditoria)
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS system_errors (
+      id         SERIAL PRIMARY KEY,
+      source     TEXT NOT NULL,
+      message    TEXT NOT NULL,
+      context    JSONB,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(() => {})
+  await sql.unsafe(`CREATE INDEX IF NOT EXISTS system_errors_created_idx ON system_errors(created_at DESC)`).catch(() => {})
 }
 
 export default sql

@@ -1,4 +1,5 @@
 import sql, { initSchema } from './db'
+import { logSystemError } from './system-errors'
 
 export interface AuditLog {
   id: number
@@ -54,6 +55,14 @@ export async function logAudit(params: {
         entityId: params.entityId?.toString() ?? null,
         patientId: params.patientId ?? null,
         error: err instanceof Error ? err.message : String(err),
+      })
+      // Persiste na tabela de erros para monitoramento (sem PII/PHI: só ids/códigos)
+      void logSystemError('audit', 'log de auditoria nao gravado', {
+        action: params.action,
+        entityType: params.entityType,
+        entityId: params.entityId?.toString() ?? null,
+        patientId: params.patientId ?? null,
+        code: err instanceof Error ? err.message : String(err),
       })
     }
   }

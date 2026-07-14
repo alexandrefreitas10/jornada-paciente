@@ -3,6 +3,7 @@ import { listPatientFiles, createPatientFile, updateFileSummary, setSummaryStatu
 import { uploadFile, getSignedDownloadUrl } from '@/lib/s3'
 import { randomUUID } from 'crypto'
 import { generateExamSummary } from '@/lib/exam-summary'
+import { logSystemError } from '@/lib/system-errors'
 import { auth } from '@/auth'
 
 export const maxDuration = 120
@@ -64,8 +65,10 @@ export async function POST(
     generateExamSummary(buffer, mimeType, file.name)
       .then(summary => updateFileSummary(record.id, summary))
       .catch(err => {
+        const message = err instanceof Error ? err.message : String(err)
         console.error('Exam summary error:', err)
-        return setSummaryStatus(record.id, 'error', err instanceof Error ? err.message : String(err)).catch(() => {})
+        void logSystemError('ai_summary', 'falha ao gerar resumo de exame', { fileId: record.id, patientId: Number(id), code: message })
+        return setSummaryStatus(record.id, 'error', message).catch(() => {})
       })
   }
 

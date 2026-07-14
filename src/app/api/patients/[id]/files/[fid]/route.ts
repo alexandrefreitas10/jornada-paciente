@@ -5,6 +5,7 @@ import { ownsResource } from '@/lib/authz'
 import { logAudit } from '@/lib/audit'
 import { downloadFile } from '@/lib/s3'
 import { generateExamSummary } from '@/lib/exam-summary'
+import { logSystemError } from '@/lib/system-errors'
 
 export const maxDuration = 120
 
@@ -38,6 +39,7 @@ export async function PATCH(
     .catch(err => {
       const message = err instanceof Error ? err.message : String(err)
       console.error('Exam summary error:', message)
+      void logSystemError('ai_summary', 'falha ao regenerar resumo de exame', { fileId, patientId: Number(id), code: message })
       return setSummaryStatus(fileId, 'error', message).catch(() => {})
     })
 

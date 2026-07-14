@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs'
 import { findUserByUsername } from '@/lib/users'
 import { deleteFile } from '@/lib/s3'
 import { assertNotLocked, registerFailure, clearAttempts } from '@/lib/rate-limit'
+import { logSystemError } from '@/lib/system-errors'
 
 export async function DELETE(
   req: NextRequest,
@@ -60,7 +61,14 @@ export async function DELETE(
     if (log && log.deleted_data) {
       const data = typeof log.deleted_data === 'string' ? JSON.parse(log.deleted_data) : log.deleted_data
       if (data.file_s3_key && (log.entity_type === 'term' || log.entity_type === 'file')) {
-        await deleteFile(data.file_s3_key).catch(() => {})
+        await deleteFile(data.file_s3_key).catch(err =>
+          logSystemError('s3_delete', 'arquivo nao removido do S3 (orfao)', {
+            entityType: log.entity_type,
+            entityId: String(log.id),
+            s3Key: data.file_s3_key,
+            code: err instanceof Error ? err.message : String(err),
+          })
+        )
       }
     }
 
