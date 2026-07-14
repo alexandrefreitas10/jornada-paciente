@@ -379,6 +379,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
     setNfSaving(true)
     setNfError('')
     const savedIds: number[] = []
+    let partialError: string | null = null
     try {
       for (const nfItem of nfItems) {
         // Prioriza o item com mesmo nome E mesmo lote (um card = um lote)
@@ -391,7 +392,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: nfItem.name, unit: nfItem.unit || 'un' }),
           })
-          if (!res.ok) { setNfError(`Erro ao criar item: ${nfItem.name}`); setNfSaving(false); return }
+          if (!res.ok) { partialError = `Erro ao criar item: ${nfItem.name}`; break }
           stockItem = await res.json() as typeof stockItem
           setItems(prev => [...prev, stockItem!])
         }
@@ -400,33 +401,38 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ item_id: stockItem.id, type: 'entrada', quantity: nfItem.quantity, lot: nfItem.lot, expiry_date: nfItem.expiry_date }),
         })
-        if (!movRes.ok) { setNfError(`Erro ao registrar entrada: ${nfItem.name}`); setNfSaving(false); return }
+        if (!movRes.ok) { partialError = `Erro ao registrar entrada: ${nfItem.name}`; break }
         // O servidor pode ter redirecionado a entrada para outro item (regra um card = um lote)
         const savedMov = await movRes.json()
         savedIds.push(savedMov.item_id ?? stockItem.id)
       }
-      // Create entry log
-      const logRes = await fetch('/api/estoque/entry-logs', {
+    } catch (e) {
+      partialError = 'Erro inesperado: ' + String(e)
+    }
+
+    // SEMPRE registra o log do que foi efetivamente salvo — mesmo em falha
+    // parcial, o estoque não aumenta sem trilha de auditoria (M5).
+    if (savedIds.length > 0) {
+      await fetch('/api/estoque/entry-logs', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: nfType, original_filename: nfFilename, s3_key: nfS3Key, item_count: savedIds.length }),
-      })
-      if (logRes.ok) {
-        const newLog = await logRes.json()
-        // Refresh signed URL
-        const logsRes = await fetch('/api/estoque/entry-logs')
-        if (logsRes.ok) setEntryLogs(await logsRes.json())
-        else setEntryLogs(prev => [newLog, ...prev])
-      }
+      }).catch(() => {})
+      const logsRes = await fetch('/api/estoque/entry-logs')
+      if (logsRes.ok) setEntryLogs(await logsRes.json())
+    }
 
-      const [itemsRes, movsRes] = await Promise.all([fetch('/api/estoque/items'), fetch('/api/estoque/movements')])
-      setItems(await itemsRes.json())
-      setMovements(await movsRes.json())
+    // Recarrega estoque/movimentos (reflete o que entrou, mesmo parcial)
+    const [itemsRes, movsRes] = await Promise.all([fetch('/api/estoque/items'), fetch('/api/estoque/movements')])
+    if (itemsRes.ok) setItems(await itemsRes.json())
+    if (movsRes.ok) setMovements(await movsRes.json())
+
+    if (partialError) {
+      setNfError(partialError + (savedIds.length ? ` — ${savedIds.length} item(ns) já foram salvos e registrados no log.` : ''))
+    } else {
       setNfItems([]); setNfS3Key(null); setNfFilename(null)
       setTab('entradas')
-      if (savedIds.length > 0) setQrDocxPrompt(savedIds)
-    } catch (e) {
-      setNfError('Erro inesperado: ' + String(e))
     }
+    if (savedIds.length > 0) setQrDocxPrompt(savedIds)
     setNfSaving(false)
   }
 
