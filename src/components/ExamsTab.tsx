@@ -37,6 +37,16 @@ function formatSummaryCompact(summary: string): string {
       items.push(`${cols[0]} | ${cols[1]}`)
     }
   }
+  // Resumos antigos vinham em tabela markdown; os novos vêm em lista/texto.
+  // Se não houver tabela, exibe o texto completo (limpando marcações leves).
+  if (items.length === 0) {
+    return summary
+      .split('\n')
+      .map(l => stripMd(l.trim()))
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+  }
   return items.join('\n')
 }
 
