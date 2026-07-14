@@ -63,7 +63,11 @@ export async function POST(
     } else {
       return NextResponse.json({ error: 'Tipo não suportado para restauração' }, { status: 400 })
     }
-  } catch {
+  } catch (err) {
+    // Loga o erro real para diagnóstico; o log de auditoria é PRESERVADO
+    // (não chega no deleteAuditLog abaixo), então a restauração pode ser
+    // tentada de novo sem perder os dados.
+    console.error('[restore] falha ao restaurar', { logId, entityType: log.entity_type, error: err instanceof Error ? err.message : String(err) })
     return NextResponse.json({ error: 'Erro ao restaurar' }, { status: 500 })
   }
 
