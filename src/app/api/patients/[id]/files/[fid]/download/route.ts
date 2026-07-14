@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getFileById } from '@/lib/patient-files'
+import { ownsResource } from '@/lib/authz'
 import { getSignedDownloadUrlWithFilename, getFileStream } from '@/lib/s3'
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; fid: string }> }
 ) {
-  const { fid } = await params
+  const { id, fid } = await params
   const file = await getFileById(Number(fid))
-  if (!file) return NextResponse.json({ error: 'Arquivo não encontrado' }, { status: 404 })
+  // Anti-IDOR: o arquivo tem que pertencer ao paciente do path
+  if (!ownsResource(file, Number(id))) {
+    return NextResponse.json({ error: 'Arquivo não encontrado' }, { status: 404 })
+  }
 
   // ?proxy=1 → stream direto (usado pelo canvas para evitar CORS)
   if (req.nextUrl.searchParams.get('proxy') === '1') {

@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { auth } from '@/auth'
 import { softDeletePatientFile, getFileById, updateFileSummary } from '@/lib/patient-files'
+import { ownsResource } from '@/lib/authz'
 import { logAudit } from '@/lib/audit'
 import { downloadFile } from '@/lib/s3'
 import { generateExamSummary } from '@/lib/exam-summary'
@@ -23,10 +24,13 @@ export async function PATCH(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string; fid: string }> }
 ) {
-  const { fid } = await params
+  const { id, fid } = await params
   const fileId = Number(fid)
   const file = await getFileById(fileId)
-  if (!file) return Response.json({ error: 'Arquivo não encontrado' }, { status: 404 })
+  // Anti-IDOR: o arquivo tem que pertencer ao paciente do path
+  if (!ownsResource(file, Number(id))) {
+    return Response.json({ error: 'Arquivo não encontrado' }, { status: 404 })
+  }
 
   if (summaryJobs.get(fileId)?.state === 'running') {
     return Response.json({ started: true, alreadyRunning: true }, { status: 202 })
@@ -52,8 +56,13 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string; fid: string }> }
 ) {
-  const { fid } = await params
+  const { id, fid } = await params
   const fileId = Number(fid)
+  const file = await getFileById(fileId)
+  // Anti-IDOR: o arquivo tem que pertencer ao paciente do path
+  if (!ownsResource(file, Number(id))) {
+    return Response.json({ error: 'Arquivo não encontrado' }, { status: 404 })
+  }
   const job = summaryJobs.get(fileId)
   if (job?.state === 'running') {
     return Response.json({ status: 'running' })
@@ -62,8 +71,6 @@ export async function GET(
     summaryJobs.delete(fileId)
     return Response.json({ status: 'error', error: job.message })
   }
-  const file = await getFileById(fileId)
-  if (!file) return Response.json({ error: 'Arquivo não encontrado' }, { status: 404 })
   return Response.json({ status: 'done', summary: file.summary })
 }
 
@@ -74,6 +81,11 @@ export async function DELETE(
   const { id, fid } = await params
   const session = await auth()
   const userName = session?.user?.name ?? 'Desconhecido'
+  // Anti-IDOR: o arquivo tem que pertencer ao paciente do path
+  const existing = await getFileById(Number(fid))
+  if (!ownsResource(existing, Number(id))) {
+    return new Response(null, { status: 404 })
+  }
   // Soft-delete: mantém o arquivo no S3 para que possa ser restaurado
   const fileRecord = await softDeletePatientFile(Number(fid))
   await logAudit({ userName, action: 'DELETE', entityType: 'file', entityId: fid, patientId: Number(id), details: fileRecord?.original_name, deletedData: fileRecord ?? undefined })

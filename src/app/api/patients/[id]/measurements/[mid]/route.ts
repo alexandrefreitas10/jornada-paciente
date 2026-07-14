@@ -1,13 +1,19 @@
 import { NextRequest } from 'next/server'
 import { auth } from '@/auth'
 import { updateMeasurement, deleteMeasurement, getMeasurementById } from '@/lib/measurements'
+import { ownsResource } from '@/lib/authz'
 import { logAudit } from '@/lib/audit'
 
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; mid: string }> }
 ) {
-  const { mid } = await params
+  const { id, mid } = await params
+  // Anti-IDOR: a medição tem que pertencer ao paciente do path
+  const current = await getMeasurementById(Number(mid))
+  if (!ownsResource(current, Number(id))) {
+    return Response.json({ error: 'Não encontrado' }, { status: 404 })
+  }
   const body = await req.json()
   const measurement = await updateMeasurement(Number(mid), body)
   return Response.json(measurement)
@@ -21,6 +27,10 @@ export async function DELETE(
   const session = await auth()
   const userName = session?.user?.name ?? 'Desconhecido'
   const measurement = await getMeasurementById(Number(mid))
+  // Anti-IDOR: a medição tem que pertencer ao paciente do path
+  if (!ownsResource(measurement, Number(id))) {
+    return new Response(null, { status: 404 })
+  }
   await deleteMeasurement(Number(mid))
   await logAudit({ userName, action: 'DELETE', entityType: 'measurement', entityId: mid, patientId: Number(id), details: `Semana ${measurement?.week ?? '—'}`, deletedData: measurement ?? undefined })
   return new Response(null, { status: 204 })
