@@ -42,7 +42,13 @@ function formatSummaryCompact(summary: string): string {
   if (items.length === 0) {
     return summary
       .split('\n')
-      .map(l => stripMd(l.trim()))
+      .map(l => {
+        let t = stripMd(l.trim())
+        t = t.replace(/^#+\s*/, '')      // títulos markdown (## HEMOGRAMA)
+        if (/^-{3,}$/.test(t)) return '' // separadores (---)
+        t = t.replace(/^[-•]\s*/, '')    // marcadores de lista
+        return t
+      })
       .join('\n')
       .replace(/\n{3,}/g, '\n\n')
       .trim()

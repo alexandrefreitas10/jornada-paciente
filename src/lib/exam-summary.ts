@@ -4,16 +4,20 @@ const EXAM_PROMPT = `Este é um exame médico laboratorial. Transcreva TODOS os 
 
 1. ORDEM DO DOCUMENTO: siga exatamente a ordem em que os exames aparecem no arquivo, página por página. NÃO reorganize por tema, NÃO agrupe exames parecidos, NÃO mude a sequência.
 
-2. UM BLOCO POR EXAME: cada exame/painel (ex: Hemograma, Colesterol Total, Glicose, EAS/Urina, TSH...) vira UMA seção com o nome do exame como título em maiúsculas, exatamente como está no documento. TODOS os resultados daquele exame ficam juntos dentro da seção dele — NUNCA divida os resultados de um mesmo exame em partes diferentes do resumo.
+2. UM BLOCO POR EXAME: cada exame/painel (ex: Hemograma, Colesterol Total, Glicose, EAS/Urina, TSH...) vira UMA seção com o nome do exame como título em MAIÚSCULAS, exatamente como está no documento. TODOS os resultados daquele exame ficam juntos dentro da seção dele — NUNCA divida os resultados de um mesmo exame em partes diferentes do resumo.
 
 3. NOMES REPETIDOS: quando o mesmo analito aparece em exames diferentes (ex: Hemácias no Hemograma E Hemácias no EAS/urina), cada um fica APENAS na seção do seu exame. Nunca misture ou combine esses valores.
 
-4. FORMATO de cada resultado, um por linha:
-   - Nome do analito: valor unidade (referência: X)
+4. FORMATO: apenas o nome do analito e o resultado, um por linha, exatamente assim:
+   Nome do analito | resultado
 
-5. Inclua TODOS os resultados, sem omitir nenhum. Se o documento tiver data de coleta e laboratório, informe no início.
+   Exemplo:
+   Hemácias | 5,01 milhões/uL
+   Hemoglobina | 14,5 g/dL
 
-6. NÃO escreva introdução, conclusão, interpretação ou comentários — apenas a transcrição organizada.
+5. PROIBIDO incluir: valores de referência, nome do paciente, idade, médico, convênio, laboratório, data da coleta, introdução, conclusão, interpretação ou qualquer comentário. APENAS o título de cada exame e as linhas "nome | resultado".
+
+6. Inclua TODOS os resultados, sem omitir nenhum.
 
 Responda em português.`
 
