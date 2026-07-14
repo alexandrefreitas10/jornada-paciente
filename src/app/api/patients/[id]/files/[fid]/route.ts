@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { auth } from '@/auth'
-import { softDeletePatientFile, getFileById, updateFileSummary } from '@/lib/patient-files'
+import { softDeletePatientFile, getFileById, updateFileSummary, setSummaryStatus } from '@/lib/patient-files'
 import { ownsResource } from '@/lib/authz'
 import { logAudit } from '@/lib/audit'
 import { downloadFile } from '@/lib/s3'
@@ -14,12 +14,9 @@ async function regenerateSummary(s3Key: string, originalName: string): Promise<s
   return generateExamSummary(buffer, isPdf ? 'application/pdf' : 'image/jpeg', originalName)
 }
 
-// Status dos resumos em geração (exames longos levam minutos — mais do que o
-// limite de ~100s do proxy do Render, então a geração roda em segundo plano)
-type JobStatus = { state: 'running' } | { state: 'error'; message: string }
-const summaryJobs = new Map<number, JobStatus>()
-
-// PATCH — dispara a geração em segundo plano e responde na hora
+// PATCH — dispara a geração em segundo plano e responde na hora.
+// O status vive no banco (summary_status), não em memória, para sobreviver a
+// restart do Render e nunca reportar "done" falso.
 export async function PATCH(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string; fid: string }> }
@@ -32,26 +29,22 @@ export async function PATCH(
     return Response.json({ error: 'Arquivo não encontrado' }, { status: 404 })
   }
 
-  if (summaryJobs.get(fileId)?.state === 'running') {
-    return Response.json({ started: true, alreadyRunning: true }, { status: 202 })
-  }
-
-  summaryJobs.set(fileId, { state: 'running' })
+  // Sempre permite (re)disparar: se um job morreu num restart do Render, o
+  // status ficaria preso em 'pending' — retrigger destrava. Gerar duas vezes
+  // só desperdiça uma chamada; a última a concluir vence.
+  await setSummaryStatus(fileId, 'pending')
   regenerateSummary(file.s3_key, file.original_name)
-    .then(async summary => {
-      await updateFileSummary(fileId, summary)
-      summaryJobs.delete(fileId)
-    })
+    .then(summary => updateFileSummary(fileId, summary))
     .catch(err => {
       const message = err instanceof Error ? err.message : String(err)
       console.error('Exam summary error:', message)
-      summaryJobs.set(fileId, { state: 'error', message })
+      return setSummaryStatus(fileId, 'error', message).catch(() => {})
     })
 
   return Response.json({ started: true }, { status: 202 })
 }
 
-// GET — consulta o status da geração / o resumo pronto
+// GET — consulta o status da geração / o resumo pronto (tudo do banco)
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string; fid: string }> }
@@ -63,13 +56,11 @@ export async function GET(
   if (!ownsResource(file, Number(id))) {
     return Response.json({ error: 'Arquivo não encontrado' }, { status: 404 })
   }
-  const job = summaryJobs.get(fileId)
-  if (job?.state === 'running') {
+  if (file.summary_status === 'pending') {
     return Response.json({ status: 'running' })
   }
-  if (job?.state === 'error') {
-    summaryJobs.delete(fileId)
-    return Response.json({ status: 'error', error: job.message })
+  if (file.summary_status === 'error') {
+    return Response.json({ status: 'error', error: file.summary_error ?? 'Falha ao gerar resumo' })
   }
   return Response.json({ status: 'done', summary: file.summary })
 }

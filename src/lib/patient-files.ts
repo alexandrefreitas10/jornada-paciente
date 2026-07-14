@@ -2,6 +2,8 @@ import sql, { initSchema } from './db'
 
 export type FileType = 'photo' | 'bioimpedance' | 'exam' | 'diet' | 'evolution' | 'prescription' | 'estetica'
 
+export type SummaryStatus = 'pending' | 'done' | 'error' | null
+
 export interface PatientFile {
   id: number
   patient_id: number
@@ -9,6 +11,8 @@ export interface PatientFile {
   s3_key: string
   original_name: string
   summary: string | null
+  summary_status: SummaryStatus
+  summary_error: string | null
   created_at: string
   created_by: string | null
 }
@@ -73,7 +77,12 @@ export async function softDeletePatientFile(id: number): Promise<PatientFile | n
 
 export async function updateFileSummary(id: number, summary: string): Promise<void> {
   await initSchema()
-  await sql`UPDATE patient_files SET summary = ${summary} WHERE id = ${id}`
+  await sql`UPDATE patient_files SET summary = ${summary}, summary_status = 'done', summary_error = NULL WHERE id = ${id}`
+}
+
+export async function setSummaryStatus(id: number, status: 'pending' | 'error', error?: string): Promise<void> {
+  await initSchema()
+  await sql`UPDATE patient_files SET summary_status = ${status}, summary_error = ${error ?? null} WHERE id = ${id}`
 }
 
 export async function restorePatientFile(id: number): Promise<void> {

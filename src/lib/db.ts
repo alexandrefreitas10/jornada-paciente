@@ -52,6 +52,8 @@ async function runMigrations() {
     );
     ALTER TABLE patient_files ADD COLUMN IF NOT EXISTS summary TEXT;
     ALTER TABLE patient_files ADD COLUMN IF NOT EXISTS created_by TEXT;
+    ALTER TABLE patient_files ADD COLUMN IF NOT EXISTS summary_status TEXT;
+    ALTER TABLE patient_files ADD COLUMN IF NOT EXISTS summary_error TEXT;
     ALTER TABLE patients ADD COLUMN IF NOT EXISTS created_by TEXT;
     CREATE TABLE IF NOT EXISTS weekly_measurements (
       id SERIAL PRIMARY KEY,

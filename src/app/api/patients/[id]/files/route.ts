@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { listPatientFiles, createPatientFile, updateFileSummary, FileType } from '@/lib/patient-files'
+import { listPatientFiles, createPatientFile, updateFileSummary, setSummaryStatus, FileType } from '@/lib/patient-files'
 import { uploadFile, getSignedDownloadUrl } from '@/lib/s3'
 import { randomUUID } from 'crypto'
 import { generateExamSummary } from '@/lib/exam-summary'
@@ -56,11 +56,17 @@ export async function POST(
   const url = await getSignedDownloadUrl(s3Key)
 
   // Resumo de exame roda em segundo plano — exames longos levam minutos,
-  // mais do que o limite de tempo do proxy para a requisição de upload
+  // mais do que o limite de tempo do proxy para a requisição de upload.
+  // O status fica no banco (pending/done/error), não em memória, para
+  // sobreviver a restart do Render e nunca reportar "done" falso.
   if (fileType === 'exam') {
+    await setSummaryStatus(record.id, 'pending')
     generateExamSummary(buffer, mimeType, file.name)
       .then(summary => updateFileSummary(record.id, summary))
-      .catch(err => console.error('Exam summary error:', err))
+      .catch(err => {
+        console.error('Exam summary error:', err)
+        return setSummaryStatus(record.id, 'error', err instanceof Error ? err.message : String(err)).catch(() => {})
+      })
   }
 
   return Response.json({ ...record, url }, { status: 201 })
