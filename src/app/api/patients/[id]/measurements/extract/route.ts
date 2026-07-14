@@ -135,7 +135,10 @@ Retorne somente o array JSON, sem texto adicional, sem markdown, sem explicaçõ
     newRows.map(input => createMeasurement(Number(id), input))
   )
 
-  // Substitui a foto de tabela anterior pela nova (mantém só a mais recente)
+  // Substitui a foto de tabela anterior pela nova (mantém só a mais recente).
+  // As medições (dado principal) já foram salvas acima; a foto é secundária —
+  // se ela falhar, NÃO fingimos sucesso total: devolvemos um aviso ao cliente.
+  let photoSaved = true
   try {
     const previous = await listPatientFiles(Number(id), 'evolution')
     await Promise.all(previous.map(async (f) => {
@@ -147,8 +150,12 @@ Retorne somente o array JSON, sem texto adicional, sem markdown, sem explicaçõ
     await uploadFile(s3Key, buffer, mediaType)
     await createPatientFile(Number(id), 'evolution', s3Key, photo.name)
   } catch (err) {
+    photoSaved = false
     console.error('Erro ao salvar foto de evolução no S3:', err)
   }
 
-  return Response.json(created, { status: 201 })
+  return Response.json(
+    { measurements: created, photoSaved, ...(photoSaved ? {} : { warning: 'As medições foram salvas, mas a foto não pôde ser guardada.' }) },
+    { status: 201 }
+  )
 }

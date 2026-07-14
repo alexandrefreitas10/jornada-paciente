@@ -139,11 +139,16 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
         const err = await res.json()
         throw new Error(err.error || 'Erro ao processar a foto')
       }
-      const created: Measurement[] = await res.json()
+      const data = await res.json()
+      // Novo formato: { measurements, photoSaved, warning } — com fallback pro antigo (array)
+      const created: Measurement[] = Array.isArray(data) ? data : (data.measurements ?? [])
       const newItems = Array.isArray(created) ? created : [created]
       setMeasurements((prev) =>
         [...prev, ...newItems].sort((a, b) => (a.week ?? 999) - (b.week ?? 999))
       )
+      if (data && data.photoSaved === false) {
+        setUploadError(data.warning || 'As medições foram salvas, mas a foto não pôde ser guardada.')
+      }
       const photosRes = await fetch(`/api/patients/${patientId}/files?type=evolution`)
       if (photosRes.ok) {
         const photos: EvolutionPhoto[] = await photosRes.json()
