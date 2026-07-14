@@ -107,7 +107,8 @@ Retorne somente o array JSON, sem texto adicional, sem markdown, sem explicaçõ
     const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : text)
     extracted = Array.isArray(parsed) ? parsed : [parsed]
   } catch {
-    console.error('Claude response could not be parsed as JSON:', rawText)
+    // Não loga o rawText: pode conter dados do paciente (PHI)
+    console.error('Claude response could not be parsed as JSON (extract measurements)')
     return Response.json(
       { error: 'Não foi possível extrair os dados da foto. Tente uma imagem mais nítida ou adicione manualmente.' },
       { status: 422 }

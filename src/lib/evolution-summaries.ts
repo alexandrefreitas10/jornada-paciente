@@ -48,13 +48,11 @@ export async function createEvolutionSummary(
   return row
 }
 
+// A rota busca a audio_s3_key (getEvolutionSummaryAudioKey) ANTES de chamar
+// esta função e remove o áudio do S3 em seguida.
 export async function deleteEvolutionSummary(id: number): Promise<void> {
   await initSchema()
-  const [row] = await sql<{ audio_s3_key: string | null }[]>`
-    DELETE FROM evolution_summaries WHERE id = ${id} RETURNING audio_s3_key
-  `
-  // Retorna a s3_key para que a rota possa deletar do S3 se necessário
-  return row?.audio_s3_key ? undefined : undefined
+  await sql`DELETE FROM evolution_summaries WHERE id = ${id}`
 }
 
 export async function getEvolutionSummaryById(id: number): Promise<EvolutionSummary | null> {

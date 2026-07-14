@@ -64,8 +64,10 @@ export async function POST(req: NextRequest) {
     const startIdx = text.indexOf('[')
     const endIdx = text.lastIndexOf(']')
 
+    // Não devolve o conteúdo do documento (raw) ao cliente — evita vazar
+    // dados da nota/paciente em logs/histórico. Só o motivo do erro.
     if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
-      return NextResponse.json({ items: [], raw: text.slice(0, 500), parseError: `No JSON array found. startIdx=${startIdx} endIdx=${endIdx}` })
+      return NextResponse.json({ items: [], parseError: 'Não foi possível ler os itens do documento.' })
     }
 
     const jsonStr = text.slice(startIdx, endIdx + 1)
@@ -73,11 +75,11 @@ export async function POST(req: NextRequest) {
     try {
       const items = JSON.parse(jsonStr)
       if (!Array.isArray(items)) {
-        return NextResponse.json({ items: [], parseError: `Parsed value is not an array: ${typeof items}`, raw: jsonStr.slice(0, 200) })
+        return NextResponse.json({ items: [], parseError: 'Formato inesperado ao ler o documento.' })
       }
       return NextResponse.json({ items, s3Key, originalFilename })
-    } catch (err) {
-      return NextResponse.json({ items: [], raw: jsonStr.slice(0, 500), parseError: String(err) })
+    } catch {
+      return NextResponse.json({ items: [], parseError: 'Não foi possível interpretar os itens do documento.' })
     }
   } catch (err) {
     return NextResponse.json({ items: [], parseError: `API error: ${String(err)}` })
