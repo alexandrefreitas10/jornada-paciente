@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { updateMovement } from '@/lib/stock'
+import { updateMovement, InsufficientStockError } from '@/lib/stock'
 import { canEstoqueSession } from '@/lib/authz'
 import sql from '@/lib/db'
 
@@ -11,9 +11,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const body = await req.json()
   const { quantity, lot, expiry_date, patient_name, observation } = body
   if (!quantity) return NextResponse.json({ error: 'Quantidade obrigatória' }, { status: 400 })
-  const movement = await updateMovement(Number(id), { quantity: Number(quantity), lot, expiry_date, patient_name, observation })
-  if (!movement) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 })
-  return NextResponse.json(movement)
+  try {
+    const movement = await updateMovement(Number(id), { quantity: Number(quantity), lot, expiry_date, patient_name, observation })
+    if (!movement) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 })
+    return NextResponse.json(movement)
+  } catch (err) {
+    if (err instanceof InsufficientStockError) {
+      return NextResponse.json({ error: 'Esta edição deixaria o estoque negativo.' }, { status: 409 })
+    }
+    const msg = err instanceof Error ? err.message : String(err)
+    return NextResponse.json({ error: msg }, { status: 400 })
+  }
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

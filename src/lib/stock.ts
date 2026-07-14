@@ -39,16 +39,18 @@ export async function listStockItems(): Promise<StockItem[]> {
         SUM(CASE WHEN m.type = 'saida'   THEN m.quantity ELSE 0 END),
         0
       ) AS quantity,
-      (SELECT lot FROM stock_movements WHERE item_id = i.id AND type = 'entrada' ORDER BY created_at DESC LIMIT 1) AS lot,
-      (SELECT expiry_date FROM stock_movements WHERE item_id = i.id AND type = 'entrada' ORDER BY created_at DESC LIMIT 1) AS expiry_date
+      (SELECT lot FROM stock_movements WHERE item_id = i.id AND type = 'entrada' ORDER BY created_at DESC, id DESC LIMIT 1) AS lot,
+      (SELECT expiry_date FROM stock_movements WHERE item_id = i.id AND type = 'entrada' ORDER BY created_at DESC, id DESC LIMIT 1) AS expiry_date
     FROM stock_items i
     LEFT JOIN stock_movements m ON m.item_id = i.id
     GROUP BY i.id
+    -- Esconde apenas os zerados (esgotado é normal). Saldo NEGATIVO aparece
+    -- para o operador ver e corrigir, em vez de sumir silenciosamente.
     HAVING COALESCE(
       SUM(CASE WHEN m.type = 'entrada' THEN m.quantity ELSE 0 END) -
       SUM(CASE WHEN m.type = 'saida'   THEN m.quantity ELSE 0 END),
       0
-    ) > 0
+    ) <> 0
     ORDER BY i.name ASC
   `
   return rows.map(r => ({ ...r, quantity: Number(r.quantity) }))
@@ -322,16 +324,41 @@ export async function updateMovement(
     }
   }
 
-  const [row] = await sql<StockMovement[]>`
-    UPDATE stock_movements
-    SET quantity = ${data.quantity},
-        lot = ${data.lot ?? null},
-        expiry_date = ${data.expiry_date ?? null},
-        patient_name = ${data.patient_name ?? null},
-        observation = ${data.observation ?? null},
-        item_id = ${itemId}
-    WHERE id = ${id}
-    RETURNING *
-  `
-  return row ? normalizeMovement(row) : null
+  if (!(data.quantity > 0)) {
+    throw new Error('Quantidade deve ser maior que zero')
+  }
+
+  // Transação com lock: aplica a edição e garante que nenhum item afetado
+  // (o atual e, se o item_id mudou, o de origem) fique com saldo negativo.
+  const originItemId = current.item_id
+  const row = await sql.begin(async (tx) => {
+    await tx`SELECT pg_advisory_xact_lock(${itemId})`
+    if (originItemId !== itemId) await tx`SELECT pg_advisory_xact_lock(${originItemId})`
+
+    const [updated] = await tx<StockMovement[]>`
+      UPDATE stock_movements
+      SET quantity = ${data.quantity},
+          lot = ${data.lot ?? null},
+          expiry_date = ${data.expiry_date ?? null},
+          patient_name = ${data.patient_name ?? null},
+          observation = ${data.observation ?? null},
+          item_id = ${itemId}
+      WHERE id = ${id}
+      RETURNING *
+    `
+    if (!updated) return null
+
+    for (const affected of new Set([itemId, originItemId])) {
+      const [{ balance }] = await tx<{ balance: string }[]>`
+        SELECT COALESCE(SUM(CASE WHEN type = 'entrada' THEN quantity ELSE -quantity END), 0) AS balance
+        FROM stock_movements WHERE item_id = ${affected}
+      `
+      if (Number(balance) < 0) {
+        throw new InsufficientStockError(Number(balance), data.quantity)
+      }
+    }
+    return updated
+  })
+
+  return row ? normalizeMovement(row as StockMovement) : null
 }

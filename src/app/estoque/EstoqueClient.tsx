@@ -224,6 +224,7 @@ function EditMovementModal({ mov, onClose, onSaved }: { mov: StockMovement; onCl
   const [patient, setPatient] = useState(mov.patient_name ?? '')
   const [obs, setObs] = useState(mov.observation ?? '')
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   async function handleSave() {
     setSaving(true)
@@ -242,7 +243,12 @@ function EditMovementModal({ mov, onClose, onSaved }: { mov: StockMovement; onCl
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ quantity: Number(quantity), lot: lot || null, expiry_date: expiry || null, patient_name: patient || null, observation: obs || null }),
     })
-    if (res.ok) { onSaved(await res.json()) }
+    if (res.ok) {
+      onSaved(await res.json())
+    } else {
+      const data = await res.json().catch(() => ({}))
+      setSaveError(data.error || 'Erro ao salvar.')
+    }
     setSaving(false)
   }
 
@@ -285,6 +291,7 @@ function EditMovementModal({ mov, onClose, onSaved }: { mov: StockMovement; onCl
             <input value={obs} onChange={e => setObs(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
           </div>
         </div>
+        {saveError && <p className="text-xs text-red-600 mt-3">{saveError}</p>}
         <div className="flex gap-2 mt-4">
           <button onClick={handleSave} disabled={saving} className="flex-1 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium disabled:opacity-50">
             {saving ? 'Salvando...' : 'Salvar'}
@@ -1036,7 +1043,10 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
                       {item.quantity > 0 && item.quantity < 5 && (
                         <p className="text-xs text-orange-500 font-semibold mt-0.5">⚠️ Pedir</p>
                       )}
-                      {item.quantity <= 0 && (
+                      {item.quantity < 0 && (
+                        <p className="text-xs text-red-600 font-bold mt-0.5">🚨 Saldo negativo — corrigir</p>
+                      )}
+                      {item.quantity === 0 && (
                         <p className="text-xs text-red-500 font-semibold mt-0.5">🚨 Zerado</p>
                       )}
                     </div>
