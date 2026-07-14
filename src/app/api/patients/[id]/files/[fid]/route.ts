@@ -3,24 +3,14 @@ import { auth } from '@/auth'
 import { softDeletePatientFile, getFileById, updateFileSummary } from '@/lib/patient-files'
 import { logAudit } from '@/lib/audit'
 import { downloadFile } from '@/lib/s3'
-import Anthropic from '@anthropic-ai/sdk'
+import { generateExamSummary } from '@/lib/exam-summary'
+
+export const maxDuration = 120
 
 async function regenerateSummary(s3Key: string, originalName: string): Promise<string> {
   const buffer = await downloadFile(s3Key)
   const isPdf = originalName.toLowerCase().endsWith('.pdf')
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-  const base64 = buffer.toString('base64')
-  const content: Anthropic.MessageParam['content'] = isPdf
-    ? [
-        { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } } as Anthropic.DocumentBlockParam,
-        { type: 'text', text: 'Este é um exame médico. Extraia e liste de forma clara e organizada TODOS os resultados encontrados, sem omitir nenhum, com os valores e as referências normais quando disponíveis. Seja objetivo e use linguagem simples. Responda em português.' },
-      ]
-    : [
-        { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
-        { type: 'text', text: 'Esta é a imagem de um exame médico. Extraia e liste de forma clara e organizada TODOS os resultados encontrados, sem omitir nenhum. Responda em português.' },
-      ]
-  const msg = await client.messages.create({ model: 'claude-sonnet-4-6', max_tokens: 4096, messages: [{ role: 'user', content }] })
-  return (msg.content[0] as { type: string; text: string }).text
+  return generateExamSummary(buffer, isPdf ? 'application/pdf' : 'image/jpeg', originalName)
 }
 
 export async function PATCH(

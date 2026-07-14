@@ -2,47 +2,10 @@ import { NextRequest } from 'next/server'
 import { listPatientFiles, createPatientFile, FileType } from '@/lib/patient-files'
 import { uploadFile, getSignedDownloadUrl } from '@/lib/s3'
 import { randomUUID } from 'crypto'
-import Anthropic from '@anthropic-ai/sdk'
+import { generateExamSummary } from '@/lib/exam-summary'
 import { auth } from '@/auth'
 
 export const maxDuration = 120
-
-function getClient() { return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }) }
-
-async function generateExamSummary(buffer: Buffer, mimeType: string, fileName: string): Promise<string> {
-  const base64 = buffer.toString('base64')
-  const isPdf = mimeType === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf')
-
-  const content: Anthropic.MessageParam['content'] = isPdf
-    ? [
-        {
-          type: 'document',
-          source: { type: 'base64', media_type: 'application/pdf', data: base64 },
-        } as Anthropic.DocumentBlockParam,
-        {
-          type: 'text',
-          text: 'Este é um exame médico. Extraia e liste de forma clara e organizada APENAS os resultados encontrados, com os valores e as referências normais quando disponíveis. Seja objetivo e use linguagem simples. Responda em português.',
-        },
-      ]
-    : [
-        {
-          type: 'image',
-          source: { type: 'base64', media_type: mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp', data: base64 },
-        },
-        {
-          type: 'text',
-          text: 'Esta é a imagem de um exame médico. Extraia e liste de forma clara e organizada APENAS os resultados encontrados, com os valores e as referências normais quando disponíveis. Seja objetivo e use linguagem simples. Responda em português.',
-        },
-      ]
-
-  const message = await getClient().messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 4096,
-    messages: [{ role: 'user', content }],
-  })
-
-  return (message.content[0] as { type: string; text: string }).text
-}
 
 export async function GET(
   req: NextRequest,
