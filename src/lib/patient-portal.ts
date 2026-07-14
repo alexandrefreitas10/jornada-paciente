@@ -39,18 +39,20 @@ export async function createPortalInvite(patientId: number, email: string): Prom
   const token = randomUUID()
   const normalizedEmail = email.toLowerCase().trim()
 
-  await sql`UPDATE patients SET email = ${normalizedEmail} WHERE id = ${patientId}`
-
-  await sql`
-    INSERT INTO patient_users (patient_id, email, invite_token)
-    VALUES (${patientId}, ${normalizedEmail}, ${token}::uuid)
-    ON CONFLICT (patient_id)
-    DO UPDATE SET
-      email = EXCLUDED.email,
-      invite_token = EXCLUDED.invite_token,
-      invite_used_at = NULL,
-      password_hash = NULL
-  `
+  // Transação: e-mail no card e patient_users ficam consistentes (tudo ou nada)
+  await sql.begin(async (tx) => {
+    await tx`UPDATE patients SET email = ${normalizedEmail} WHERE id = ${patientId}`
+    await tx`
+      INSERT INTO patient_users (patient_id, email, invite_token)
+      VALUES (${patientId}, ${normalizedEmail}, ${token}::uuid)
+      ON CONFLICT (patient_id)
+      DO UPDATE SET
+        email = EXCLUDED.email,
+        invite_token = EXCLUDED.invite_token,
+        invite_used_at = NULL,
+        password_hash = NULL
+    `
+  })
   return token
 }
 
@@ -72,6 +74,8 @@ export async function activatePortalUser(token: string, password: string): Promi
 
 export async function revokePortalAccess(patientId: number): Promise<void> {
   await initSchema()
-  await sql`DELETE FROM patient_users WHERE patient_id = ${patientId}`
-  await sql`UPDATE patients SET email = NULL WHERE id = ${patientId}`
+  await sql.begin(async (tx) => {
+    await tx`DELETE FROM patient_users WHERE patient_id = ${patientId}`
+    await tx`UPDATE patients SET email = NULL WHERE id = ${patientId}`
+  })
 }

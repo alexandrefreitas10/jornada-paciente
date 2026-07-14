@@ -56,7 +56,7 @@ export async function createPatientTerm(
   await initSchema()
   const [row] = await sql<PatientTerm[]>`
     INSERT INTO patient_terms (patient_id, title, content, file_s3_key, file_name, file_mime, created_by, fields)
-    VALUES (${patientId}, ${title}, '', ${fileS3Key}, ${fileName}, ${fileMime}, ${createdBy}, ${JSON.stringify(fields)})
+    VALUES (${patientId}, ${title}, '', ${fileS3Key}, ${fileName}, ${fileMime}, ${createdBy}, ${sql.json(fields as never)})
     RETURNING *
   `
   return row
@@ -103,7 +103,7 @@ export async function signTerm(
   const [row] = await sql<PatientTerm[]>`
     UPDATE patient_terms
     SET status = 'signed', signed_at = NOW(), signer_name = ${signerName},
-        signature_data = ${signatureData}, filled_fields = ${JSON.stringify(filledFields)},
+        signature_data = ${signatureData}, filled_fields = ${sql.json(filledFields as never)},
         signed_file_s3_key = ${signedFileS3Key}, signed_file_sha256 = ${signedFileSha256},
         sign_token = NULL
     WHERE sign_token = ${token} AND status <> 'signed'
@@ -122,7 +122,7 @@ export async function signTermWithFile(
   const [row] = await sql<PatientTerm[]>`
     UPDATE patient_terms
     SET status = 'signed', signed_at = NOW(), signer_name = ${signerName},
-        signature_data = ${signatureData}, filled_fields = ${JSON.stringify(filledFields)},
+        signature_data = ${signatureData}, filled_fields = ${sql.json(filledFields as never)},
         file_s3_key = ${filledS3Key}, file_name = ${filledFileName},
         signed_file_s3_key = ${signedFileS3Key}, signed_file_sha256 = ${signedFileSha256},
         sign_token = NULL
@@ -159,8 +159,8 @@ export async function restorePatientTerm(
     )
     VALUES (
       ${patientId}, ${data.title}, ${data.content}, ${data.file_s3_key},
-      ${data.file_name}, ${data.file_mime}, ${JSON.stringify(data.fields ?? [])},
-      ${JSON.stringify(data.filled_fields ?? {})}, ${data.signed_file_s3_key ?? null},
+      ${data.file_name}, ${data.file_mime}, ${sql.json((data.fields ?? []) as never)},
+      ${sql.json((data.filled_fields ?? {}) as never)}, ${data.signed_file_s3_key ?? null},
       ${data.status}, ${data.created_by}, ${data.sign_token}, ${data.sent_at},
       ${data.signed_at}, ${data.signer_name}, ${data.signature_data}
     )

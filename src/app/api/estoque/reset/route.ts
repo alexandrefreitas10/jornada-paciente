@@ -19,8 +19,11 @@ export async function POST(req: NextRequest) {
   const valid = await bcrypt.compare(password, admin.password_hash)
   if (!valid) return NextResponse.json({ error: 'Senha incorreta' }, { status: 401 })
 
-  await sql`DELETE FROM stock_movements`
-  await sql`DELETE FROM stock_items`
+  // Transação: os dois DELETE são atômicos (não deixa itens órfãos se cair no meio)
+  await sql.begin(async (tx) => {
+    await tx`DELETE FROM stock_movements`
+    await tx`DELETE FROM stock_items`
+  })
 
   return NextResponse.json({ ok: true })
 }

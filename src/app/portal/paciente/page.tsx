@@ -7,7 +7,7 @@ import { PatientDetailClient } from '@/components/PatientDetailClient'
 import { portalAuth } from '@/auth-portal'
 import { findPortalUserByPatientId } from '@/lib/patient-portal'
 import { hasAnsweredNps } from '@/lib/feedback'
-import { logoutPortal } from './actions'
+import { PortalLogoutButton } from './PortalLogoutButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,9 +57,7 @@ export default async function PortalPatientPage() {
     <div>
       <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
         <span className="text-sm font-semibold text-gray-700">🌸 Minha Área</span>
-        <form action={logoutPortal}>
-          <button type="submit" className="text-xs text-gray-500 hover:text-gray-700">Sair</button>
-        </form>
+        <PortalLogoutButton />
       </div>
       <PatientDetailClient
         patient={patient}
