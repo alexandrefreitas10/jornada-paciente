@@ -83,12 +83,29 @@ export function ExamsTab({ patientId, initialFiles, readOnly = false }: Props) {
 
   async function handleRegenerate(id: number) {
     setRegenerating(id)
+    setError(null)
     try {
       const res = await fetch(`/api/patients/${patientId}/files/${id}`, { method: 'PATCH' })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error ? `Erro ao regenerar: ${data.error}` : `Erro ao regenerar (HTTP ${res.status})`)
-      const { summary } = data
-      setFiles(prev => prev.map(f => f.id === id ? { ...f, summary } : f))
+
+      // Geração roda em segundo plano no servidor — consulta o status até terminar (máx. ~8 min)
+      for (let i = 0; i < 96; i++) {
+        await new Promise(r => setTimeout(r, 5000))
+        const sr = await fetch(`/api/patients/${patientId}/files/${id}`)
+        if (!sr.ok) continue
+        const status = await sr.json()
+        if (status.status === 'error') throw new Error(`Erro ao gerar resumo: ${status.error}`)
+        if (status.status === 'done') {
+          if (status.summary) {
+            setFiles(prev => prev.map(f => f.id === id ? { ...f, summary: status.summary } : f))
+          } else {
+            throw new Error('O resumo terminou vazio. Tente novamente.')
+          }
+          return
+        }
+      }
+      throw new Error('A geração demorou demais. Recarregue a página em alguns minutos.')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao regenerar resumo')
     } finally {

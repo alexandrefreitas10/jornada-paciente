@@ -13,21 +13,58 @@ async function regenerateSummary(s3Key: string, originalName: string): Promise<s
   return generateExamSummary(buffer, isPdf ? 'application/pdf' : 'image/jpeg', originalName)
 }
 
+// Status dos resumos em geração (exames longos levam minutos — mais do que o
+// limite de ~100s do proxy do Render, então a geração roda em segundo plano)
+type JobStatus = { state: 'running' } | { state: 'error'; message: string }
+const summaryJobs = new Map<number, JobStatus>()
+
+// PATCH — dispara a geração em segundo plano e responde na hora
 export async function PATCH(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string; fid: string }> }
 ) {
   const { fid } = await params
-  const file = await getFileById(Number(fid))
+  const fileId = Number(fid)
+  const file = await getFileById(fileId)
   if (!file) return Response.json({ error: 'Arquivo não encontrado' }, { status: 404 })
-  try {
-    const summary = await regenerateSummary(file.s3_key, file.original_name)
-    await updateFileSummary(Number(fid), summary)
-    return Response.json({ summary })
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    return Response.json({ error: msg }, { status: 500 })
+
+  if (summaryJobs.get(fileId)?.state === 'running') {
+    return Response.json({ started: true, alreadyRunning: true }, { status: 202 })
   }
+
+  summaryJobs.set(fileId, { state: 'running' })
+  regenerateSummary(file.s3_key, file.original_name)
+    .then(async summary => {
+      await updateFileSummary(fileId, summary)
+      summaryJobs.delete(fileId)
+    })
+    .catch(err => {
+      const message = err instanceof Error ? err.message : String(err)
+      console.error('Exam summary error:', message)
+      summaryJobs.set(fileId, { state: 'error', message })
+    })
+
+  return Response.json({ started: true }, { status: 202 })
+}
+
+// GET — consulta o status da geração / o resumo pronto
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string; fid: string }> }
+) {
+  const { fid } = await params
+  const fileId = Number(fid)
+  const job = summaryJobs.get(fileId)
+  if (job?.state === 'running') {
+    return Response.json({ status: 'running' })
+  }
+  if (job?.state === 'error') {
+    summaryJobs.delete(fileId)
+    return Response.json({ status: 'error', error: job.message })
+  }
+  const file = await getFileById(fileId)
+  if (!file) return Response.json({ error: 'Arquivo não encontrado' }, { status: 404 })
+  return Response.json({ status: 'done', summary: file.summary })
 }
 
 export async function DELETE(

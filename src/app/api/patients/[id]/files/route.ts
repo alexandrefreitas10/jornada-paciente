@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { listPatientFiles, createPatientFile, FileType } from '@/lib/patient-files'
+import { listPatientFiles, createPatientFile, updateFileSummary, FileType } from '@/lib/patient-files'
 import { uploadFile, getSignedDownloadUrl } from '@/lib/s3'
 import { randomUUID } from 'crypto'
 import { generateExamSummary } from '@/lib/exam-summary'
@@ -52,17 +52,16 @@ export async function POST(
     return Response.json({ error: `Erro S3: ${msg}` }, { status: 500 })
   }
 
-  let summary: string | null = null
-  if (fileType === 'exam') {
-    try {
-      summary = await generateExamSummary(buffer, mimeType, file.name)
-    } catch (err) {
-      console.error('Exam summary error:', err)
-    }
-  }
-
-  const record = await createPatientFile(Number(id), fileType, s3Key, file.name, summary, createdBy)
+  const record = await createPatientFile(Number(id), fileType, s3Key, file.name, null, createdBy)
   const url = await getSignedDownloadUrl(s3Key)
+
+  // Resumo de exame roda em segundo plano — exames longos levam minutos,
+  // mais do que o limite de tempo do proxy para a requisição de upload
+  if (fileType === 'exam') {
+    generateExamSummary(buffer, mimeType, file.name)
+      .then(summary => updateFileSummary(record.id, summary))
+      .catch(err => console.error('Exam summary error:', err))
+  }
 
   return Response.json({ ...record, url }, { status: 201 })
 }
