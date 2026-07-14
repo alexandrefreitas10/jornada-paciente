@@ -8,6 +8,14 @@ export async function isAdminSession(): Promise<boolean> {
   return !!(session?.user as any)?.is_admin
 }
 
+// Retorna true se a sessão de staff atual pode mexer no estoque (admin ou
+// permissão can_estoque). Use nas rotas de mutação de estoque.
+export async function canEstoqueSession(): Promise<boolean> {
+  const session = await auth()
+  const u = session?.user as { is_admin?: boolean; can_estoque?: boolean } | undefined
+  return !!u?.is_admin || !!u?.can_estoque
+}
+
 // Helpers de autorização por propriedade (defesa contra IDOR).
 //
 // O proxy garante que o paciente do portal só acessa /api/patients/{seuProprioId}/*.

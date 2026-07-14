@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { adjustStockQuantity, getStockItem } from '@/lib/stock'
 import { auth } from '@/auth'
+import { canEstoqueSession } from '@/lib/authz'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!(await canEstoqueSession())) {
+    return NextResponse.json({ error: 'Sem permissão de estoque' }, { status: 403 })
+  }
   const { id } = await params
   const session = await auth()
   const createdBy = session?.user?.name ?? null

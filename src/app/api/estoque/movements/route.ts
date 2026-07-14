@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listMovements, createMovement, InsufficientStockError } from '@/lib/stock'
 import { auth } from '@/auth'
+import { canEstoqueSession } from '@/lib/authz'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,6 +12,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  if (!(await canEstoqueSession())) {
+    return NextResponse.json({ error: 'Sem permissão de estoque' }, { status: 403 })
+  }
   const session = await auth()
   const createdBy = session?.user?.name ?? null
   const body = await req.json()

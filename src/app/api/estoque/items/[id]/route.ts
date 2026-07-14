@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { updateStockItem, getStockItem } from '@/lib/stock'
+import { canEstoqueSession } from '@/lib/authz'
 import sql from '@/lib/db'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -10,6 +11,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!(await canEstoqueSession())) {
+    return NextResponse.json({ error: 'Sem permissão de estoque' }, { status: 403 })
+  }
   const { id } = await params
   const { name, unit, notes } = await req.json()
   if (!name) return NextResponse.json({ error: 'Nome obrigatório' }, { status: 400 })
@@ -18,6 +22,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!(await canEstoqueSession())) {
+    return NextResponse.json({ error: 'Sem permissão de estoque' }, { status: 403 })
+  }
   const { id } = await params
   await sql`DELETE FROM stock_items WHERE id = ${Number(id)}`
   return NextResponse.json({ ok: true })
