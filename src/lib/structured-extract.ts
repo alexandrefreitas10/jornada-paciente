@@ -39,13 +39,15 @@ function parseJson<T>(text: string): T | null {
 
 export interface BioRaw {
   data: string | null
-  peso: string | null
-  gordura_pct: string | null // só o número do PGC, ex "14,4"
+  peso: string | null           // "97,9 kg"
+  gordura_pct: string | null    // só o número do PGC, ex "14,4"
+  massa_muscular: string | null // Massa Muscular Esquelética, ex "48,6 kg"
+  massa_magra: string | null    // Massa Livre de Gordura, ex "83,8 kg"
 }
 
-const BIO_PROMPT = `Este é um exame de BIOIMPEDÂNCIA (ex: InBody). Extraia SOMENTE estes 3 dados e responda SÓ com um JSON, sem texto extra:
-{"data":"data do exame (campo 'Data / Hora'), formato dd/mm/aaaa, ou null","peso":"o PESO CORPORAL em kg com unidade (campo 'Peso'), ex '97,9 kg', ou null","gordura_pct":"o PERCENTUAL DE GORDURA CORPORAL — campo 'PGC' ou 'Percentual de Gordura', SOMENTE o número, ex '14,4', ou null"}
-IMPORTANTE: use o PGC em PERCENTUAL. NÃO use 'Massa de Gordura' em kg, NÃO use 'Massa Muscular Esquelética', NÃO use 'Massa Livre de Gordura'. Responda somente o JSON.`
+const BIO_PROMPT = `Este é um exame de BIOIMPEDÂNCIA (ex: InBody). Extraia SOMENTE estes campos e responda SÓ com um JSON, sem texto extra:
+{"data":"data do exame (campo 'Data / Hora'), formato dd/mm/aaaa, ou null","peso":"o PESO CORPORAL em kg com unidade (campo 'Peso'), ex '97,9 kg', ou null","gordura_pct":"o PERCENTUAL DE GORDURA CORPORAL (campo 'PGC'/'Percentual de Gordura'), SOMENTE o número, ex '14,4', ou null","massa_muscular":"a MASSA MUSCULAR ESQUELÉTICA com unidade (campo 'Massa Muscular Esquelética'), ex '48,6 kg', ou null","massa_magra":"a MASSA LIVRE DE GORDURA com unidade (campo 'Massa Livre de Gordura'), ex '83,8 kg', ou null"}
+Não confunda os dois: 'Massa Muscular Esquelética' e 'Massa Livre de Gordura' são valores DIFERENTES e devem ir em campos separados. Responda somente o JSON.`
 
 export async function extractBioRaw(buffer: Buffer, mimeType: string, fileName: string): Promise<BioRaw | null> {
   const text = await askAboutFile(buffer, mimeType, fileName, BIO_PROMPT)

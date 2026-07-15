@@ -7,33 +7,35 @@ import { logSystemError } from '@/lib/system-errors'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
 
-const CACHE_VERSION = 2 // bump para invalidar caches antigos (massa magra vinha errada)
+const CACHE_VERSION = 3 // bump para invalidar caches antigos
 
 interface BioMetrics {
   v: number
   data: string | null
   peso: string | null
-  gordura: string | null       // ex "14,4%"
-  massa_magra: string | null   // ex "85,6%" (100 - gordura)
+  gordura: string | null         // % (PGC), ex "14,4%"
+  massa_muscular: string | null  // Massa Muscular Esquelética, ex "48,6 kg"
+  massa_magra: string | null     // Massa Livre de Gordura, ex "83,8 kg"
 }
 
 function mimeOf(name: string): string {
   return name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg'
 }
 
-// Monta as métricas finais: % gordura (PGC) e % massa magra = 100 - PGC.
-function build(raw: { data: string | null; peso: string | null; gordura_pct: string | null }): BioMetrics {
+function build(raw: { data: string | null; peso: string | null; gordura_pct: string | null; massa_muscular: string | null; massa_magra: string | null }): BioMetrics {
   let gordura: string | null = null
-  let massa_magra: string | null = null
   if (raw.gordura_pct) {
-    const n = parseFloat(raw.gordura_pct.replace(',', '.').replace(/[^\d.]/g, ''))
-    if (Number.isFinite(n)) {
-      gordura = `${raw.gordura_pct.replace('.', ',').replace('%', '')}%`
-      const magra = 100 - n
-      massa_magra = `${magra.toFixed(1).replace('.', ',')}%`
-    }
+    const num = raw.gordura_pct.replace('.', ',').replace('%', '').trim()
+    if (num) gordura = `${num}%`
   }
-  return { v: CACHE_VERSION, data: raw.data ?? null, peso: raw.peso ?? null, gordura, massa_magra }
+  return {
+    v: CACHE_VERSION,
+    data: raw.data ?? null,
+    peso: raw.peso ?? null,
+    gordura,
+    massa_muscular: raw.massa_muscular ?? null,
+    massa_magra: raw.massa_magra ?? null,
+  }
 }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

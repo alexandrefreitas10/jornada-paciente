@@ -6,7 +6,7 @@ import { ScreenHeader, IconBox, EmptyState } from '../ui'
 import { IconDocSimple, IconDownload } from '../Icons'
 import type { PortalData } from '../types'
 
-interface BioMetrics { data: string | null; peso: string | null; gordura: string | null; massa_magra: string | null }
+interface BioMetrics { data: string | null; peso: string | null; gordura: string | null; massa_muscular: string | null; massa_magra: string | null }
 
 function Metric({ label, value, feature }: { label: string; value: string; feature?: boolean }) {
   return (
@@ -32,7 +32,7 @@ export function Bio({ data, onBack }: { data: PortalData; onBack: () => void }) 
     return () => { alive = false }
   }, [data.patientId, data.bioimpedances.length])
 
-  const hasMetric = metrics && (metrics.peso || metrics.gordura || metrics.massa_magra)
+  const hasMetric = metrics && (metrics.peso || metrics.gordura || metrics.massa_magra || metrics.massa_muscular)
 
   return (
     <div className="pt-view">
@@ -47,11 +47,12 @@ export function Bio({ data, onBack }: { data: PortalData; onBack: () => void }) 
           {metrics!.data && <div style={{ fontSize: 12, color: C.soft }}>Exame de {metrics!.data}</div>}
           <div style={{ display: 'flex', gap: 10 }}>
             {metrics!.peso && <Metric label="PESO" value={metrics!.peso} feature />}
-            {metrics!.gordura && <Metric label="GORDURA" value={metrics!.gordura} />}
+            {metrics!.gordura && <Metric label="% GORDURA" value={metrics!.gordura} />}
           </div>
-          {metrics!.massa_magra && (
+          {(metrics!.massa_muscular || metrics!.massa_magra) && (
             <div style={{ display: 'flex', gap: 10 }}>
-              <Metric label="MASSA MAGRA" value={metrics!.massa_magra} />
+              {metrics!.massa_muscular && <Metric label="MASSA MUSCULAR" value={metrics!.massa_muscular} />}
+              {metrics!.massa_magra && <Metric label="MASSA MAGRA" value={metrics!.massa_magra} />}
             </div>
           )}
         </div>
