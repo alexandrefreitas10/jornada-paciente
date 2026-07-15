@@ -1,10 +1,11 @@
 'use client'
 
 import React from 'react'
-import { C, serif, shadowCard, shadowFeature } from '../theme'
+import Image from 'next/image'
+import { C, serif, shadowCard } from '../theme'
 import { firstName, initial } from '../theme'
 import { IconBox } from '../ui'
-import { IconBell, IconCamera, IconMoon, IconFlask, IconBars, IconLeaf, IconCapsule, IconSparkle, IconDoc } from '../Icons'
+import { IconBell, IconCamera, IconFlask, IconBars, IconLeaf, IconCapsule, IconSparkle, IconDoc } from '../Icons'
 import type { PortalData, Screen } from '../types'
 
 function QA({ label, tone, icon, onClick }: { label: string; tone: 'gold' | 'sage'; icon: React.ReactNode; onClick: () => void }) {
@@ -20,11 +21,17 @@ function QA({ label, tone, icon, onClick }: { label: string; tone: 'gold' | 'sag
 }
 
 export function Home({ data, go }: { data: PortalData; go: (s: Screen) => void }) {
-  const pct = data.tasksTotal > 0 ? Math.round((data.tasksDone / data.tasksTotal) * 100) : 0
   return (
     <div className="pt-view">
-      {/* Cabeçalho: avatar + saudação + sino */}
-      <div style={{ padding: '18px 22px 6px', display: 'flex', alignItems: 'center', gap: 12 }}>
+      {/* Marca co-branded (igual ao login) */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '24px 22px 6px' }}>
+        <Image src="/portal/logo-torres.png" alt="Instituto Torres" width={78} height={92} style={{ width: 78, height: 'auto', objectFit: 'contain' }} />
+        <div style={{ width: 1, height: 58, background: '#ddd2be' }} />
+        <Image src="/portal/logo-fran.png" alt="Dra. Fran Torres" width={70} height={92} style={{ width: 70, height: 'auto', objectFit: 'contain' }} />
+      </div>
+
+      {/* Saudação */}
+      <div style={{ padding: '10px 22px 6px', display: 'flex', alignItems: 'center', gap: 12 }}>
         <span style={{ width: 46, height: 46, borderRadius: 16, background: 'linear-gradient(135deg,#e7d9b8,#C4A86A)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: serif, color: '#fff', fontSize: 20 }}>{initial(data.name)}</span>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 13, color: C.muted2 }}>Olá, seja bem-vindo(a)</div>
@@ -35,33 +42,15 @@ export function Home({ data, go }: { data: PortalData; go: (s: Screen) => void }
         </span>
       </div>
 
-      {/* Card de jornada com anel de progresso */}
-      <button onClick={() => go('jornada')} className="pt-press" style={{
-        cursor: 'pointer', margin: '14px 20px', background: 'linear-gradient(135deg,#fff,#fbf3e6)', borderRadius: 24, padding: 20,
-        display: 'flex', alignItems: 'center', gap: 18, boxShadow: shadowFeature, border: 'none', width: 'calc(100% - 40px)', textAlign: 'left',
-      }}>
-        <div style={{ width: 80, height: 80, borderRadius: '50%', background: `conic-gradient(${C.gold} 0 ${pct}%, #efe6d6 ${pct}% 100%)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <div style={{ width: 58, height: 58, borderRadius: '50%', background: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontFamily: serif, fontSize: 20, color: C.graphiteStrong }}>{data.tasksDone}/{data.tasksTotal}</span>
-            <span style={{ fontSize: 9, color: C.muted2 }}>TAREFAS</span>
-          </div>
-        </div>
-        <div>
-          <div style={{ fontFamily: serif, fontSize: 18, color: C.graphiteStrong }}>Sua jornada</div>
-          <div style={{ fontSize: 12, color: C.soft, marginTop: 4, lineHeight: 1.4 }}>{data.tasksDone} de {data.tasksTotal} tarefas concluídas. Continue firme!</div>
-        </div>
-      </button>
-
-      <div style={{ fontFamily: serif, fontSize: 19, color: C.graphiteStrong, padding: '0 22px', marginBottom: 10 }}>Acesso rápido</div>
+      <div style={{ fontFamily: serif, fontSize: 19, color: C.graphiteStrong, padding: '18px 22px 0', marginBottom: 10 }}>Acesso rápido</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 11, padding: '0 20px 8px' }}>
         <QA label="Fotos" tone="gold" icon={<IconCamera color={C.goldIcon} />} onClick={() => go('fotos')} />
-        <QA label="Antes/Depois" tone="sage" icon={<IconMoon color={C.sageText} />} onClick={() => go('antes')} />
         <QA label="Exames" tone="gold" icon={<IconFlask color={C.goldIcon} />} onClick={() => go('exames')} />
         <QA label="Bioimpedância" tone="sage" icon={<IconBars color={C.sageText} />} onClick={() => go('bio')} />
         <QA label="Dieta" tone="gold" icon={<IconLeaf color={C.goldIcon} />} onClick={() => go('dieta')} />
         <QA label="Medicações" tone="gold" icon={<IconCapsule color={C.goldIcon} />} onClick={() => go('med')} />
-        {data.hasEstetica && <QA label="Estética" tone="gold" icon={<IconSparkle color={C.goldIcon} />} onClick={() => go('estetica')} />}
         <QA label="Termos" tone="sage" icon={<IconDoc color={C.sageText} />} onClick={() => go('termos')} />
+        {data.hasEstetica && <QA label="Estética" tone="gold" icon={<IconSparkle color={C.goldIcon} />} onClick={() => go('estetica')} />}
       </div>
     </div>
   )

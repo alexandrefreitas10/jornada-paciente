@@ -2,12 +2,10 @@
 
 import React, { useState } from 'react'
 import { C } from './theme'
-import { IconHome, IconMoon, IconBars, IconMenu } from './Icons'
+import { IconHome, IconCamera, IconFlask, IconMenu } from './Icons'
 import type { PortalData, Screen } from './types'
 import { Home } from './screens/Home'
-import { Jornada } from './screens/Jornada'
 import { Fotos } from './screens/Fotos'
-import { Antes } from './screens/Antes'
 import { Exames } from './screens/Exames'
 import { Bio } from './screens/Bio'
 import { Dieta } from './screens/Dieta'
@@ -48,9 +46,7 @@ export function PortalApp({ data, onLogout }: { data: PortalData; onLogout: () =
       <div className="pt-root" style={{ width: '100%', maxWidth: 440, background: C.sand, color: C.graphite, minHeight: '100dvh', display: 'flex', flexDirection: 'column', position: 'relative' }}>
         <div style={{ flex: 1, overflowY: 'auto', paddingBottom: showNav ? 76 : 0 }}>
           {screen === 'home' && <Home data={data} go={go} />}
-          {screen === 'jornada' && <Jornada data={data} onBack={back} />}
           {screen === 'fotos' && <Fotos data={data} onBack={back} />}
-          {screen === 'antes' && <Antes data={data} onBack={back} />}
           {screen === 'exames' && <Exames data={data} onBack={back} />}
           {screen === 'bio' && <Bio data={data} onBack={back} />}
           {screen === 'dieta' && <Dieta data={data} onBack={back} />}
@@ -64,8 +60,8 @@ export function PortalApp({ data, onLogout }: { data: PortalData; onLogout: () =
         {showNav && (
           <nav style={{ position: 'fixed', bottom: 0, width: '100%', maxWidth: 440, display: 'flex', justifyContent: 'space-around', padding: '14px 30px 22px', borderTop: `1px solid #efe7d9`, background: C.white, flexShrink: 0 }}>
             <button aria-label="Início" onClick={() => go('home')} style={navBtn(navColor('home'))}><IconHome size={21} color="currentColor" /></button>
-            <button aria-label="Antes e depois" onClick={() => go('antes')} style={navBtn(navColor('antes'))}><IconMoon size={21} color="currentColor" /></button>
-            <button aria-label="Jornada" onClick={() => go('jornada')} style={navBtn(navColor('jornada'))}><IconBars size={21} color="currentColor" sw={1.7} /></button>
+            <button aria-label="Fotos" onClick={() => go('fotos')} style={navBtn(navColor('fotos'))}><IconCamera size={21} color="currentColor" sw={1.7} /></button>
+            <button aria-label="Exames" onClick={() => go('exames')} style={navBtn(navColor('exames'))}><IconFlask size={21} color="currentColor" sw={1.7} /></button>
             <button aria-label="Perfil" onClick={() => go('perfil')} style={navBtn(navColor('perfil'))}><IconMenu size={21} color="currentColor" /></button>
           </nav>
         )}

@@ -53,7 +53,7 @@ export default async function PortalPatientPage() {
   const withUrls = async (files: typeof photos): Promise<PortalFile[]> =>
     Promise.all(files.map(async (f) => ({
       id: f.id, original_name: f.original_name, created_at: f.created_at,
-      url: await getSignedDownloadUrl(f.s3_key),
+      url: await getSignedDownloadUrl(f.s3_key), summary: f.summary,
     })))
 
   const [pPhotos, pBio, pExams, pDiets] = await Promise.all([

@@ -1,7 +1,7 @@
 // Contrato de dados do Portal do Paciente (montado no servidor e passado ao PortalApp).
 
 export type Screen =
-  | 'home' | 'jornada' | 'fotos' | 'antes' | 'exames' | 'bio'
+  | 'home' | 'fotos' | 'exames' | 'bio'
   | 'dieta' | 'med' | 'termos' | 'estetica' | 'perfil' | 'ouvidoria'
 
 export interface PortalFile {
@@ -9,6 +9,7 @@ export interface PortalFile {
   original_name: string
   created_at: string
   url: string
+  summary?: string | null
 }
 
 export interface PortalTerm {
