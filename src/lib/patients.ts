@@ -101,6 +101,26 @@ export async function getPatient(id: number): Promise<PatientDetail | null> {
   }
 }
 
+// Dados básicos editáveis pelo próprio paciente no portal (nome NÃO muda).
+export async function updatePatientProfile(
+  id: number,
+  input: { birth_date?: string | null; phone?: string | null; email?: string | null }
+): Promise<void> {
+  await initSchema()
+  await sql`
+    UPDATE patients SET
+      birth_date = ${input.birth_date ?? null},
+      phone = ${input.phone ?? null},
+      email = ${input.email ?? null}
+    WHERE id = ${id}
+  `
+}
+
+export async function updatePatientAvatar(id: number, s3Key: string): Promise<void> {
+  await initSchema()
+  await sql`UPDATE patients SET avatar_s3_key = ${s3Key} WHERE id = ${id}`
+}
+
 export async function updatePatient(id: number, input: PatientInput): Promise<void> {
   if (!input.name.trim()) throw new Error('name is required')
   await initSchema()

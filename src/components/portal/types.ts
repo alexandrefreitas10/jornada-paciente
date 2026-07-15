@@ -52,6 +52,10 @@ export interface PortalData {
   patientId: number
   name: string
   startDate: string | null
+  birthDate: string | null
+  phone: string | null
+  email: string | null
+  avatarUrl: string | null
   tasksDone: number
   tasksTotal: number
   hasEstetica: boolean

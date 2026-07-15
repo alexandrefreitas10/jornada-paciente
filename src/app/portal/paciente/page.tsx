@@ -60,11 +60,18 @@ export default async function PortalPatientPage() {
     withUrls(photos), withUrls(bioimpedances), withUrls(exams), withUrls(diets),
   ])
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const p = patient as any
+  const avatarUrl = p.avatar_s3_key ? await getSignedDownloadUrl(p.avatar_s3_key) : null
+
   const data: PortalData = {
     patientId,
     name: patient.name,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    startDate: (patient as any).start_date ?? null,
+    startDate: p.start_date ?? null,
+    birthDate: p.birth_date ? String(p.birth_date).slice(0, 10) : null,
+    phone: p.phone ?? null,
+    email: p.email ?? null,
+    avatarUrl,
     tasksDone: patient.completed_task_keys.length,
     tasksTotal: ALL_TASK_KEYS.length,
     hasEstetica: sessions.length > 0,

@@ -32,7 +32,12 @@ export function Home({ data, go }: { data: PortalData; go: (s: Screen) => void }
 
       {/* Saudação */}
       <div style={{ padding: '10px 22px 6px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <span style={{ width: 46, height: 46, borderRadius: 16, background: 'linear-gradient(135deg,#e7d9b8,#C4A86A)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: serif, color: '#fff', fontSize: 20 }}>{initial(data.name)}</span>
+        <span style={{ width: 46, height: 46, borderRadius: 16, overflow: 'hidden', background: data.avatarUrl ? '#eee' : 'linear-gradient(135deg,#e7d9b8,#C4A86A)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: serif, color: '#fff', fontSize: 20, flexShrink: 0 }}>
+          {data.avatarUrl
+            // eslint-disable-next-line @next/next/no-img-element
+            ? <img src={data.avatarUrl} alt="Foto" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : initial(data.name)}
+        </span>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 13, color: C.muted2 }}>Olá, seja bem-vindo(a)</div>
           <div style={{ fontFamily: serif, fontSize: 23, color: C.graphiteStrong, lineHeight: 1 }}>{firstName(data.name)}</div>

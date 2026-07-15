@@ -303,6 +303,10 @@ async function runMigrations() {
 
   // Portal do paciente
   await sql.unsafe(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS email TEXT`).catch(() => {})
+  // Dados básicos editáveis pelo paciente no portal
+  await sql.unsafe(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS birth_date DATE`).catch(() => {})
+  await sql.unsafe(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS phone TEXT`).catch(() => {})
+  await sql.unsafe(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS avatar_s3_key TEXT`).catch(() => {})
   await sql.unsafe(`
     CREATE TABLE IF NOT EXISTS patient_users (
       id               SERIAL PRIMARY KEY,

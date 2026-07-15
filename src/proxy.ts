@@ -47,10 +47,13 @@ export default auth(async (req) => {
       (pathname === ownApiPrefix || pathname.startsWith(`${ownApiPrefix}/`)) &&
       !pathname.includes('/portal-invite')
 
-    // Exceções de escrita do próprio paciente: NPS e ouvidoria
+    // Exceções de escrita do próprio paciente: NPS, ouvidoria, dados básicos e avatar
     const isOwnPatientWrite =
       req.method === 'POST' &&
-      (pathname === `${ownApiPrefix}/nps` || pathname === `${ownApiPrefix}/feedback`)
+      (pathname === `${ownApiPrefix}/nps` ||
+        pathname === `${ownApiPrefix}/feedback` ||
+        pathname === `${ownApiPrefix}/profile` ||
+        pathname === `${ownApiPrefix}/avatar`)
 
     if (isOwnPatientGet || isOwnPatientWrite) return NextResponse.next()
 
