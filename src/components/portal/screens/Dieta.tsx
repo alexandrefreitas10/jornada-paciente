@@ -47,6 +47,17 @@ export function Dieta({ data, onBack }: { data: PortalData; onBack: () => void }
         <>
           {loading && <div style={{ padding: '8px 20px 12px', fontSize: 13, color: C.muted }}>Organizando seu plano…</div>}
 
+          {/* Aviso: o documento original pode ter opções de substituição */}
+          {meals && meals.length > 0 && latest && (
+            <a href={latest.url} target="_blank" rel="noreferrer" style={{
+              display: 'block', textDecoration: 'none', margin: '0 20px 14px',
+              background: C.sageBox, color: C.sageText, borderRadius: 14, padding: '12px 16px',
+              fontSize: 13, fontWeight: 700, lineHeight: 1.4,
+            }}>
+              💡 Este é um resumo do seu cardápio. Toque aqui para abrir o documento original e ver as <u>opções de substituição</u> de cada refeição.
+            </a>
+          )}
+
           {/* Refeições estruturadas */}
           {meals && meals.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 11, padding: '0 20px 16px' }}>

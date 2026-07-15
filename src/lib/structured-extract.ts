@@ -37,20 +37,19 @@ function parseJson<T>(text: string): T | null {
   } catch { return null }
 }
 
-export interface BioMetrics {
+export interface BioRaw {
   data: string | null
   peso: string | null
-  gordura: string | null
-  massa_magra: string | null
+  gordura_pct: string | null // só o número do PGC, ex "14,4"
 }
 
-const BIO_PROMPT = `Este é um exame de BIOIMPEDÂNCIA (ex: InBody). Extraia APENAS estes 4 dados e responda SÓ com um JSON, sem texto extra:
-{"data":"data do exame (dd/mm/aaaa) ou null","peso":"peso em kg com unidade, ex '82,4 kg' ou null","gordura":"percentual de gordura corporal, ex '24,1%' ou null","massa_magra":"percentual OU massa de músculo/massa magra, ex '48,6 kg' ou '55,2%' ou null"}
-Use exatamente os valores do documento. Se algum não existir, use null. Responda somente o JSON.`
+const BIO_PROMPT = `Este é um exame de BIOIMPEDÂNCIA (ex: InBody). Extraia SOMENTE estes 3 dados e responda SÓ com um JSON, sem texto extra:
+{"data":"data do exame (campo 'Data / Hora'), formato dd/mm/aaaa, ou null","peso":"o PESO CORPORAL em kg com unidade (campo 'Peso'), ex '97,9 kg', ou null","gordura_pct":"o PERCENTUAL DE GORDURA CORPORAL — campo 'PGC' ou 'Percentual de Gordura', SOMENTE o número, ex '14,4', ou null"}
+IMPORTANTE: use o PGC em PERCENTUAL. NÃO use 'Massa de Gordura' em kg, NÃO use 'Massa Muscular Esquelética', NÃO use 'Massa Livre de Gordura'. Responda somente o JSON.`
 
-export async function extractBioMetrics(buffer: Buffer, mimeType: string, fileName: string): Promise<BioMetrics | null> {
+export async function extractBioRaw(buffer: Buffer, mimeType: string, fileName: string): Promise<BioRaw | null> {
   const text = await askAboutFile(buffer, mimeType, fileName, BIO_PROMPT)
-  return parseJson<BioMetrics>(text)
+  return parseJson<BioRaw>(text)
 }
 
 export interface DietMeal { nome: string; itens: string }
