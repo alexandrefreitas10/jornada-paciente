@@ -37,7 +37,7 @@ export default async function PortalPatientPage() {
     listMovementsByPatient(patientId),
     listPatientTerms(patientId),
     sql<{ id: number; name: string; total_sessions: number; created_at: string; completed_count: string }[]>`
-      SELECT s.id, s.name, s.total_sessions, s.created_at,
+      SELECT s.id, s.procedure_name AS name, s.total_sessions, s.created_at,
         COUNT(c.session_number) AS completed_count
       FROM aesthetic_sessions s
       LEFT JOIN aesthetic_session_completions c ON c.aesthetic_session_id = s.id
