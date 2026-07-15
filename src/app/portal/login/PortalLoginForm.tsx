@@ -2,40 +2,25 @@
 import { useActionState } from 'react'
 import { portalLogin } from './actions'
 
+const inputStyle: React.CSSProperties = {
+  background: '#fff', border: '1px solid #eee6d7', borderRadius: 14, padding: '15px 16px',
+  fontSize: 14, color: '#514f4a', width: '100%', outline: 'none',
+}
+
 export function PortalLoginForm() {
   const [state, action, pending] = useActionState(portalLogin, null)
   return (
-    <form action={action} className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
-        <input
-          name="email"
-          type="email"
-          required
-          autoComplete="email"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
-          placeholder="seu@email.com"
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
-        <input
-          name="password"
-          type="password"
-          required
-          autoComplete="current-password"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
-          placeholder="••••••••"
-        />
-      </div>
-      {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
-      <button
-        type="submit"
-        disabled={pending}
-        className="w-full py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors"
-      >
-        {pending ? 'Entrando...' : 'Entrar'}
+    <form action={action} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <input name="email" type="email" required autoComplete="email" placeholder="seu@email.com" style={inputStyle} />
+      <input name="password" type="password" required autoComplete="current-password" placeholder="••••••••" style={inputStyle} />
+      {state?.error && <p style={{ fontSize: 13, color: '#c0392b', textAlign: 'left', margin: 0 }}>{state.error}</p>}
+      <button type="submit" disabled={pending} style={{
+        background: '#C4A86A', color: '#fff', fontWeight: 700, fontSize: 15, padding: 16, borderRadius: 14, border: 'none',
+        boxShadow: '0 14px 26px -14px #C4A86A', cursor: pending ? 'default' : 'pointer', opacity: pending ? 0.7 : 1,
+      }}>
+        {pending ? 'Entrando…' : 'Entrar'}
       </button>
+      <div style={{ fontSize: 13, color: '#8A9A7B', fontWeight: 700, marginTop: 4 }}>Esqueci minha senha</div>
     </form>
   )
 }
