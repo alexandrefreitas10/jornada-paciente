@@ -3,6 +3,7 @@ import { getPatient } from '@/lib/patients'
 import { listMeasurements } from '@/lib/measurements'
 import { listPatientFiles } from '@/lib/patient-files'
 import { listPatientTerms } from '@/lib/patient-terms'
+import { listTabNotes } from '@/lib/tab-notes'
 import { listMovementsByPatient } from '@/lib/stock'
 import { getSignedDownloadUrl } from '@/lib/s3'
 import { ALL_TASK_KEYS } from '@/lib/task-definitions'
@@ -27,13 +28,15 @@ export default async function PortalPatientPage() {
 
   if (!(await hasAnsweredNps(patientId))) redirect('/portal/paciente/nps')
 
-  const [patient, measurements, photos, bioimpedances, exams, diets, medications, terms, sessions] = await Promise.all([
+  const [patient, measurements, photos, bioimpedances, exams, diets, prescriptions, prescricaoNotes, medications, terms, sessions] = await Promise.all([
     getPatient(patientId),
     listMeasurements(patientId),
     listPatientFiles(patientId, 'photo'),
     listPatientFiles(patientId, 'bioimpedance'),
     listPatientFiles(patientId, 'exam'),
     listPatientFiles(patientId, 'diet'),
+    listPatientFiles(patientId, 'prescricao'),
+    listTabNotes(patientId, 'prescricao').catch(() => []),
     listMovementsByPatient(patientId),
     listPatientTerms(patientId),
     sql<{ id: number; name: string; total_sessions: number; created_at: string; completed_count: string }[]>`
@@ -56,8 +59,8 @@ export default async function PortalPatientPage() {
       url: await getSignedDownloadUrl(f.s3_key), summary: f.summary,
     })))
 
-  const [pPhotos, pBio, pExams, pDiets] = await Promise.all([
-    withUrls(photos), withUrls(bioimpedances), withUrls(exams), withUrls(diets),
+  const [pPhotos, pBio, pExams, pDiets, pPresc] = await Promise.all([
+    withUrls(photos), withUrls(bioimpedances), withUrls(exams), withUrls(diets), withUrls(prescriptions),
   ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -95,6 +98,10 @@ export default async function PortalPatientPage() {
       week: m.week, date: m.date, weight: m.weight,
       abdominal_circumference: m.abdominal_circumference, waist_circumference: m.waist_circumference,
     })),
+    prescricoes: pPresc,
+    prescricaoIndicacao: prescricaoNotes.length > 0
+      ? prescricaoNotes.map(n => n.content).join('\n\n')
+      : null,
   }
 
   return <PortalApp data={data} onLogout={logoutPortal} />

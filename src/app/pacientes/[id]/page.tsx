@@ -14,7 +14,7 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
   const session = await auth()
   const currentUserName = session?.user?.name ?? ''
 
-  const [patient, measurements, photos, bioimpedances, exams, diets, evolutionPhotos, prescriptions] = await Promise.all([
+  const [patient, measurements, photos, bioimpedances, exams, diets, evolutionPhotos, prescriptions, prescricoes] = await Promise.all([
     getPatient(patientId),
     listMeasurements(patientId),
     listPatientFiles(patientId, 'photo'),
@@ -23,6 +23,7 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
     listPatientFiles(patientId, 'diet'),
     listPatientFiles(patientId, 'evolution'),
     listPatientFiles(patientId, 'prescription'),
+    listPatientFiles(patientId, 'prescricao'),
   ])
 
   if (!patient) notFound()
@@ -30,13 +31,14 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
   const withUrls = async (files: typeof photos) =>
     Promise.all(files.map(async (f) => ({ ...f, url: await getSignedDownloadUrl(f.s3_key) })))
 
-  const [initialPhotos, initialBioimpedances, initialExams, initialDiets, initialEvolutionPhotos, initialPrescriptions] = await Promise.all([
+  const [initialPhotos, initialBioimpedances, initialExams, initialDiets, initialEvolutionPhotos, initialPrescriptions, initialPrescricoes] = await Promise.all([
     withUrls(photos),
     withUrls(bioimpedances),
     withUrls(exams),
     withUrls(diets),
     withUrls(evolutionPhotos),
     withUrls(prescriptions),
+    withUrls(prescricoes),
   ])
 
   return (
@@ -49,6 +51,7 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
       initialDiets={initialDiets}
       initialEvolutionPhotos={initialEvolutionPhotos}
       initialPrescriptions={initialPrescriptions}
+      initialPrescricoes={initialPrescricoes}
       currentUserName={currentUserName}
     />
   )

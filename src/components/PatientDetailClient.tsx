@@ -25,7 +25,7 @@ function avatarColor(name: string) {
   return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]
 }
 
-type Tab = 'tasks' | 'evolution' | 'photos' | 'bioimpedance' | 'exams' | 'diet' | 'terms' | 'medications' | 'estetica' | 'ouvidoria'
+type Tab = 'tasks' | 'evolution' | 'photos' | 'bioimpedance' | 'exams' | 'diet' | 'prescricao' | 'terms' | 'medications' | 'estetica' | 'ouvidoria'
 
 interface FileRecord {
   id: number
@@ -47,11 +47,12 @@ interface Props {
   initialDiets: FileRecord[]
   initialEvolutionPhotos: FileRecord[]
   initialPrescriptions: FileRecord[]
+  initialPrescricoes?: FileRecord[]
   currentUserName: string
   readOnly?: boolean
 }
 
-export function PatientDetailClient({ patient, initialMeasurements, initialPhotos, initialBioimpedances, initialExams, initialDiets, initialEvolutionPhotos, initialPrescriptions, currentUserName, readOnly = false }: Props) {
+export function PatientDetailClient({ patient, initialMeasurements, initialPhotos, initialBioimpedances, initialExams, initialDiets, initialEvolutionPhotos, initialPrescriptions, initialPrescricoes = [], currentUserName, readOnly = false }: Props) {
   const [completedKeys, setCompletedKeys] = useState<string[]>(patient.completed_task_keys)
   const [editOpen, setEditOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<Tab>(readOnly ? 'evolution' : 'tasks')
@@ -94,6 +95,7 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
     { key: 'bioimpedance', label: 'Bioimpedância' },
     { key: 'exams', label: 'Exames' },
     { key: 'diet', label: 'Dietas' },
+    { key: 'prescricao', label: '📋 Prescrições' },
 { key: 'terms', label: '📄 Termos' },
     { key: 'medications', label: '💊 Medicações' },
     { key: 'estetica', label: '✨ Estética' },
@@ -186,6 +188,9 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
         )}
         {activeTab === 'diet' && (
           <FilesTab patientId={patient.id} fileType="diet" initialFiles={initialDiets} readOnly={readOnly} />
+        )}
+        {activeTab === 'prescricao' && (
+          <FilesTab patientId={patient.id} fileType="prescricao" initialFiles={initialPrescricoes} readOnly={readOnly} />
         )}
 {activeTab === 'terms' && (
           <TermsTab patientId={patient.id} readOnly={readOnly} />

@@ -1,6 +1,6 @@
 import sql, { initSchema } from './db'
 
-export type FileType = 'photo' | 'bioimpedance' | 'exam' | 'diet' | 'evolution' | 'prescription' | 'estetica'
+export type FileType = 'photo' | 'bioimpedance' | 'exam' | 'diet' | 'evolution' | 'prescription' | 'prescricao' | 'estetica'
 
 export type SummaryStatus = 'pending' | 'done' | 'error' | null
 

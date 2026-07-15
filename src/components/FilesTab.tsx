@@ -159,7 +159,7 @@ function CroppedPreview({ url, crop, alt }: { url: string; crop: CropRect; alt: 
 
 interface Props {
   patientId: number
-  fileType: 'photo' | 'bioimpedance' | 'diet'
+  fileType: 'photo' | 'bioimpedance' | 'diet' | 'prescricao'
   initialFiles: FileRecord[]
   readOnly?: boolean
 }
@@ -185,7 +185,7 @@ export function FilesTab({ patientId, fileType, initialFiles, readOnly = false }
 
   const isPhoto = fileType === 'photo'
   const accept = isPhoto ? 'image/*' : 'image/*,application/pdf,.doc,.docx,.xls,.xlsx'
-  const label = isPhoto ? '📷 Enviar foto' : fileType === 'diet' ? '🥗 Enviar dieta' : '📎 Enviar arquivo'
+  const label = isPhoto ? '📷 Enviar foto' : fileType === 'diet' ? '🥗 Enviar dieta' : fileType === 'prescricao' ? '📋 Enviar prescrição' : '📎 Enviar arquivo'
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]

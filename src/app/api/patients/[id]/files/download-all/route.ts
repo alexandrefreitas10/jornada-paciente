@@ -61,6 +61,7 @@ export async function GET(
     diet: 'dietas',
     evolution: 'evolucao',
     prescription: 'prescricoes',
+    prescricao: 'prescricoes',
     estetica: 'estetica',
   }
 

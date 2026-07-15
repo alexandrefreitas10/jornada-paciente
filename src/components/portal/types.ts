@@ -2,7 +2,7 @@
 
 export type Screen =
   | 'home' | 'fotos' | 'exames' | 'bio'
-  | 'dieta' | 'med' | 'termos' | 'estetica' | 'perfil' | 'ouvidoria'
+  | 'dieta' | 'med' | 'termos' | 'estetica' | 'prescricoes' | 'perfil' | 'ouvidoria'
 
 export interface PortalFile {
   id: number
@@ -67,4 +67,6 @@ export interface PortalData {
   sessions: PortalSession[]
   terms: PortalTerm[]
   measurements: PortalMeasurement[]
+  prescricoes: PortalFile[]
+  prescricaoIndicacao: string | null
 }

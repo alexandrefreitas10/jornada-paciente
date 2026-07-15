@@ -75,6 +75,7 @@ export async function GET(req: NextRequest) {
       exam: 'Exame',
       diet: 'Dieta',
       prescription: 'Prescrição',
+      prescricao: 'Prescrição',
       bioimpedance: 'Bioimpedância',
     }
 
