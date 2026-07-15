@@ -1,59 +1,78 @@
 'use client'
+
 import React from 'react'
-import { C, serif, shadowCard, shadowCardSoft } from '../theme'
-import { shortDate } from '../theme'
+import { C, serif, longDate, shadowCardSoft } from '../theme'
 import { ScreenHeader, IconBox, EmptyState } from '../ui'
 import { IconDocSimple, IconDownload } from '../Icons'
-import type { PortalData, PortalFile } from '../types'
+import type { PortalData } from '../types'
+
+interface BioMetrics { data: string | null; peso: string | null; gordura: string | null; massa_magra: string | null }
+
+function Metric({ label, value, feature }: { label: string; value: string; feature?: boolean }) {
+  return (
+    <div style={{ flex: 1, minWidth: 0, background: feature ? 'linear-gradient(135deg,#fff,#fbf3e6)' : C.white, borderRadius: 18, padding: 16, textAlign: 'center', boxShadow: shadowCardSoft }}>
+      <div style={{ fontSize: 11, color: C.muted2, letterSpacing: 0.5 }}>{label}</div>
+      <div style={{ fontFamily: serif, fontSize: 24, color: C.graphiteStrong, lineHeight: 1.2, marginTop: 2 }}>{value}</div>
+    </div>
+  )
+}
 
 export function Bio({ data, onBack }: { data: PortalData; onBack: () => void }) {
-  // Peso mais recente: último item de measurements com weight não-nulo.
-  const withWeight = data.measurements.filter((m) => m.weight != null)
-  const latest = withWeight.length > 0 ? withWeight[withWeight.length - 1] : null
-  const files = data.bioimpedances
+  const [metrics, setMetrics] = React.useState<BioMetrics | null>(null)
+  const [loading, setLoading] = React.useState(data.bioimpedances.length > 0)
+
+  React.useEffect(() => {
+    if (data.bioimpedances.length === 0) return
+    let alive = true
+    fetch(`/api/patients/${data.patientId}/bio-metrics`)
+      .then(r => r.json())
+      .then(j => { if (alive) setMetrics(j.metrics ?? null) })
+      .catch(() => {})
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [data.patientId, data.bioimpedances.length])
+
+  const hasMetric = metrics && (metrics.peso || metrics.gordura || metrics.massa_magra)
 
   return (
     <div className="pt-view">
       <ScreenHeader title="Bioimpedância" subtitle="Sua composição corporal" onBack={onBack} />
 
-      {/* Cartão de métrica: peso atual */}
-      {latest && (
-        <div style={{
-          margin: '2px 20px 16px', background: 'linear-gradient(135deg,#fff,#fbf3e6)', borderRadius: 20,
-          padding: '18px 20px', boxShadow: shadowCardSoft, display: 'flex', flexDirection: 'column', gap: 6,
-        }}>
-          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: C.muted2 }}>PESO ATUAL</span>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-            <span style={{ fontFamily: serif, fontSize: 26, color: C.graphiteStrong, lineHeight: 1 }}>
-              {latest.weight}
-            </span>
-            <span style={{ fontSize: 14, color: C.soft }}>kg</span>
+      {loading && (
+        <div style={{ padding: '8px 20px 16px', fontSize: 13, color: C.muted }}>Analisando seu último exame…</div>
+      )}
+
+      {hasMetric && (
+        <div style={{ padding: '0 20px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {metrics!.data && <div style={{ fontSize: 12, color: C.soft }}>Exame de {metrics!.data}</div>}
+          <div style={{ display: 'flex', gap: 10 }}>
+            {metrics!.peso && <Metric label="PESO" value={metrics!.peso} feature />}
+            {metrics!.gordura && <Metric label="GORDURA" value={metrics!.gordura} />}
           </div>
-          {latest.date && (
-            <span style={{ fontSize: 12, color: C.muted }}>Medido em {shortDate(latest.date)}</span>
+          {metrics!.massa_magra && (
+            <div style={{ display: 'flex', gap: 10 }}>
+              <Metric label="MASSA MAGRA" value={metrics!.massa_magra} />
+            </div>
           )}
         </div>
       )}
 
-      {/* Lista de arquivos de bioimpedância */}
-      {files.length === 0 ? (
+      {/* Arquivos */}
+      {data.bioimpedances.length === 0 ? (
         <EmptyState>Nenhum arquivo de bioimpedância ainda.</EmptyState>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 11, padding: '0 20px 8px' }}>
-          {files.map((f: PortalFile) => (
-            <a key={f.id} href={f.url} target="_blank" rel="noreferrer" className="pt-press" style={{
-              display: 'flex', alignItems: 'center', gap: 13, background: C.white, borderRadius: 16,
-              padding: '13px 15px', boxShadow: shadowCard, textDecoration: 'none',
-            }}>
-              <IconBox tone="gold"><IconDocSimple color={C.goldIcon} /></IconBox>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 11, padding: '0 20px 20px' }}>
+          {data.bioimpedances.map((f) => (
+            <div key={f.id} style={{ background: C.white, borderRadius: 16, boxShadow: shadowCardSoft, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <IconBox tone="sage" size={42} radius={12}><IconDocSimple size={18} color={C.sageText} /></IconBox>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: C.graphite, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {f.original_name}
-                </div>
-                <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>PDF · {shortDate(f.created_at)}</div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: C.graphiteStrong, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.original_name}</div>
+                <div style={{ fontSize: 12, color: C.muted }}>{longDate(f.created_at)}</div>
               </div>
-              <IconDownload color={C.sage} />
-            </a>
+              <a href={f.url} target="_blank" rel="noreferrer" aria-label="Baixar" style={{ display: 'flex', flexShrink: 0 }}>
+                <IconDownload size={18} color={C.sage} sw={1.7} />
+              </a>
+            </div>
           ))}
         </div>
       )}
