@@ -34,6 +34,11 @@ export function PortalApp({ data, onLogout }: { data: PortalData; onLogout: () =
   const showNav = screen !== 'ouvidoria'
   const navColor = (s: Screen) => (screen === s ? C.gold : C.navOff)
 
+  // Escala global: aumenta tudo proporcionalmente no celular. O zoom escala
+  // largura/altura junto, então compensamos com calc(/SCALE) para preencher a
+  // tela sem estourar (sem rolagem horizontal).
+  const SCALE = 1.15
+
   return (
     <div style={{ minHeight: '100dvh', background: C.sand, display: 'flex', justifyContent: 'center' }}>
       <style>{`
@@ -43,8 +48,12 @@ export function PortalApp({ data, onLogout }: { data: PortalData; onLogout: () =
         .pt-press:active { transform: scale(.97); }
         .pt-root a, .pt-root a:hover { color:#8A9A7B; }
       `}</style>
-      <div className="pt-root" style={{ width: '100%', maxWidth: 440, background: C.sand, color: C.graphite, minHeight: '100dvh', display: 'flex', flexDirection: 'column', position: 'relative' }}>
-        <div style={{ flex: 1, overflowY: 'auto', paddingBottom: showNav ? 76 : 0 }}>
+      <div className="pt-root" style={{
+        width: `calc(100% / ${SCALE})`, maxWidth: `calc(440px / ${SCALE})`,
+        height: `calc(100dvh / ${SCALE})`, zoom: SCALE,
+        background: C.sand, color: C.graphite, display: 'flex', flexDirection: 'column', position: 'relative',
+      }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
           {screen === 'home' && <Home data={data} go={go} />}
           {screen === 'fotos' && <Fotos data={data} onBack={back} />}
           {screen === 'exames' && <Exames data={data} onBack={back} />}
@@ -58,7 +67,7 @@ export function PortalApp({ data, onLogout }: { data: PortalData; onLogout: () =
         </div>
 
         {showNav && (
-          <nav style={{ position: 'fixed', bottom: 0, width: '100%', maxWidth: 440, display: 'flex', justifyContent: 'space-around', padding: '14px 30px 22px', borderTop: `1px solid #efe7d9`, background: C.white, flexShrink: 0 }}>
+          <nav style={{ flexShrink: 0, display: 'flex', justifyContent: 'space-around', padding: '14px 30px 22px', borderTop: `1px solid #efe7d9`, background: C.white }}>
             <button aria-label="Início" onClick={() => go('home')} style={navBtn(navColor('home'))}><IconHome size={21} color="currentColor" /></button>
             <button aria-label="Fotos" onClick={() => go('fotos')} style={navBtn(navColor('fotos'))}><IconCamera size={21} color="currentColor" sw={1.7} /></button>
             <button aria-label="Exames" onClick={() => go('exames')} style={navBtn(navColor('exames'))}><IconFlask size={21} color="currentColor" sw={1.7} /></button>
