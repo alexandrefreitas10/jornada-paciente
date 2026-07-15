@@ -172,7 +172,8 @@ function PatientExitGroups({ groups, onEdit, onDelete, formatDate }: {
     <div className="space-y-2">
       {groups.map(([patient, movs]) => {
         const isOpen = open[patient] ?? false
-        const lastDate = formatDate(movs[movs.length - 1].created_at)
+        // movs já vem ordenado da saída mais recente → mais antiga (índice 0 = última saída)
+        const lastDate = formatDate(movs[0].created_at)
         const totalItems = movs.length
         return (
           <div key={patient} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -1353,11 +1354,14 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
               if (!groups[key]) groups[key] = []
               groups[key].push(m)
             })
-            const sorted = Object.entries(groups).sort(([, aMovs], [, bMovs]) => {
-              const aLast = aMovs[aMovs.length - 1].created_at
-              const bLast = bMovs[bMovs.length - 1].created_at
-              return bLast.localeCompare(aLast)
-            })
+            // Dentro de cada paciente: saídas da mais recente → mais antiga (índice 0 = última saída)
+            Object.values(groups).forEach(movs =>
+              movs.sort((a, b) => b.created_at.localeCompare(a.created_at))
+            )
+            // Grupos ordenados pela última saída (mais recente) → mais antiga
+            const sorted = Object.entries(groups).sort(([, aMovs], [, bMovs]) =>
+              bMovs[0].created_at.localeCompare(aMovs[0].created_at)
+            )
             return (
               <PatientExitGroups
                 groups={sorted}
