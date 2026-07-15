@@ -34,13 +34,13 @@ export function PortalApp({ data, onLogout }: { data: PortalData; onLogout: () =
   const showNav = screen !== 'ouvidoria'
   const navColor = (s: Screen) => (screen === s ? C.gold : C.navOff)
 
-  // Escala global: aumenta tudo proporcionalmente no celular. O zoom escala
-  // largura/altura junto, então compensamos com calc(/SCALE) para preencher a
-  // tela sem estourar (sem rolagem horizontal).
-  const SCALE = 1.15
+  // Escala global via transform: um "palco" de tamanho fixo (largura/altura
+  // divididas por SCALE) é ampliado por scale(SCALE) para preencher a tela.
+  // Assim o conteúdo cresce de verdade no celular (o zoom não fazia isso).
+  const SCALE = 1.3
 
   return (
-    <div style={{ minHeight: '100dvh', background: C.sand, display: 'flex', justifyContent: 'center' }}>
+    <div style={{ height: '100dvh', overflow: 'hidden', background: C.sand, display: 'flex', justifyContent: 'center' }}>
       <style>{`
         @keyframes ptfade { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
         .pt-view { animation: ptfade .28s ease; }
@@ -48,9 +48,14 @@ export function PortalApp({ data, onLogout }: { data: PortalData; onLogout: () =
         .pt-press:active { transform: scale(.97); }
         .pt-root a, .pt-root a:hover { color:#8A9A7B; }
       `}</style>
+      <div style={{
+        width: `calc(min(100vw, 500px) / ${SCALE})`,
+        height: `calc(100dvh / ${SCALE})`,
+        transform: `scale(${SCALE})`,
+        transformOrigin: 'top center',
+      }}>
       <div className="pt-root" style={{
-        width: `calc(100% / ${SCALE})`, maxWidth: `calc(440px / ${SCALE})`,
-        height: `calc(100dvh / ${SCALE})`, zoom: SCALE,
+        width: '100%', height: '100%',
         background: C.sand, color: C.graphite, display: 'flex', flexDirection: 'column', position: 'relative',
       }}>
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
@@ -74,6 +79,7 @@ export function PortalApp({ data, onLogout }: { data: PortalData; onLogout: () =
             <button aria-label="Perfil" onClick={() => go('perfil')} style={navBtn(navColor('perfil'))}><IconMenu size={21} color="currentColor" /></button>
           </nav>
         )}
+      </div>
       </div>
     </div>
   )
