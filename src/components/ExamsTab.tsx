@@ -260,7 +260,7 @@ export function ExamsTab({ patientId, initialFiles, readOnly = false }: Props) {
                       </div>
                     </div>
                     <a
-                      href={f.url}
+                      href={`/api/patients/${patientId}/files/${f.id}/download?proxy=1`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-xs text-violet-600 hover:underline font-medium shrink-0"

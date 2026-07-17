@@ -70,7 +70,7 @@ export function Bio({ data, onBack }: { data: PortalData; onBack: () => void }) 
                 <div style={{ fontWeight: 700, fontSize: 14, color: C.graphiteStrong, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.original_name}</div>
                 <div style={{ fontSize: 12, color: C.muted }}>{longDate(f.created_at)}</div>
               </div>
-              <a href={f.url} target="_blank" rel="noreferrer" aria-label="Baixar" style={{ display: 'flex', flexShrink: 0 }}>
+              <a href={`/api/patients/${data.patientId}/files/${f.id}/download`} target="_blank" rel="noreferrer" aria-label="Baixar" style={{ display: 'flex', flexShrink: 0 }}>
                 <IconDownload size={18} color={C.sage} sw={1.7} />
               </a>
             </div>

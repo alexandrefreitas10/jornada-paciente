@@ -34,6 +34,11 @@ const emptyInput = (): MeasurementInput => ({
   tirzepatide_dose: null,
 })
 
+// Rota estável (mesma origem) que gera URL assinada FRESCA a cada request — nunca
+// expira, ao contrário de f.url (assinada no carregamento, morre em 15 min).
+const proxyDownload = (patientId: number, fileId: number) =>
+  `/api/patients/${patientId}/files/${fileId}/download?proxy=1`
+
 export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionPhotos, initialPrescriptions, currentUserName, readOnly = false }: Props) {
   const [measurements, setMeasurements] = useState<Measurement[]>(initialMeasurements)
   const [evolutionPhotos, setEvolutionPhotos] = useState<EvolutionPhoto[]>(initialEvolutionPhotos)
@@ -768,9 +773,10 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {prescriptions.map((f) => (
               <div key={f.id} className="rounded-xl overflow-hidden border border-emerald-200">
-                <a href={f.url} target="_blank" rel="noopener noreferrer">
+                <a href={proxyDownload(patientId, f.id)} target="_blank" rel="noopener noreferrer">
                   <img
                     src={f.url}
+                    onError={e => { const u = proxyDownload(patientId, f.id); if (!e.currentTarget.src.endsWith(u)) e.currentTarget.src = u }}
                     alt={f.original_name}
                     className="w-full h-32 object-cover hover:opacity-90 transition-opacity"
                   />
@@ -810,9 +816,10 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {evolutionPhotos.map((f) => (
               <div key={f.id} className="rounded-xl overflow-hidden border border-gray-200">
-                <a href={f.url} target="_blank" rel="noopener noreferrer">
+                <a href={proxyDownload(patientId, f.id)} target="_blank" rel="noopener noreferrer">
                   <img
                     src={f.url}
+                    onError={e => { const u = proxyDownload(patientId, f.id); if (!e.currentTarget.src.endsWith(u)) e.currentTarget.src = u }}
                     alt={f.original_name}
                     className="w-full h-32 object-cover hover:opacity-90 transition-opacity"
                   />

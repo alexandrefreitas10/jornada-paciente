@@ -49,7 +49,7 @@ export function Dieta({ data, onBack }: { data: PortalData; onBack: () => void }
 
           {/* Aviso: o documento original pode ter opções de substituição */}
           {meals && meals.length > 0 && latest && (
-            <a href={latest.url} target="_blank" rel="noreferrer" style={{
+            <a href={`/api/patients/${data.patientId}/files/${latest.id}/download?proxy=1`} target="_blank" rel="noreferrer" style={{
               display: 'block', textDecoration: 'none', margin: '0 20px 14px',
               background: C.sageBox, color: C.sageText, borderRadius: 14, padding: '12px 16px',
               fontSize: 13, fontWeight: 700, lineHeight: 1.4,
@@ -76,7 +76,7 @@ export function Dieta({ data, onBack }: { data: PortalData; onBack: () => void }
           {/* Arquivo original para baixar */}
           {latest && (
             <div style={{ padding: '0 20px 20px' }}>
-              <a href={latest.url} target="_blank" rel="noreferrer" style={{
+              <a href={`/api/patients/${data.patientId}/files/${latest.id}/download`} target="_blank" rel="noreferrer" style={{
                 display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none',
                 background: C.white, borderRadius: 16, padding: '14px 16px', boxShadow: shadowCard,
               }}>

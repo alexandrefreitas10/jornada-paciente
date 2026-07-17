@@ -83,10 +83,15 @@ function calcEndDate(startDate: string, totalSessions: number, sessionsPerWeek: 
 
 function today() { return new Date().toISOString().slice(0, 10) }
 
+// Rota estável (mesma origem) que gera URL assinada FRESCA a cada request — nunca
+// expira, ao contrário de f.url (assinada no carregamento, morre em 15 min).
+const proxySrc = (patientId: number, fileId: number) =>
+  `/api/patients/${patientId}/files/${fileId}/download?proxy=1`
+
 // ── Crop Editor ───────────────────────────────────────────────────────────────
 
-function CropEditor({ url, label, crop, onChange }: {
-  url: string; label: string; crop: CropRect; onChange: (r: CropRect) => void
+function CropEditor({ url, label, crop, onChange, fallback }: {
+  url: string; label: string; crop: CropRect; onChange: (r: CropRect) => void; fallback?: string
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const drag = useRef<{ type: 'move'|'tl'|'tr'|'bl'|'br'; startMx:number; startMy:number; startCrop:CropRect }|null>(null)
@@ -122,7 +127,7 @@ function CropEditor({ url, label, crop, onChange }: {
       <p className="text-xs font-semibold text-center text-gray-500 uppercase tracking-wide">{label}</p>
       <div ref={containerRef} className="relative rounded-xl overflow-hidden border border-gray-200"
         onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}>
-        <img src={url} alt="" className="w-full block pointer-events-none" draggable={false} />
+        <img src={url} alt="" onError={fallback ? e => { if (!e.currentTarget.src.endsWith(fallback)) e.currentTarget.src = fallback } : undefined} className="w-full block pointer-events-none" draggable={false} />
         <div style={{ position:'absolute', inset:0, pointerEvents:'none', background:`linear-gradient(rgba(0,0,0,0.45),rgba(0,0,0,0.45))`,
           clipPath:`polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%, ${crop.x*100}% ${crop.y*100}%, ${crop.x*100}% ${(crop.y+crop.h)*100}%, ${(crop.x+crop.w)*100}% ${(crop.y+crop.h)*100}%, ${(crop.x+crop.w)*100}% ${crop.y*100}%, ${crop.x*100}% ${crop.y*100}%)` }} />
         <div style={{ position:'absolute', left:`${crop.x*100}%`, top:`${crop.y*100}%`, width:`${crop.w*100}%`, height:`${crop.h*100}%`, border:'2px solid #7c3aed', cursor:'move', boxSizing:'border-box' }}
@@ -140,12 +145,12 @@ function CropEditor({ url, label, crop, onChange }: {
   )
 }
 
-function CroppedPreview({ url, crop, label }: { url: string; crop: CropRect; label: string }) {
+function CroppedPreview({ url, crop, label, fallback }: { url: string; crop: CropRect; label: string; fallback?: string }) {
   return (
     <div className="space-y-1">
       <p className="text-xs font-semibold text-center text-gray-500 uppercase tracking-wide">{label}</p>
       <div className="relative rounded-xl overflow-hidden border border-gray-200 bg-black" style={{ paddingTop:`${(crop.h/crop.w)*100}%` }}>
-        <img src={url} alt="" style={{ position:'absolute', top:`${-crop.y/crop.h*100}%`, left:`${-crop.x/crop.w*100}%`, width:`${1/crop.w*100}%`, maxWidth:'none' }} />
+        <img src={url} alt="" onError={fallback ? e => { if (!e.currentTarget.src.endsWith(fallback)) e.currentTarget.src = fallback } : undefined} style={{ position:'absolute', top:`${-crop.y/crop.h*100}%`, left:`${-crop.x/crop.w*100}%`, width:`${1/crop.w*100}%`, maxWidth:'none' }} />
       </div>
     </div>
   )
@@ -472,7 +477,7 @@ export function EsteticaTab({ patientId, readOnly = false }: { patientId: number
         </div>
         <div className="grid grid-cols-2 gap-4">
           {cropPics.map((f, i) => (
-            <CropEditor key={f.id} url={f.url} label={i === 0 ? 'Antes' : 'Depois'} crop={cropRects[i]}
+            <CropEditor key={f.id} url={f.url} fallback={proxySrc(patientId, f.id)} label={i === 0 ? 'Antes' : 'Depois'} crop={cropRects[i]}
               onChange={r => setCropRects(prev => { const next: [CropRect,CropRect] = [...prev] as [CropRect,CropRect]; next[i]=r; return next })} />
           ))}
         </div>
@@ -494,8 +499,8 @@ export function EsteticaTab({ patientId, readOnly = false }: { patientId: number
           </div>
         </div>
         <div className="grid grid-cols-2 gap-4">
-          <CroppedPreview url={comparing[0].url} crop={finalCrops[0]} label="Antes" />
-          <CroppedPreview url={comparing[1].url} crop={finalCrops[1]} label="Depois" />
+          <CroppedPreview url={comparing[0].url} fallback={proxySrc(patientId, comparing[0].id)} crop={finalCrops[0]} label="Antes" />
+          <CroppedPreview url={comparing[1].url} fallback={proxySrc(patientId, comparing[1].id)} crop={finalCrops[1]} label="Depois" />
         </div>
         <div className="grid grid-cols-2 gap-4 text-xs text-gray-400 text-center">
           <p>{fmtDate(comparing[0].created_at)}</p>
@@ -874,7 +879,7 @@ export function EsteticaTab({ patientId, readOnly = false }: { patientId: number
                 <div key={f.id} className="relative group rounded-xl overflow-hidden border border-gray-200 bg-gray-50 aspect-square">
                   {compareMode ? (
                     <>
-                      <img src={f.url} alt="" className="w-full h-full object-cover" />
+                      <img src={f.url} alt="" onError={e => { const u = proxySrc(patientId, f.id); if (!e.currentTarget.src.endsWith(u)) e.currentTarget.src = u }} className="w-full h-full object-cover" />
                       <button onClick={() => toggleSelect(f)}
                         className={`absolute inset-0 flex items-center justify-center text-xl font-bold transition-all ${isSel ? 'bg-violet-600/70 text-white' : 'bg-black/20 text-transparent hover:bg-violet-400/50 hover:text-white'}`}>
                         {isSel ? selIdx + 1 : ''}
@@ -883,7 +888,7 @@ export function EsteticaTab({ patientId, readOnly = false }: { patientId: number
                   ) : (
                     <>
                       <button onClick={() => setLightboxPhoto(f)} className="w-full h-full block">
-                        <img src={f.url} alt="" className="w-full h-full object-cover" />
+                        <img src={f.url} alt="" onError={e => { const u = proxySrc(patientId, f.id); if (!e.currentTarget.src.endsWith(u)) e.currentTarget.src = u }} className="w-full h-full object-cover" />
                       </button>
                       {/* overlay desktop (hover) */}
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-end justify-between p-1.5 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto">
@@ -915,6 +920,7 @@ export function EsteticaTab({ patientId, readOnly = false }: { patientId: number
               </button>
               <img
                 src={lightboxPhoto.url}
+                onError={e => { const u = proxySrc(patientId, lightboxPhoto.id); if (!e.currentTarget.src.endsWith(u)) e.currentTarget.src = u }}
                 alt=""
                 className="max-w-full max-h-[80vh] object-contain rounded-lg"
               />

@@ -6,9 +6,9 @@ import { ScreenHeader, IconBox, EmptyState } from '../ui'
 import { IconCapsule, IconDoc, IconDownload } from '../Icons'
 import type { PortalData, PortalFile } from '../types'
 
-function PrescricaoCard({ f }: { f: PortalFile }) {
+function PrescricaoCard({ f, patientId }: { f: PortalFile; patientId: number }) {
   return (
-    <a href={f.url} target="_blank" rel="noreferrer" style={{
+    <a href={`/api/patients/${patientId}/files/${f.id}/download`} target="_blank" rel="noreferrer" style={{
       display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none',
       background: C.white, borderRadius: 16, padding: '14px 16px', boxShadow: shadowCardSoft,
     }}>
@@ -56,7 +56,7 @@ export function Prescricoes({ data, onBack }: { data: PortalData; onBack: () => 
                 Documentos
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 11, padding: '0 20px 20px' }}>
-                {data.prescricoes.map((f) => <PrescricaoCard key={f.id} f={f} />)}
+                {data.prescricoes.map((f) => <PrescricaoCard key={f.id} f={f} patientId={data.patientId} />)}
               </div>
             </>
           )}

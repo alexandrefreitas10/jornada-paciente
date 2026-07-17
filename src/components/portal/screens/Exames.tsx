@@ -6,7 +6,7 @@ import { ScreenHeader, IconBox, EmptyState } from '../ui'
 import { IconFlask, IconDownload } from '../Icons'
 import type { PortalData, PortalFile } from '../types'
 
-function ExamCard({ f }: { f: PortalFile }) {
+function ExamCard({ f, patientId }: { f: PortalFile; patientId: number }) {
   const [open, setOpen] = React.useState(false)
   const hasSummary = !!(f.summary && f.summary.trim())
   return (
@@ -17,7 +17,7 @@ function ExamCard({ f }: { f: PortalFile }) {
           <div style={{ fontWeight: 700, fontSize: 14, color: C.graphiteStrong, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.original_name}</div>
           <div style={{ fontSize: 12, color: C.muted }}>PDF · {longDate(f.created_at)}</div>
         </div>
-        <a href={f.url} target="_blank" rel="noreferrer" aria-label="Baixar" style={{ display: 'flex', flexShrink: 0 }}>
+        <a href={`/api/patients/${patientId}/files/${f.id}/download`} target="_blank" rel="noreferrer" aria-label="Baixar" style={{ display: 'flex', flexShrink: 0 }}>
           <IconDownload size={18} color={C.sage} sw={1.7} />
         </a>
       </div>
@@ -48,7 +48,7 @@ export function Exames({ data, onBack }: { data: PortalData; onBack: () => void 
         <EmptyState>Nenhum exame disponível ainda.</EmptyState>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 11, padding: '0 20px 20px' }}>
-          {data.exams.map((f) => <ExamCard key={f.id} f={f} />)}
+          {data.exams.map((f) => <ExamCard key={f.id} f={f} patientId={data.patientId} />)}
         </div>
       )}
     </div>

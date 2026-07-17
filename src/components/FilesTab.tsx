@@ -16,13 +16,20 @@ interface FileRecord {
 interface CropRect { x: number; y: number; w: number; h: number }
 const FULL_CROP: CropRect = { x: 0, y: 0, w: 1, h: 1 }
 
+// URL estável (mesma origem) que gera uma URL assinada FRESCA a cada request.
+// Ao contrário de f.url (assinada no carregamento da página, expira em 15 min),
+// esta nunca expira — usada para abrir e como fallback quando a miniatura vence.
+const proxyDownload = (patientId: number, fileId: number) =>
+  `/api/patients/${patientId}/files/${fileId}/download?proxy=1`
+
 // ── Crop editor ──────────────────────────────────────────────────────────────
 
-function CropEditor({ url, label, crop, onChange }: {
+function CropEditor({ url, label, crop, onChange, fallback }: {
   url: string
   label: string
   crop: CropRect
   onChange: (r: CropRect) => void
+  fallback?: string
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const drag = useRef<{
@@ -92,7 +99,7 @@ function CropEditor({ url, label, crop, onChange }: {
         onMouseUp={onMouseUp}
         onMouseLeave={onMouseUp}
       >
-        <img src={url} alt="" className="w-full block pointer-events-none" draggable={false} />
+        <img src={url} alt="" onError={fallback ? e => { if (!e.currentTarget.src.endsWith(fallback)) e.currentTarget.src = fallback } : undefined} className="w-full block pointer-events-none" draggable={false} />
 
         {/* Overlay escuro fora da seleção */}
         <div style={{
@@ -141,11 +148,11 @@ function CropEditor({ url, label, crop, onChange }: {
 
 // ── Imagem cortada (preview) ─────────────────────────────────────────────────
 
-function CroppedPreview({ url, crop, alt }: { url: string; crop: CropRect; alt: string }) {
+function CroppedPreview({ url, crop, alt, fallback }: { url: string; crop: CropRect; alt: string; fallback?: string }) {
   return (
     <div style={{ position: 'relative', paddingBottom: `${(crop.h / crop.w) * 100}%`, overflow: 'hidden' }}
       className="rounded-xl border border-gray-200">
-      <img src={url} alt={alt} draggable={false} style={{
+      <img src={url} alt={alt} draggable={false} onError={fallback ? e => { if (!e.currentTarget.src.endsWith(fallback)) e.currentTarget.src = fallback } : undefined} style={{
         position: 'absolute',
         left: `${-crop.x / crop.w * 100}%`,
         top: `${-crop.y / crop.h * 100}%`,
@@ -381,6 +388,7 @@ export function FilesTab({ patientId, fileType, initialFiles, readOnly = false }
             <CropEditor
               key={f.id}
               url={f.url}
+              fallback={proxyDownload(patientId, f.id)}
               label={i === 0 ? 'Antes' : 'Depois'}
               crop={cropRects[i]}
               onChange={(r) => setCropRects(prev => {
@@ -428,7 +436,7 @@ export function FilesTab({ patientId, fileType, initialFiles, readOnly = false }
               <p className="text-xs font-semibold text-center text-gray-500 uppercase tracking-wide">
                 {i === 0 ? 'Antes' : 'Depois'}
               </p>
-              <CroppedPreview url={f.url} crop={finalCrops[i]} alt={f.original_name} />
+              <CroppedPreview url={f.url} fallback={proxyDownload(patientId, f.id)} crop={finalCrops[i]} alt={f.original_name} />
               <p className="text-xs text-center text-gray-400">{formatDate(f.created_at)}</p>
             </div>
           ))}
@@ -535,12 +543,14 @@ export function FilesTab({ patientId, fileType, initialFiles, readOnly = false }
                 )}
 
                 {!compareMode ? (
-                  <a href={f.url} target="_blank" rel="noopener noreferrer">
-                    <img src={f.url} alt={f.original_name} className="w-full h-40 object-cover hover:opacity-90 transition-opacity" />
+                  <a href={proxyDownload(patientId, f.id)} target="_blank" rel="noopener noreferrer">
+                    <img src={f.url} alt={f.original_name}
+                      onError={e => { const u = proxyDownload(patientId, f.id); if (!e.currentTarget.src.endsWith(u)) e.currentTarget.src = u }}
+                      className="w-full h-40 object-cover hover:opacity-90 transition-opacity" />
                   </a>
                 ) : (
                   <img src={f.url} alt={f.original_name}
-                    onError={e => { (e.currentTarget as HTMLImageElement).src = `/api/patients/${patientId}/files/${f.id}/download?proxy=1` }}
+                    onError={e => { const u = proxyDownload(patientId, f.id); if (!e.currentTarget.src.endsWith(u)) e.currentTarget.src = u }}
                     className={`w-full h-40 object-cover transition-opacity ${isSelected ? 'opacity-100' : 'opacity-70'}`} />
                 )}
 
@@ -583,7 +593,7 @@ export function FilesTab({ patientId, fileType, initialFiles, readOnly = false }
                     {f.created_by && ` · por ${f.created_by}`}
                   </p>
                 </div>
-                <a href={f.url} target="_blank" rel="noopener noreferrer"
+                <a href={proxyDownload(patientId, f.id)} target="_blank" rel="noopener noreferrer"
                   className="text-xs text-violet-600 hover:underline font-medium shrink-0">
                   Abrir
                 </a>

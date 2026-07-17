@@ -9,6 +9,14 @@ import type { PortalData, PortalFile } from '../types'
 interface CropRect { x: number; y: number; w: number; h: number }
 const FULL_CROP: CropRect = { x: 0, y: 0, w: 1, h: 1 }
 
+// Rota estável (mesma origem) que gera uma URL assinada FRESCA a cada request.
+// f.url é assinada no carregamento da página e expira em 15 min; estas não expiram.
+// proxySrc: stream inline (para exibir <img>). downloadHref: força download com nome.
+const proxySrc = (patientId: number, fileId: number) =>
+  `/api/patients/${patientId}/files/${fileId}/download?proxy=1`
+const downloadHref = (patientId: number, fileId: number) =>
+  `/api/patients/${patientId}/files/${fileId}/download`
+
 function dayKey(iso: string): string {
   try { const d = new Date(iso); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` } catch { return iso }
 }
@@ -17,7 +25,7 @@ function fmtDateTime(iso: string) {
 }
 
 // Editor de enquadramento com Pointer Events (toque + mouse).
-function CropEditor({ url, label, crop, onChange }: { url: string; label: string; crop: CropRect; onChange: (r: CropRect) => void }) {
+function CropEditor({ url, label, crop, onChange, fallback }: { url: string; label: string; crop: CropRect; onChange: (r: CropRect) => void; fallback?: string }) {
   const ref = React.useRef<HTMLDivElement>(null)
   const drag = React.useRef<{ type: 'move' | 'tl' | 'tr' | 'bl' | 'br'; sx: number; sy: number; sc: CropRect } | null>(null)
 
@@ -65,7 +73,7 @@ function CropEditor({ url, label, crop, onChange }: { url: string; label: string
       <div ref={ref} style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', border: `1px solid ${C.border}`, touchAction: 'none' }}
         onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={url} alt="" style={{ width: '100%', display: 'block', pointerEvents: 'none' }} draggable={false} />
+        <img src={url} alt="" onError={fallback ? e => { if (!e.currentTarget.src.endsWith(fallback)) e.currentTarget.src = fallback } : undefined} style={{ width: '100%', display: 'block', pointerEvents: 'none' }} draggable={false} />
         <div style={{
           position: 'absolute', inset: 0, pointerEvents: 'none', background: 'rgba(0,0,0,0.45)',
           clipPath: `polygon(0% 0%,100% 0%,100% 100%,0% 100%,0% 0%,${crop.x * 100}% ${crop.y * 100}%,${crop.x * 100}% ${(crop.y + crop.h) * 100}%,${(crop.x + crop.w) * 100}% ${(crop.y + crop.h) * 100}%,${(crop.x + crop.w) * 100}% ${crop.y * 100}%,${crop.x * 100}% ${crop.y * 100}%)`,
@@ -167,8 +175,8 @@ export function Fotos({ data, onBack }: { data: PortalData; onBack: () => void }
       <div className="pt-view">
         <ScreenHeader title="Enquadrar" subtitle="Ajuste a caixa de recorte de cada foto" onBack={() => setStep('select')} />
         <div style={{ padding: '0 20px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <CropEditor url={a.url} label="ANTES" crop={crops[0]} onChange={(r) => setCrops(([, y]) => [r, y])} />
-          <CropEditor url={b.url} label="DEPOIS" crop={crops[1]} onChange={(r) => setCrops(([x]) => [x, r])} />
+          <CropEditor url={a.url} fallback={proxySrc(data.patientId, a.id)} label="ANTES" crop={crops[0]} onChange={(r) => setCrops(([, y]) => [r, y])} />
+          <CropEditor url={b.url} fallback={proxySrc(data.patientId, b.id)} label="DEPOIS" crop={crops[1]} onChange={(r) => setCrops(([x]) => [x, r])} />
           {error && <p style={{ fontSize: 13, color: '#c0392b', margin: 0 }}>{error}</p>}
           <button style={{ ...goldBtn, opacity: generating ? 0.7 : 1 }} disabled={generating} onClick={generate}>
             {generating ? 'Gerando…' : '✨ Gerar montagem com logo'}
@@ -197,7 +205,7 @@ export function Fotos({ data, onBack }: { data: PortalData; onBack: () => void }
                       background: C.white, borderRadius: 12, overflow: 'hidden', aspectRatio: '1', boxShadow: shadowCard,
                     }}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={f.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      <img src={f.url} alt="" onError={e => { const u = proxySrc(data.patientId, f.id); if (!e.currentTarget.src.endsWith(u)) e.currentTarget.src = u }} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                       {sel && <span style={{ position: 'absolute', top: 4, right: 4, width: 22, height: 22, borderRadius: '50%', background: C.gold, color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{idx === 0 ? 'A' : 'D'}</span>}
                     </button>
                   )
@@ -246,7 +254,7 @@ export function Fotos({ data, onBack }: { data: PortalData; onBack: () => void }
                       borderRadius: 12, overflow: 'hidden', aspectRatio: '1', boxShadow: shadowCard,
                     }}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={f.url} alt={f.original_name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      <img src={f.url} alt={f.original_name} onError={e => { const u = proxySrc(data.patientId, f.id); if (!e.currentTarget.src.endsWith(u)) e.currentTarget.src = u }} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                     </button>
                   ))}
                 </div>
@@ -259,8 +267,8 @@ export function Fotos({ data, onBack }: { data: PortalData; onBack: () => void }
       {lightbox && (
         <div onClick={() => setLightbox(null)} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,.85)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={lightbox.url} alt={lightbox.original_name} onClick={(e) => e.stopPropagation()} style={{ maxWidth: '100%', maxHeight: '78%', objectFit: 'contain', borderRadius: 12 }} />
-          <a href={lightbox.url} download onClick={(e) => e.stopPropagation()} target="_blank" rel="noreferrer" style={{ marginTop: 18, background: C.gold, color: '#fff', fontWeight: 700, fontSize: 14, padding: '11px 20px', borderRadius: 999, display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
+          <img src={lightbox.url} alt={lightbox.original_name} onClick={(e) => e.stopPropagation()} onError={e => { const u = proxySrc(data.patientId, lightbox.id); if (!e.currentTarget.src.endsWith(u)) e.currentTarget.src = u }} style={{ maxWidth: '100%', maxHeight: '78%', objectFit: 'contain', borderRadius: 12 }} />
+          <a href={downloadHref(data.patientId, lightbox.id)} onClick={(e) => e.stopPropagation()} target="_blank" rel="noreferrer" style={{ marginTop: 18, background: C.gold, color: '#fff', fontWeight: 700, fontSize: 14, padding: '11px 20px', borderRadius: 999, display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
             <IconDownload size={17} color="#fff" sw={1.7} /> Baixar foto
           </a>
           <span style={{ color: 'rgba(255,255,255,.7)', fontSize: 12, marginTop: 12 }}>Toque fora para fechar</span>
