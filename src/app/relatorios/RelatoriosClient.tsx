@@ -549,7 +549,7 @@ interface PatientActivity {
 }
 
 const ACTIVITY_ICONS: Record<string, string> = {
-  saida: '💊', foto: '📸', exame: '🔬', dieta: '🥗', prescricao: '📄',
+  cadastro: '🆕', saida: '💊', foto: '📸', exame: '🔬', dieta: '🥗', prescricao: '📄',
   medicao: '📏', tarefa: '✅', resumo: '📝', evolution: '📸', exam: '🔬',
   diet: '🥗', prescription: '📄', bioimpedance: '📊',
 }
