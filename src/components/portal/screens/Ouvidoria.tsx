@@ -68,7 +68,7 @@ export function Ouvidoria({ data, onBack }: { data: PortalData; onBack: () => vo
   return (
     <div className="pt-view">
       <ScreenHeader
-        title="Falar com a clínica"
+        title="Deixe um feedback"
         subtitle="Sua mensagem vai direto para a direção, com confidencialidade"
         onBack={onBack}
       />

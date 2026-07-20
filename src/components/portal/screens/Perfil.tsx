@@ -127,7 +127,7 @@ export function Perfil({ data, go, onLogout, onBack }: { data: PortalData; go: (
         <div style={{ height: 1, background: C.border, margin: '0 16px' }} />
         <Row icon={<IconLock size={20} color={C.goldIcon} />} label="Privacidade e senha" />
         <div style={{ height: 1, background: C.border, margin: '0 16px' }} />
-        <Row icon={<IconChat size={20} color={C.sageText} />} label="Falar com a clínica" onClick={() => go('ouvidoria')} />
+        <Row icon={<IconChat size={20} color={C.sageText} />} label="Deixe um feedback" onClick={() => go('ouvidoria')} />
       </div>
 
       <button onClick={onLogout} style={{ display: 'block', width: '100%', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'center', padding: 20, fontSize: 14, fontWeight: 700, color: C.danger }}>Sair</button>
