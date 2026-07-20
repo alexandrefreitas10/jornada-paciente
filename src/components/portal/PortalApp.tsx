@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import { C } from './theme'
-import { IconHome, IconCamera, IconFlask, IconMenu } from './Icons'
+import { IconHome, IconCamera, IconBars, IconLeaf, IconMenu } from './Icons'
 import type { PortalData, Screen } from './types'
 import { Home } from './screens/Home'
 import { Fotos } from './screens/Fotos'
@@ -74,10 +74,11 @@ export function PortalApp({ data, onLogout }: { data: PortalData; onLogout: () =
         </div>
 
         {showNav && (
-          <nav style={{ flexShrink: 0, display: 'flex', justifyContent: 'space-around', padding: '14px 30px 22px', borderTop: `1px solid #efe7d9`, background: C.white }}>
+          <nav style={{ flexShrink: 0, display: 'flex', justifyContent: 'space-around', padding: '14px 20px 22px', borderTop: `1px solid #efe7d9`, background: C.white }}>
             <button aria-label="Início" onClick={() => go('home')} style={navBtn(navColor('home'))}><IconHome size={21} color="currentColor" /></button>
             <button aria-label="Fotos" onClick={() => go('fotos')} style={navBtn(navColor('fotos'))}><IconCamera size={21} color="currentColor" sw={1.7} /></button>
-            <button aria-label="Exames" onClick={() => go('exames')} style={navBtn(navColor('exames'))}><IconFlask size={21} color="currentColor" sw={1.7} /></button>
+            <button aria-label="Bioimpedância" onClick={() => go('bio')} style={navBtn(navColor('bio'))}><IconBars size={21} color="currentColor" sw={1.7} /></button>
+            <button aria-label="Dieta" onClick={() => go('dieta')} style={navBtn(navColor('dieta'))}><IconLeaf size={21} color="currentColor" sw={1.7} /></button>
             <button aria-label="Perfil" onClick={() => go('perfil')} style={navBtn(navColor('perfil'))}><IconMenu size={21} color="currentColor" /></button>
           </nav>
         )}
