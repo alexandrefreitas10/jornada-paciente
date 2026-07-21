@@ -9,8 +9,11 @@ export async function GET(req: NextRequest) {
 
   if (!start || !end) return NextResponse.json({ error: 'start e end são obrigatórios' }, { status: 400 })
 
-  const startTs = start + 'T00:00:00'
-  const endTs = end + 'T23:59:59'
+  // Interpreta a data no fuso de Brasília (UTC-3, sem horário de verão desde 2019).
+  // O banco guarda em UTC; sem o offset, um cadastro às 21h BRT vira o dia seguinte
+  // em UTC e sumia do filtro do dia escolhido.
+  const startTs = start + 'T00:00:00-03:00'
+  const endTs = end + 'T23:59:59-03:00'
 
   try {
     const [saidas, arquivos, medicoes, tarefas, resumos, cadastros] = await Promise.all([

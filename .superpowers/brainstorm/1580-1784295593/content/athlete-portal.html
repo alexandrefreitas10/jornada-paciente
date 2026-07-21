@@ -1,0 +1,120 @@
+<h2>A tela do aluno (celular)</h2>
+<p class="subtitle">Ele abre o link que você mandou, entra com login/senha e cai aqui. Fluxo: ver o treino de hoje → conectar o Strava → depois de correr, ver planejado × realizado.</p>
+
+<style>
+  .phones { display:flex; gap:18px; flex-wrap:wrap; justify-content:center; }
+  .phone { width:270px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:26px; padding:10px; box-shadow:0 6px 20px rgba(0,0,0,.12); }
+  .screen { background:var(--bg-primary); border-radius:18px; overflow:hidden; min-height:500px; display:flex; flex-direction:column; }
+  .pbar { text-align:center; font-size:0.6rem; color:var(--text-tertiary); padding:5px; }
+  .ptop { padding:12px 14px 6px; }
+  .pbody { padding:6px 14px 14px; flex:1; }
+  .plabel { font-size:0.62rem; text-transform:uppercase; letter-spacing:.05em; color:var(--text-secondary); }
+  .strava-banner { background:#fc4c02; color:#fff; border-radius:10px; padding:10px 12px; font-size:0.72rem; display:flex; justify-content:space-between; align-items:center; gap:8px; margin:8px 0; }
+  .strava-banner .b { background:#fff; color:#fc4c02; border-radius:6px; padding:4px 8px; font-weight:700; font-size:0.66rem; white-space:nowrap; }
+  .strava-ok { background:rgba(52,199,89,.15); color:#2e9e4f; border-radius:8px; padding:6px 10px; font-size:0.68rem; font-weight:600; margin:8px 0; }
+  .today { background:var(--accent); color:#fff; border-radius:14px; padding:14px; margin-top:6px; }
+  .today .t { font-size:0.62rem; opacity:.85; text-transform:uppercase; letter-spacing:.05em; }
+  .today .big { font-size:1.15rem; font-weight:700; margin:2px 0 4px; }
+  .today .m { font-size:0.75rem; opacity:.95; }
+  .today .go { background:#fff; color:var(--accent); border-radius:8px; padding:7px; text-align:center; font-weight:700; font-size:0.75rem; margin-top:10px; }
+  .mini { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border); font-size:0.74rem; }
+  .mini:last-child { border-bottom:0; }
+  .mini .day { color:var(--text-secondary); }
+  .nav { display:flex; justify-content:space-around; padding:8px; border-top:1px solid var(--border); font-size:0.6rem; color:var(--text-secondary); }
+  .nav .on { color:var(--accent); font-weight:700; }
+  .wblk { background:var(--bg-secondary); border:1px solid var(--border); border-radius:10px; padding:9px 11px; margin-bottom:7px; font-size:0.74rem; }
+  .wblk .h { font-weight:700; font-size:0.64rem; text-transform:uppercase; letter-spacing:.04em; color:var(--accent); margin-bottom:3px; }
+  .cmp { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:8px 0; }
+  .cmp .c { border:1px solid var(--border); border-radius:8px; padding:8px; font-size:0.72rem; }
+  .cmp .c .k { font-size:0.58rem; text-transform:uppercase; color:var(--text-secondary); }
+  .cmp .c .v { font-weight:700; font-size:0.9rem; }
+  .barok { color:var(--success); font-size:0.72rem; font-weight:700; }
+  .coach-note { background:var(--bg-tertiary); border-radius:8px; padding:8px 10px; font-size:0.72rem; margin-top:8px; }
+</style>
+
+<div class="phones">
+
+  <!-- HOME -->
+  <div class="phone"><div class="screen">
+    <div class="pbar">●●● Portal do Aluno</div>
+    <div class="ptop">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div><span class="plabel">Bom treino,</span><div style="font-weight:700; font-size:1rem;">João 👋</div></div>
+        <div style="width:34px; height:34px; border-radius:50%; background:var(--bg-tertiary);"></div>
+      </div>
+      <div class="strava-banner">🔗 Conecte o Strava pra registrar tudo automático <span class="b">Conectar</span></div>
+    </div>
+    <div class="pbody">
+      <div class="today">
+        <div class="t">Hoje · Sáb 18 jan</div>
+        <div class="big">Longão 15 km</div>
+        <div class="m">Ritmo alvo 6:40 /km · Zona 2 · sem parar</div>
+        <div class="go">Ver treino completo →</div>
+      </div>
+      <div class="plabel" style="margin:14px 0 4px;">Próximos</div>
+      <div class="mini"><span>Rodagem regenerativa 40min</span><span class="day">Dom</span></div>
+      <div class="mini"><span>Intervalado 6×800m</span><span class="day">Ter</span></div>
+      <div class="mini"><span>Rodagem leve 6km</span><span class="day">Qua</span></div>
+    </div>
+    <div class="nav"><span class="on">◉ Hoje</span><span>▦ Semana</span><span>📈 Progresso</span><span>👤 Perfil</span></div>
+  </div></div>
+
+  <!-- DETALHE DO TREINO -->
+  <div class="phone"><div class="screen">
+    <div class="pbar">← Treino</div>
+    <div class="ptop">
+      <span class="plabel">Ter 21 jan · Intervalado</span>
+      <div style="font-weight:700; font-size:1.05rem;">Intervalado VO2</div>
+      <div class="strava-ok">✓ Strava conectado</div>
+    </div>
+    <div class="pbody">
+      <div class="wblk"><div class="h">Aquecimento</div>10 min · ritmo leve (Z1–Z2)</div>
+      <div class="wblk" style="border-color:var(--accent);">
+        <div class="h">Repetir 6×</div>
+        <div>▸ 800 m <b>forte</b> @ 4:00 /km</div>
+        <div style="color:var(--text-secondary);">▸ 200 m trote (recuperação)</div>
+      </div>
+      <div class="wblk"><div class="h">Desligamento</div>10 min · trote leve</div>
+      <div class="coach-note">💬 <b>Treinador:</b> segura o ritmo nos primeiros 800, não começa rápido demais. Foca em terminar forte.</div>
+      <div style="text-align:center; font-size:0.66rem; color:var(--text-secondary); margin-top:10px;">Ao terminar, seu Strava marca esse treino sozinho ✓</div>
+    </div>
+  </div></div>
+
+  <!-- DEPOIS DE CORRER -->
+  <div class="phone"><div class="screen">
+    <div class="pbar">← Treino concluído</div>
+    <div class="ptop">
+      <span class="plabel">Qui 16 jan · Tempo run</span>
+      <div style="font-weight:700; font-size:1.05rem;">Tempo run 5 km <span class="barok">✓</span></div>
+    </div>
+    <div class="pbody">
+      <div class="cmp">
+        <div class="c"><div class="k">Planejado</div><div class="v">5,0 km</div><div style="color:var(--text-secondary)">@ 5:20 /km</div></div>
+        <div class="c" style="border-color:var(--success);"><div class="k">Você fez (Strava)</div><div class="v">5,1 km</div><div class="barok">@ 5:18 ✓</div></div>
+      </div>
+      <div class="wblk"><div class="h">Resumo</div>
+        <div style="display:flex; justify-content:space-between;"><span>Pace médio</span><b class="barok">5:18 · na meta</b></div>
+        <div style="display:flex; justify-content:space-between;"><span>FC média</span><b>158 bpm</b></div>
+        <div style="display:flex; justify-content:space-between;"><span>Tempo</span><b>27:04</b></div>
+      </div>
+      <div class="coach-note">💬 <b>Treinador:</b> excelente controle de ritmo! Semana que vem sobe pra 6km.</div>
+    </div>
+  </div></div>
+
+</div>
+
+<h3 style="margin-top:1.5rem;">Duas coisas sobre a tela do aluno:</h3>
+<div class="options" data-multiselect>
+  <div class="option" data-choice="home-hoje" onclick="toggleSelect(this)">
+    <div class="letter">1</div>
+    <div class="content"><h3>Home lidera com "Hoje" (do jeito que mostrei)</h3><p>O treino do dia em destaque grande, e "próximos" numa lista pequena embaixo. Bom pra ele saber na hora o que fazer.</p></div>
+  </div>
+  <div class="option" data-choice="home-semana" onclick="toggleSelect(this)">
+    <div class="letter">2</div>
+    <div class="content"><h3>Prefiro a home liderando com "A semana"</h3><p>Os 7 dias em lista logo de cara, tipo agenda. (Podemos ter as duas abas de qualquer forma — é sobre qual abre primeiro.)</p></div>
+  </div>
+  <div class="option" data-choice="feedback" onclick="toggleSelect(this)">
+    <div class="letter">3</div>
+    <div class="content"><h3>Quero poder deixar recado/feedback em cada treino</h3><p>Aquele balãozinho "💬 Treinador" — você comenta e o aluno vê. E talvez o aluno responder também (como foi, dor, etc.).</p></div>
+  </div>
+</div>

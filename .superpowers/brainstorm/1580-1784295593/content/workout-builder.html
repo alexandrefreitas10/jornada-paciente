@@ -1,0 +1,101 @@
+<h2>O montador de treino por blocos</h2>
+<p class="subtitle">Exemplo: um intervalado. Aquecimento → 6×(800m forte + 200m trote) → desligamento. Cada bloco vira uma meta que o Strava vai bater tiro a tiro.</p>
+
+<style>
+  .blk { border:1px solid var(--border); border-radius:10px; margin-bottom:10px; overflow:hidden; background:var(--bg-primary); }
+  .blk-h { display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--bg-tertiary); font-size:0.8rem; }
+  .blk-h .grip { color:var(--text-tertiary); cursor:grab; }
+  .blk-h .tag { font-weight:700; text-transform:uppercase; letter-spacing:.04em; font-size:0.66rem; padding:2px 8px; border-radius:5px; }
+  .tag.warm { background:rgba(255,159,10,.2); color:#c77f00; }
+  .tag.rep  { background:rgba(10,132,255,.18); color:var(--accent); }
+  .tag.cool { background:rgba(52,199,89,.18); color:#2e9e4f; }
+  .blk-b { padding:10px 12px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; font-size:0.8rem; }
+  .fld { background:var(--bg-secondary); border:1px solid var(--border); border-radius:6px; padding:5px 9px; }
+  .fld .k { font-size:0.58rem; color:var(--text-secondary); text-transform:uppercase; display:block; }
+  .fld .v { font-weight:600; }
+  .rep-steps { margin:6px 0 0 0; padding:10px; border:1px dashed var(--border); border-radius:8px; background:var(--bg-secondary); }
+  .step { display:flex; gap:8px; align-items:center; padding:5px 0; font-size:0.78rem; }
+  .step .n { width:20px; height:20px; border-radius:50%; background:var(--accent); color:#fff; font-size:0.62rem; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .step.rec .n { background:var(--text-tertiary); }
+  .addbtn { border:1px dashed var(--border); background:transparent; color:var(--text-secondary); border-radius:8px; padding:8px; width:100%; font-size:0.8rem; cursor:pointer; }
+  .totbar { display:flex; gap:16px; padding:10px 12px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:8px; margin-top:12px; font-size:0.8rem; }
+  .totbar b { color:var(--accent); }
+  .short { background:#12121a; color:#d7d7e0; border-radius:8px; padding:12px 14px; font-family:ui-monospace,monospace; font-size:0.8rem; line-height:1.7; }
+  .short .cmt { color:#6b6b80; }
+</style>
+
+<div class="mockup">
+  <div class="mockup-header">Montador visual — treino de João, Ter 21/jan</div>
+  <div class="mockup-body">
+    <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+      <div class="fld"><span class="k">Nome</span><span class="v">Intervalado VO2</span></div>
+      <div class="fld"><span class="k">Tipo</span><span class="v">Intervalado ▾</span></div>
+      <div class="fld"><span class="k">Data</span><span class="v">21/01 ▾</span></div>
+    </div>
+
+    <div class="blk">
+      <div class="blk-h"><span class="grip">⠿</span><span class="tag warm">Aquecimento</span><span style="color:var(--text-secondary)">passo único</span></div>
+      <div class="blk-b">
+        <div class="fld"><span class="k">Duração</span><span class="v">10 min</span></div>
+        <div class="fld"><span class="k">Intensidade</span><span class="v">Z1–Z2 · leve</span></div>
+      </div>
+    </div>
+
+    <div class="blk">
+      <div class="blk-h"><span class="grip">⠿</span><span class="tag rep">Repetições</span><span style="color:var(--text-secondary)">repetir <b style="color:var(--accent)">6×</b></span></div>
+      <div class="blk-b" style="display:block;">
+        <div class="rep-steps">
+          <div class="step"><span class="n">1</span> <b>Forte</b> · 800 m · pace-alvo <b>4:00 /km</b> · Z4</div>
+          <div class="step rec"><span class="n">R</span> Recuperação · 200 m · trote leve</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="blk">
+      <div class="blk-h"><span class="grip">⠿</span><span class="tag cool">Desligamento</span><span style="color:var(--text-secondary)">passo único</span></div>
+      <div class="blk-b">
+        <div class="fld"><span class="k">Duração</span><span class="v">10 min</span></div>
+        <div class="fld"><span class="k">Intensidade</span><span class="v">Z1 · trote</span></div>
+      </div>
+    </div>
+
+    <button class="addbtn">＋ adicionar bloco (aquecimento · repetições · rodagem · recuperação · desligamento)</button>
+
+    <div class="totbar">
+      <span>Distância estimada <b>≈ 9,6 km</b></span>
+      <span>Tempo <b>≈ 50 min</b></span>
+      <span>Carga <b>alta</b></span>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Alternativa: atalho por texto — você digita e vira os blocos acima</div>
+  <div class="mockup-body">
+    <div class="short">
+<span class="cmt"># mesmo treino, digitado rápido</span><br>
+aquecimento 10min Z1<br>
+6x (800m @4:00 Z4 / 200m trote)<br>
+desligamento 10min Z1
+    </div>
+    <p style="font-size:0.78rem; color:var(--text-secondary); margin-top:8px;">Bom pra quem monta muito treino e já tem o vocabulário na cabeça. O sistema interpreta e mostra o preview visual pra conferir.</p>
+  </div>
+</div>
+
+<h3 style="margin-top:1.5rem;">Como você prefere montar?</h3>
+<div class="options">
+  <div class="option" data-choice="visual" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content"><h3>Só o montador visual</h3><p>Clicar pra adicionar blocos e preencher campos. Mais guiado, sem decorar sintaxe.</p></div>
+  </div>
+  <div class="option" data-choice="texto" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content"><h3>Só o atalho por texto</h3><p>Digitar rápido no formato curto e o sistema vira blocos. Mais ágil pra quem já domina.</p></div>
+  </div>
+  <div class="option" data-choice="ambos" onclick="toggleSelect(this)">
+    <div class="letter">A+B</div>
+    <div class="content"><h3>Os dois</h3><p>Monta no visual OU digita o atalho — os dois geram a mesma estrutura. (Sugiro visual na fase 1, atalho como turbo depois.)</p></div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:1.2rem;">Também quero confirmar no terminal: esse vocabulário de blocos (aquecimento / repetições Nx / recuperação / rodagem / desligamento) cobre os tipos de treino que você passa? Falta algum (ex: fartlek, progressivo, tiros em ladeira)?</p>
