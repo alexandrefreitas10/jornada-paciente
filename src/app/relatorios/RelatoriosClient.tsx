@@ -548,8 +548,21 @@ interface PatientActivity {
   }[]
 }
 
+interface Cadastro {
+  patient_id: number
+  patient_name: string
+  email: string | null
+  created_at: string
+  created_by: string | null
+}
+
+interface ResumoResponse {
+  patients: PatientActivity[]
+  cadastros: Cadastro[]
+}
+
 const ACTIVITY_ICONS: Record<string, string> = {
-  cadastro: '🆕', saida: '💊', foto: '📸', exame: '🔬', dieta: '🥗', prescricao: '📄',
+  saida: '💊', foto: '📸', exame: '🔬', dieta: '🥗', prescricao: '📄',
   medicao: '📏', tarefa: '✅', resumo: '📝', evolution: '📸', exam: '🔬',
   diet: '🥗', prescription: '📄', bioimpedance: '📊',
 }
@@ -560,10 +573,11 @@ function ResumoPaciente() {
   const [dateStart, setDateStart] = useState(firstOfMonth)
   const [dateEnd, setDateEnd] = useState(today)
   const [loading, setLoading] = useState(false)
-  const [data, setData] = useState<PatientActivity[] | null>(null)
+  const [data, setData] = useState<ResumoResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<number | null>(null)
   const [copied, setCopied] = useState<number | null>(null)
+  const [copiedList, setCopiedList] = useState(false)
 
   const start = useSpecific ? specificDate : dateStart
   const end = useSpecific ? specificDate : dateEnd
@@ -595,6 +609,18 @@ function ResumoPaciente() {
     navigator.clipboard.writeText(lines.join('\n')).then(() => {
       setCopied(p.patient_id)
       setTimeout(() => setCopied(null), 2000)
+    })
+  }
+
+  function copyCadastros(cadastros: Cadastro[]) {
+    const lines = [
+      `Cadastrados — ${start === end ? start : `${start} a ${end}`}`,
+      '',
+      ...cadastros.map(c => `• ${c.patient_name} — ${c.email ?? 'sem e-mail no portal'}`),
+    ]
+    navigator.clipboard.writeText(lines.join('\n')).then(() => {
+      setCopiedList(true)
+      setTimeout(() => setCopiedList(false), 2000)
     })
   }
 
@@ -636,11 +662,45 @@ function ResumoPaciente() {
 
       {/* Resultados */}
       {data !== null && (
-        data.length === 0 ? (
-          <div className="text-center py-10 text-gray-400 text-sm">Nenhuma atividade encontrada no período.</div>
+        data.patients.length === 0 && data.cadastros.length === 0 ? (
+          <div className="text-center py-10 text-gray-400 text-sm">Nenhum registro encontrado no período.</div>
         ) : (
+          <div className="space-y-5">
+            {/* Lista separada: pacientes cadastrados no período */}
+            {data.cadastros.length > 0 && (
+              <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+                <div className="flex items-center justify-between gap-2 px-5 py-3 bg-violet-50 border-b border-violet-100">
+                  <h3 className="text-sm font-semibold text-violet-700">🆕 Cadastrados no período ({data.cadastros.length})</h3>
+                  <button onClick={() => copyCadastros(data.cadastros)}
+                    className={`text-xs font-medium px-2.5 py-1 rounded-lg transition-colors ${copiedList ? 'bg-green-100 text-green-700' : 'bg-white text-violet-600 border border-violet-200 hover:bg-violet-100'}`}>
+                    {copiedList ? '✅ Copiado!' : '📋 Copiar lista'}
+                  </button>
+                </div>
+                <div className="divide-y divide-gray-100">
+                  {data.cadastros.map(c => (
+                    <div key={c.patient_id} className="flex items-center gap-3 px-5 py-3">
+                      <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center text-violet-600 font-bold text-sm shrink-0">
+                        {c.patient_name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{c.patient_name}</p>
+                        <p className={`text-xs truncate ${c.email ? 'text-gray-500' : 'text-amber-600'}`}>
+                          {c.email ? `📧 ${c.email}` : 'Sem e-mail no portal ainda'}
+                        </p>
+                      </div>
+                      <p className="text-xs text-gray-400 shrink-0">
+                        {new Date(c.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Resumo de atividades por paciente */}
+            {data.patients.length > 0 && (
           <div className="space-y-3">
-            {data.map(p => {
+            {data.patients.map(p => {
               const isOpen = expanded === p.patient_id
               return (
                 <div key={p.patient_id} className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
@@ -686,6 +746,8 @@ function ResumoPaciente() {
                 </div>
               )
             })}
+          </div>
+            )}
           </div>
         )
       )}

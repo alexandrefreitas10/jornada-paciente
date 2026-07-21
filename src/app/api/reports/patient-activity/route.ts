@@ -54,8 +54,8 @@ export async function GET(req: NextRequest) {
         ORDER BY created_at
       `,
       // Pacientes cadastrados no período, com o e-mail do portal (fallback: e-mail do cadastro)
-      sql<{ patient_id: number; created_at: string; created_by: string | null; email: string | null }[]>`
-        SELECT p.id AS patient_id, p.created_at, p.created_by,
+      sql<{ patient_id: number; patient_name: string; created_at: string; created_by: string | null; email: string | null }[]>`
+        SELECT p.id AS patient_id, p.name AS patient_name, p.created_at, p.created_by,
                COALESCE(pu.email, p.email) AS email
         FROM patients p
         LEFT JOIN patient_users pu ON pu.patient_id = p.id
@@ -65,19 +65,27 @@ export async function GET(req: NextRequest) {
       `,
     ])
 
-    // Coleta todos os patient_ids únicos que tiveram atividade (ou foram cadastrados)
+    // Coleta todos os patient_ids únicos que tiveram atividade
     const patientIds = new Set<number>([
       ...saidas.map(r => r.patient_id),
       ...arquivos.map(r => r.patient_id),
       ...medicoes.map(r => r.patient_id),
       ...tarefas.map(r => r.patient_id),
       ...resumos.map(r => r.patient_id),
-      ...cadastros.map(r => r.patient_id),
     ])
 
-    const cadastroByPatient = new Map(cadastros.map(c => [c.patient_id, c]))
+    // Lista à parte: pacientes cadastrados no período, com o e-mail do portal
+    const cadastrosList = cadastros.map(c => ({
+      patient_id: c.patient_id,
+      patient_name: c.patient_name,
+      email: c.email,
+      created_at: c.created_at,
+      created_by: c.created_by,
+    }))
 
-    if (patientIds.size === 0) return NextResponse.json([])
+    if (patientIds.size === 0) {
+      return NextResponse.json({ patients: [], cadastros: cadastrosList })
+    }
 
     const patients = await sql<{ id: number; name: string }[]>`
       SELECT id, name FROM patients WHERE id = ANY(${[...patientIds]}::int[]) ORDER BY name
@@ -105,17 +113,6 @@ export async function GET(req: NextRequest) {
 
     const result = patients.map(p => {
       const activities: { type: string; description: string; detail: string | null; created_at: string; created_by: string | null }[] = []
-
-      const cadastro = cadastroByPatient.get(p.id)
-      if (cadastro) {
-        activities.push({
-          type: 'cadastro',
-          description: 'Paciente cadastrado',
-          detail: cadastro.email ? `E-mail do portal: ${cadastro.email}` : 'Sem e-mail no portal ainda',
-          created_at: cadastro.created_at,
-          created_by: cadastro.created_by,
-        })
-      }
 
       saidas.filter(r => r.patient_id === p.id).forEach(r => {
         activities.push({
@@ -172,7 +169,7 @@ export async function GET(req: NextRequest) {
       return { patient_id: p.id, patient_name: p.name, activities }
     })
 
-    return NextResponse.json(result)
+    return NextResponse.json({ patients: result, cadastros: cadastrosList })
   } catch (err) {
     console.error('patient-activity error:', err)
     return NextResponse.json({ error: String(err) }, { status: 500 })
