@@ -614,7 +614,7 @@ function ResumoPaciente() {
 
   function copyCadastros(cadastros: Cadastro[]) {
     const lines = [
-      `Cadastrados — ${start === end ? start : `${start} a ${end}`}`,
+      `E-mail do portal cadastrado — ${start === end ? start : `${start} a ${end}`}`,
       '',
       ...cadastros.map(c => `• ${c.patient_name} — ${c.email ?? 'sem e-mail no portal'}`),
     ]
@@ -670,7 +670,7 @@ function ResumoPaciente() {
             {data.cadastros.length > 0 && (
               <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between gap-2 px-5 py-3 bg-violet-50 border-b border-violet-100">
-                  <h3 className="text-sm font-semibold text-violet-700">🆕 Cadastrados no período ({data.cadastros.length})</h3>
+                  <h3 className="text-sm font-semibold text-violet-700">🆕 E-mail do portal cadastrado ({data.cadastros.length})</h3>
                   <button onClick={() => copyCadastros(data.cadastros)}
                     className={`text-xs font-medium px-2.5 py-1 rounded-lg transition-colors ${copiedList ? 'bg-green-100 text-green-700' : 'bg-white text-violet-600 border border-violet-200 hover:bg-violet-100'}`}>
                     {copiedList ? '✅ Copiado!' : '📋 Copiar lista'}
