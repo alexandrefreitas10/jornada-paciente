@@ -14,8 +14,8 @@ export async function GET(req: NextRequest) {
   const rows = await sql<{ id: number; name: string; created_at: string; created_by: string | null }[]>`
     SELECT id, name, created_at, created_by
     FROM patients
-    WHERE created_at::date >= ${from}::date
-      AND created_at::date <= ${to}::date
+    WHERE (created_at AT TIME ZONE 'America/Sao_Paulo')::date >= ${from}::date
+      AND (created_at AT TIME ZONE 'America/Sao_Paulo')::date <= ${to}::date
     ORDER BY created_at DESC
   `
 

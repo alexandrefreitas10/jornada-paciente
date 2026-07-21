@@ -10,7 +10,9 @@ interface PatientOption { id: number; name: string }
 // ── Utilitários ──────────────────────────────────────────────────────────────
 
 function today() {
-  return new Date().toISOString().slice(0, 10)
+  // Data local (Brasília), não UTC — senão à noite o padrão pula pro dia seguinte
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 function firstOfMonth() {

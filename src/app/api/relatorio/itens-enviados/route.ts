@@ -25,8 +25,8 @@ export async function GET(req: NextRequest) {
            pf.file_type, pf.original_name, pf.created_at, pf.created_by
     FROM patient_files pf
     JOIN patients p ON p.id = pf.patient_id
-    WHERE pf.created_at::date >= ${from}::date
-      AND pf.created_at::date <= ${to}::date
+    WHERE (pf.created_at AT TIME ZONE 'America/Sao_Paulo')::date >= ${from}::date
+      AND (pf.created_at AT TIME ZONE 'America/Sao_Paulo')::date <= ${to}::date
       ${patientId ? sql`AND pf.patient_id = ${Number(patientId)}` : sql``}
     ORDER BY pf.created_at DESC
   `

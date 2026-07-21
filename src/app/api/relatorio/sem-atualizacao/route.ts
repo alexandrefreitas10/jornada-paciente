@@ -14,7 +14,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Parâmetro since é obrigatório' }, { status: 400 })
   }
 
-  const toDate = to ?? new Date().toISOString().slice(0, 10)
+  // Padrão "hoje" no fuso de Brasília (não em UTC do servidor)
+  const toDate = to ?? new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
 
   // Retorna pacientes que não tiveram nenhuma atualização no período [since, toDate]
   const rows = await (async () => {
@@ -23,8 +24,8 @@ export async function GET(req: NextRequest) {
         SELECT p.id, p.name, p.duration, MAX(m.created_at) as last_update
         FROM patients p
         LEFT JOIN weekly_measurements m ON m.patient_id = p.id
-          AND m.created_at::date >= ${since}::date
-          AND m.created_at::date <= ${toDate}::date
+          AND (m.created_at AT TIME ZONE 'America/Sao_Paulo')::date >= ${since}::date
+          AND (m.created_at AT TIME ZONE 'America/Sao_Paulo')::date <= ${toDate}::date
         WHERE p.deleted_at IS NULL
         GROUP BY p.id, p.name, p.duration
         HAVING MAX(m.created_at) IS NULL
@@ -37,8 +38,8 @@ export async function GET(req: NextRequest) {
         SELECT p.id, p.name, p.duration, MAX(tc.completed_at) as last_update
         FROM patients p
         LEFT JOIN task_completions tc ON tc.patient_id = p.id
-          AND tc.completed_at::date >= ${since}::date
-          AND tc.completed_at::date <= ${toDate}::date
+          AND (tc.completed_at AT TIME ZONE 'America/Sao_Paulo')::date >= ${since}::date
+          AND (tc.completed_at AT TIME ZONE 'America/Sao_Paulo')::date <= ${toDate}::date
         WHERE p.deleted_at IS NULL
         GROUP BY p.id, p.name, p.duration
         HAVING MAX(tc.completed_at) IS NULL
@@ -52,8 +53,8 @@ export async function GET(req: NextRequest) {
       FROM patients p
       LEFT JOIN patient_files pf ON pf.patient_id = p.id
         AND pf.file_type = ${type}
-        AND pf.created_at::date >= ${since}::date
-        AND pf.created_at::date <= ${toDate}::date
+        AND (pf.created_at AT TIME ZONE 'America/Sao_Paulo')::date >= ${since}::date
+        AND (pf.created_at AT TIME ZONE 'America/Sao_Paulo')::date <= ${toDate}::date
       WHERE p.deleted_at IS NULL
       GROUP BY p.id, p.name, p.duration
       HAVING MAX(pf.created_at) IS NULL
