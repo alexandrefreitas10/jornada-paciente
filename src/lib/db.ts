@@ -318,6 +318,10 @@ async function runMigrations() {
       created_at       TIMESTAMPTZ DEFAULT NOW()
     )
   `).catch(() => {})
+  // Data em que o e-mail do portal foi (re)registrado — atualiza a cada convite
+  // gerado, ao contrário de created_at (que fica fixo na criação da linha).
+  await sql.unsafe(`ALTER TABLE patient_users ADD COLUMN IF NOT EXISTS email_registered_at TIMESTAMPTZ`).catch(() => {})
+  await sql.unsafe(`UPDATE patient_users SET email_registered_at = created_at WHERE email_registered_at IS NULL`).catch(() => {})
 
   // NPS e ouvidoria do portal do paciente
   await sql.unsafe(`

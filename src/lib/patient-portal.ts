@@ -43,14 +43,15 @@ export async function createPortalInvite(patientId: number, email: string): Prom
   await sql.begin(async (tx) => {
     await tx`UPDATE patients SET email = ${normalizedEmail} WHERE id = ${patientId}`
     await tx`
-      INSERT INTO patient_users (patient_id, email, invite_token)
-      VALUES (${patientId}, ${normalizedEmail}, ${token}::uuid)
+      INSERT INTO patient_users (patient_id, email, invite_token, email_registered_at)
+      VALUES (${patientId}, ${normalizedEmail}, ${token}::uuid, NOW())
       ON CONFLICT (patient_id)
       DO UPDATE SET
         email = EXCLUDED.email,
         invite_token = EXCLUDED.invite_token,
         invite_used_at = NULL,
-        password_hash = NULL
+        password_hash = NULL,
+        email_registered_at = NOW()
     `
   })
   return token

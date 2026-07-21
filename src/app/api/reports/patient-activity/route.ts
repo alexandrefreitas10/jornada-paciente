@@ -53,16 +53,17 @@ export async function GET(req: NextRequest) {
         WHERE created_at BETWEEN ${startTs}::timestamptz AND ${endTs}::timestamptz
         ORDER BY created_at
       `,
-      // Pacientes cujo E-MAIL DO PORTAL foi registrado no período (patient_users criado).
-      // Filtra por pu.created_at (quando o acesso/e-mail foi cadastrado), não pela
-      // data de criação do card — o card pode ter sido criado em outro dia.
+      // Pacientes cujo E-MAIL DO PORTAL foi registrado no período. Usa
+      // email_registered_at (atualizado a cada convite gerado), não a data do card
+      // nem created_at da linha — o card e a linha podem ser de outro dia.
       sql<{ patient_id: number; patient_name: string; created_at: string; created_by: string | null; email: string | null }[]>`
-        SELECT p.id AS patient_id, p.name AS patient_name, pu.created_at, p.created_by, pu.email
+        SELECT p.id AS patient_id, p.name AS patient_name,
+               COALESCE(pu.email_registered_at, pu.created_at) AS created_at, p.created_by, pu.email
         FROM patient_users pu
         JOIN patients p ON p.id = pu.patient_id
         WHERE p.deleted_at IS NULL
-          AND pu.created_at BETWEEN ${startTs}::timestamptz AND ${endTs}::timestamptz
-        ORDER BY pu.created_at
+          AND COALESCE(pu.email_registered_at, pu.created_at) BETWEEN ${startTs}::timestamptz AND ${endTs}::timestamptz
+        ORDER BY COALESCE(pu.email_registered_at, pu.created_at)
       `,
     ])
 
