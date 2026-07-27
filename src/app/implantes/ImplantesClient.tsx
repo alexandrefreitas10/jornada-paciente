@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { NotesSection } from '@/components/NotesSection'
 
 interface Patient { id: number; name: string }
 interface StockItem { id: number; name: string; unit: string; quantity: number; lot: string | null; expiry_date: string | null }
@@ -34,7 +35,9 @@ function fmtDate(iso: string) {
 }
 
 function today() {
-  return new Date().toISOString().slice(0, 10)
+  // Data local (Brasília), não UTC — senão à noite o padrão pula pro dia seguinte
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 interface Props { patients: Patient[] }
@@ -747,6 +750,11 @@ export default function ImplantesClient({ patients }: Props) {
                       </div>
                     )
                   })()}
+
+                  {/* Observações de acompanhamento — só nos cards Atrasado/Em breve com paciente vinculado */}
+                  {implant.days_until <= 30 && implant.patient_id && (
+                    <NotesSection patientId={implant.patient_id} tab="implante" />
+                  )}
                 </div>
               )
             })}

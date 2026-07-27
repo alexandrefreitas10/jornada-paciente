@@ -29,10 +29,14 @@ function formatDateTime(iso: string) {
   return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-function today() { return new Date().toISOString().slice(0, 10) }
+// Datas no fuso local (Brasília), não UTC — senão à noite o padrão pula de dia
+function today() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 function firstOfMonth() {
-  const d = new Date(); d.setDate(1)
-  return d.toISOString().slice(0, 10)
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
 }
 
 function filterByRange(movs: StockMovement[], dateStart: string, dateEnd: string) {

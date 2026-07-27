@@ -81,7 +81,11 @@ function calcEndDate(startDate: string, totalSessions: number, sessionsPerWeek: 
   return start.toISOString().slice(0, 10)
 }
 
-function today() { return new Date().toISOString().slice(0, 10) }
+function today() {
+  // Data local (Brasília), não UTC — senão à noite o padrão pula pro dia seguinte
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 // Rota estável (mesma origem) que gera URL assinada FRESCA a cada request — nunca
 // expira, ao contrário de f.url (assinada no carregamento, morre em 15 min).

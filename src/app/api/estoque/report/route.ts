@@ -16,7 +16,8 @@ export async function GET(req: NextRequest) {
   const format = req.nextUrl.searchParams.get('format') === 'xlsx' ? 'xlsx' : 'pdf'
   const items = await listStockItems()
   const now = new Date()
-  const stamp = now.toISOString().slice(0, 10)
+  // Data do fuso de Brasília para o nome do arquivo (não UTC)
+  const stamp = now.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
 
   if (format === 'xlsx') {
     const wb = new ExcelJS.Workbook()

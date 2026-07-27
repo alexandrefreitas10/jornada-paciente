@@ -709,7 +709,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   const [showReport, setShowReport] = useState(false)
   const [reportPatient, setReportPatient] = useState('')
   const [reportPatientSearch, setReportPatientSearch] = useState('')
-  const [reportDate, setReportDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [reportDate, setReportDate] = useState(() => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }))
   const [reportCopied, setReportCopied] = useState(false)
 
   // Resolve patient name from patients list when movement only has patient_id
@@ -727,7 +727,8 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
     const dateLabel = new Date(reportDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
     const dayExits = exitsWithName.filter(m =>
       m.patient_name?.toLowerCase() === reportPatient.toLowerCase() &&
-      m.created_at.slice(0, 10) === reportDate
+      // data no fuso de Brasília (não UTC), senão saídas da noite caem no dia errado
+      new Date(m.created_at).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) === reportDate
     )
     if (dayExits.length === 0) return `Nenhuma saída registrada para "${reportPatient}" em ${dateLabel}.`
     const lines = dayExits.map(m => {

@@ -25,7 +25,7 @@ export function MedicationsTab({ patientId, patientName, readOnly = false }: { p
   const [medications, setMedications] = useState<Medication[]>([])
   const [loading, setLoading] = useState(true)
   const [showReport, setShowReport] = useState(false)
-  const [reportDate, setReportDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [reportDate, setReportDate] = useState(() => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }))
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
@@ -37,7 +37,7 @@ export function MedicationsTab({ patientId, patientName, readOnly = false }: { p
 
   const reportText = (() => {
     const dateLabel = new Date(reportDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-    const dayMeds = medications.filter(m => m.created_at.slice(0, 10) === reportDate)
+    const dayMeds = medications.filter(m => new Date(m.created_at).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) === reportDate)
     if (dayMeds.length === 0) return `Nenhuma medicação registrada em ${dateLabel}.`
     const lines = dayMeds.map(m => {
       const meta = [m.lot ? `Lote: ${m.lot}` : null, m.expiry_date ? `Validade: ${m.expiry_date}` : null].filter(Boolean).join(' | ')

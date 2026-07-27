@@ -30,7 +30,8 @@ function ImplanteCard({ patientId, patientName }: { patientId: number | null; pa
   const [loading, setLoading] = useState(false)
   const [dismissed, setDismissed] = useState(false)
   const [name, setName] = useState(patientName ?? '')
-  const today = new Date().toISOString().slice(0, 10)
+  const now = new Date()
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
   if (dismissed) return null
 
