@@ -265,6 +265,20 @@ async function runMigrations() {
     ALTER TABLE implants ADD COLUMN IF NOT EXISTS items_used JSONB DEFAULT '[]'
   `).catch(() => {})
 
+  // Observações de acompanhamento dos implantes — log por card, com autor e data.
+  // patient_key = String(patient_id ?? patient_name), a mesma chave de agrupamento
+  // do card (funciona para implantes vinculados E sem vínculo a paciente).
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS implant_notes (
+      id SERIAL PRIMARY KEY,
+      patient_key TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_by TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(() => {})
+  await sql.unsafe(`CREATE INDEX IF NOT EXISTS idx_implant_notes_key ON implant_notes(patient_key)`).catch(() => {})
+
   // Estética: procedimentos estéticos
   await sql.unsafe(`
     CREATE TABLE IF NOT EXISTS aesthetic_sessions (

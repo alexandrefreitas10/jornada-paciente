@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { NotesSection } from '@/components/NotesSection'
+import { ImplantNotes } from '@/components/ImplantNotes'
 
 interface Patient { id: number; name: string }
 interface StockItem { id: number; name: string; unit: string; quantity: number; lot: string | null; expiry_date: string | null }
@@ -751,9 +751,9 @@ export default function ImplantesClient({ patients }: Props) {
                     )
                   })()}
 
-                  {/* Observações de acompanhamento — só nos cards Atrasado/Em breve com paciente vinculado */}
-                  {implant.days_until <= 30 && implant.patient_id && (
-                    <NotesSection patientId={implant.patient_id} tab="implante" />
+                  {/* Observações de acompanhamento — todos os cards Atrasado/Em breve */}
+                  {implant.days_until <= 30 && (
+                    <ImplantNotes patientKey={String(implant.patient_id ?? implant.patient_name)} />
                   )}
                 </div>
               )
