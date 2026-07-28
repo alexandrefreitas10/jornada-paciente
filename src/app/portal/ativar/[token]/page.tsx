@@ -3,6 +3,12 @@
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { C, serif, shadowCard } from '@/components/portal/theme'
+import { IconEye, IconEyeOff } from '@/components/portal/Icons'
+
+const eyeBtn: React.CSSProperties = {
+  position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+  background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', color: C.sage,
+}
 
 const wrap: React.CSSProperties = { minHeight: '100dvh', background: C.sand, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 22px' }
 const card: React.CSSProperties = { background: C.white, borderRadius: 22, boxShadow: shadowCard, padding: 28, maxWidth: 360, width: '100%', textAlign: 'center' }
@@ -18,6 +24,7 @@ export default function AtivarPortalPage() {
 
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
+  const [show, setShow] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
@@ -95,8 +102,18 @@ export default function AtivarPortalPage() {
         </div>
         <div style={{ background: C.white, borderRadius: 22, boxShadow: shadowCard, padding: 24 }}>
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} placeholder="Criar senha (mín. 6 caracteres)" style={inputStyle} />
-            <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} required placeholder="Confirmar senha" style={inputStyle} />
+            <div style={{ position: 'relative' }}>
+              <input type={show ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} required minLength={6} placeholder="Criar senha (mín. 6 caracteres)" style={{ ...inputStyle, paddingRight: 46 }} />
+              <button type="button" onClick={() => setShow(s => !s)} aria-label={show ? 'Ocultar senha' : 'Mostrar senha'} style={eyeBtn}>
+                {show ? <IconEyeOff size={20} /> : <IconEye size={20} />}
+              </button>
+            </div>
+            <div style={{ position: 'relative' }}>
+              <input type={show ? 'text' : 'password'} value={confirm} onChange={e => setConfirm(e.target.value)} required placeholder="Confirmar senha" style={{ ...inputStyle, paddingRight: 46 }} />
+              <button type="button" onClick={() => setShow(s => !s)} aria-label={show ? 'Ocultar senha' : 'Mostrar senha'} style={eyeBtn}>
+                {show ? <IconEyeOff size={20} /> : <IconEye size={20} />}
+              </button>
+            </div>
             {error && <p style={{ fontSize: 13, color: '#c0392b', margin: 0 }}>{error}</p>}
             <button type="submit" disabled={loading} style={{
               width: '100%', background: C.gold, color: '#fff', fontWeight: 700, fontSize: 15, padding: 15,

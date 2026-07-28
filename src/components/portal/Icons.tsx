@@ -14,6 +14,8 @@ function Svg({ size = 20, color = 'currentColor', sw = 1.6, children }: P & { ch
 }
 
 export const IconBell = (p: P) => <Svg {...p}><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></Svg>
+export const IconEye = (p: P) => <Svg {...p}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></Svg>
+export const IconEyeOff = (p: P) => <Svg {...p}><path d="M3 3l18 18" /><path d="M10.6 6.1A9.6 9.6 0 0 1 12 6c6.5 0 10 6 10 6a17.4 17.4 0 0 1-3.6 4.1M6.3 7.3A17.2 17.2 0 0 0 2 12s3.5 7 10 7a9.6 9.6 0 0 0 3.6-.7" /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" /></Svg>
 export const IconCamera = (p: P) => <Svg {...p}><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h3l1.6-2.4A1 1 0 0 1 9.4 4h5.2a1 1 0 0 1 .8.4L17 7h3a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="3.6" /></Svg>
 export const IconFlask = (p: P) => <Svg {...p}><path d="M9 3h6" /><path d="M10 3v6l-4.6 8.1A2 2 0 0 0 7.1 20h9.8a2 2 0 0 0 1.7-2.9L14 9V3" /><path d="M7 14h10" /></Svg>
 export const IconBars = (p: P) => <Svg {...p}><path d="M5 21V9M12 21V3M19 21v-7" /><path d="M3 21h18" /></Svg>
