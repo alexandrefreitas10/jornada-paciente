@@ -25,6 +25,11 @@ function friendlyError(err: unknown): { message: string; code: string } {
     if (status === 429) return { message: 'A leitura por IA está com muitas requisições agora. Espere alguns segundos e toque em enviar de novo.', code: `anthropic_${status}` }
     if (status === 529 || (status !== undefined && status >= 500)) return { message: 'O serviço de leitura por IA está sobrecarregado no momento. Tente novamente em instantes.', code: `anthropic_${status}` }
     if (status === 413) return { message: 'A foto ficou grande demais para processar. Recorte só a tabela e tente de novo.', code: 'anthropic_413' }
+    if (status === 400) {
+      // 400 = a requisição foi recusada (quase sempre a imagem). Mostra o motivo
+      // real da API — é sobre o formato/tamanho do arquivo, não sobre o paciente.
+      return { message: `A leitura por IA recusou essa imagem: ${err.message}`, code: 'anthropic_400' }
+    }
     return { message: `Erro na leitura por IA (${status}). Tente novamente ou adicione manualmente.`, code: `anthropic_${status}` }
   }
   if (err instanceof Anthropic.APIConnectionError) {
@@ -35,6 +40,31 @@ function friendlyError(err: unknown): { message: string; code: string } {
     return { message: 'Não foi possível ler esse formato de imagem. Tire a foto novamente (JPG ou PNG).', code: 'image_decode' }
   }
   return { message: 'Erro inesperado ao processar a foto. Tente novamente ou adicione manualmente.', code: 'unknown' }
+}
+
+// A API aceita no máximo ~5MB por imagem já em base64 (base64 infla ~33%), então
+// o binário precisa ficar abaixo de ~3,5MB. Reduz a nitidez em passos só até
+// caber — números de tabela manuscrita precisam de resolução, então começa alto.
+const MAX_IMAGE_BYTES = 3_500_000
+const STEPS: { maxPx: number; quality: number }[] = [
+  { maxPx: 2200, quality: 88 },
+  { maxPx: 2000, quality: 80 },
+  { maxPx: 1600, quality: 75 },
+  { maxPx: 1300, quality: 70 },
+]
+
+async function prepareImage(raw: Buffer): Promise<Buffer> {
+  let last: Buffer | null = null
+  for (const { maxPx, quality } of STEPS) {
+    // .rotate() aplica a orientação EXIF (foto de celular deitada)
+    last = await sharp(raw)
+      .rotate()
+      .resize({ width: maxPx, height: maxPx, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality, mozjpeg: true })
+      .toBuffer()
+    if (last.length <= MAX_IMAGE_BYTES) return last
+  }
+  return last!
 }
 
 function toNum(v: unknown): number | null {
@@ -82,14 +112,13 @@ async function handleExtract(
 
   const arrayBuffer = await photo.arrayBuffer()
   const rawBuffer = Buffer.from(arrayBuffer)
-  // Auto-rotate based on EXIF orientation (fixes sideways mobile camera photos)
-  const buffer = await sharp(rawBuffer).rotate().toBuffer()
+  // Normaliza a imagem antes de enviar: a API rejeita (400) imagens acima de
+  // ~5MB em base64, e o recorte no celular gera JPEG 2400px q0.92 que passa
+  // disso em fotos detalhadas — era a causa do "erro na leitura por IA (400)".
+  // Também força JPEG, então HEIC/PNG/webp deixam de quebrar o media_type.
+  const buffer = await prepareImage(rawBuffer)
   const base64 = buffer.toString('base64')
-  const mediaType = (photo.type || 'image/jpeg') as
-    | 'image/jpeg'
-    | 'image/png'
-    | 'image/gif'
-    | 'image/webp'
+  const mediaType = 'image/jpeg' as const
 
   const message = await getClient().messages.create({
     model: 'claude-opus-4-8',
@@ -200,8 +229,8 @@ Retorne somente o array JSON, sem texto adicional, sem markdown, sem explicaçõ
       await deleteFile(f.s3_key).catch(() => {})
       await deletePatientFile(f.id)
     }))
-    const ext = photo.name.split('.').pop() ?? 'jpg'
-    const s3Key = `patients/${id}/evolution/${randomUUID()}.${ext}`
+    // prepareImage sempre devolve JPEG — extensão e content-type acompanham
+    const s3Key = `patients/${id}/evolution/${randomUUID()}.jpg`
     await uploadFile(s3Key, buffer, mediaType)
     await createPatientFile(Number(id), 'evolution', s3Key, photo.name)
   } catch (err) {
