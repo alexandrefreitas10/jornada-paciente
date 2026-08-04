@@ -18,6 +18,12 @@ function getClient() {
   return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 3, timeout: 60_000 })
 }
 
+// Extrai só a frase de erro da API — err.message vem com o JSON inteiro.
+function apiMessage(err: InstanceType<typeof Anthropic.APIError>): string {
+  const body = (err as { error?: { error?: { message?: string } } }).error
+  return body?.error?.message ?? err.message
+}
+
 // Traduz a falha para uma mensagem que a equipe entende (nunca corpo vazio).
 function friendlyError(err: unknown): { message: string; code: string } {
   if (err instanceof Anthropic.APIError) {
@@ -26,9 +32,17 @@ function friendlyError(err: unknown): { message: string; code: string } {
     if (status === 529 || (status !== undefined && status >= 500)) return { message: 'O serviço de leitura por IA está sobrecarregado no momento. Tente novamente em instantes.', code: `anthropic_${status}` }
     if (status === 413) return { message: 'A foto ficou grande demais para processar. Recorte só a tabela e tente de novo.', code: 'anthropic_413' }
     if (status === 400) {
-      // 400 = a requisição foi recusada (quase sempre a imagem). Mostra o motivo
-      // real da API — é sobre o formato/tamanho do arquivo, não sobre o paciente.
-      return { message: `A leitura por IA recusou essa imagem: ${err.message}`, code: 'anthropic_400' }
+      const apiMsg = apiMessage(err)
+      // Saldo da conta de IA zerado: nada a ver com a foto — a equipe precisa
+      // saber que é cobrança, não tentar de novo com outra imagem.
+      if (/credit balance is too low|insufficient credit|billing/i.test(apiMsg)) {
+        return {
+          message: 'Os créditos da IA acabaram — por isso a leitura automática parou. É preciso recarregar em console.anthropic.com (Plans & Billing). Enquanto isso, use "+ Adicionar manualmente" para lançar as medições.',
+          code: 'anthropic_no_credits',
+        }
+      }
+      // Outro 400: mostra o motivo real da API (é sobre o arquivo, não o paciente)
+      return { message: `A leitura por IA recusou essa imagem: ${apiMsg}`, code: 'anthropic_400' }
     }
     return { message: `Erro na leitura por IA (${status}). Tente novamente ou adicione manualmente.`, code: `anthropic_${status}` }
   }
