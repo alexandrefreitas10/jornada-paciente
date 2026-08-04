@@ -4,12 +4,38 @@ import sharp from 'sharp'
 import { createMeasurement, deleteAllMeasurements, MeasurementInput } from '@/lib/measurements'
 import { uploadFile, deleteFile } from '@/lib/s3'
 import { createPatientFile, listPatientFiles, deletePatientFile } from '@/lib/patient-files'
+import { logSystemError } from '@/lib/system-errors'
 import { randomUUID } from 'crypto'
 
-export const maxDuration = 60
+export const maxDuration = 120
 export const dynamic = 'force-dynamic'
 
-function getClient() { return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }) }
+// timeout explícito + retries: a API pode devolver 429 (limite) ou 529 (sobrecarga)
+// transitórios quando várias fotos são enviadas em sequência. Sem isso, a falha
+// subia como exceção e o Next devolvia 500 com corpo VAZIO — o cliente fazia
+// res.json() e estourava "Unexpected end of JSON input".
+function getClient() {
+  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 3, timeout: 60_000 })
+}
+
+// Traduz a falha para uma mensagem que a equipe entende (nunca corpo vazio).
+function friendlyError(err: unknown): { message: string; code: string } {
+  if (err instanceof Anthropic.APIError) {
+    const status = err.status
+    if (status === 429) return { message: 'A leitura por IA está com muitas requisições agora. Espere alguns segundos e toque em enviar de novo.', code: `anthropic_${status}` }
+    if (status === 529 || (status !== undefined && status >= 500)) return { message: 'O serviço de leitura por IA está sobrecarregado no momento. Tente novamente em instantes.', code: `anthropic_${status}` }
+    if (status === 413) return { message: 'A foto ficou grande demais para processar. Recorte só a tabela e tente de novo.', code: 'anthropic_413' }
+    return { message: `Erro na leitura por IA (${status}). Tente novamente ou adicione manualmente.`, code: `anthropic_${status}` }
+  }
+  if (err instanceof Anthropic.APIConnectionError) {
+    return { message: 'Não foi possível falar com o serviço de leitura por IA (conexão). Tente novamente.', code: 'anthropic_conn' }
+  }
+  const msg = err instanceof Error ? err.message : String(err)
+  if (/unsupported image|Input buffer|sharp/i.test(msg)) {
+    return { message: 'Não foi possível ler esse formato de imagem. Tire a foto novamente (JPG ou PNG).', code: 'image_decode' }
+  }
+  return { message: 'Erro inesperado ao processar a foto. Tente novamente ou adicione manualmente.', code: 'unknown' }
+}
 
 function toNum(v: unknown): number | null {
   if (typeof v === 'number') return v
@@ -25,6 +51,23 @@ function toStr(v: unknown): string | null {
 }
 
 export async function POST(
+  req: NextRequest,
+  ctx: { params: Promise<{ id: string }> }
+) {
+  try {
+    return await handleExtract(req, ctx)
+  } catch (err) {
+    // Rede de segurança: qualquer falha vira JSON legível. Sem isso o Next
+    // devolvia 500 com corpo vazio e o cliente quebrava no res.json().
+    const { message, code } = friendlyError(err)
+    const detail = err instanceof Error ? err.message : String(err)
+    console.error('extract measurements error:', err)
+    void logSystemError('ai_extract', 'falha ao extrair medições da foto', { code, detail })
+    return Response.json({ error: message, code }, { status: 502 })
+  }
+}
+
+async function handleExtract(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -115,9 +158,6 @@ Retorne somente o array JSON, sem texto adicional, sem markdown, sem explicaçõ
     )
   }
 
-  // Nova foto substitui toda a tabela — apaga medições antigas e insere as novas
-  await deleteAllMeasurements(Number(id))
-
   const newRows = extracted
     .map((row) => {
       const r = row as Record<string, unknown>
@@ -130,6 +170,21 @@ Retorne somente o array JSON, sem texto adicional, sem markdown, sem explicaçõ
         tirzepatide_dose: toNum(r.tirzepatide_dose),
       } as MeasurementInput
     })
+    // Descarta linhas totalmente vazias (a IA às vezes devolve o cabeçalho)
+    .filter(r => r.week != null || r.date != null || r.weight != null ||
+      r.abdominal_circumference != null || r.waist_circumference != null || r.tirzepatide_dose != null)
+
+  // Só apaga a tabela existente se a leitura trouxe algo — senão uma extração
+  // vazia zerava todas as medições do paciente.
+  if (newRows.length === 0) {
+    return Response.json(
+      { error: 'Não foi possível ler nenhuma linha da tabela nessa foto. As medições atuais foram mantidas. Tente uma foto mais nítida ou adicione manualmente.', code: 'empty_extract' },
+      { status: 422 }
+    )
+  }
+
+  // Nova foto substitui toda a tabela — apaga medições antigas e insere as novas
+  await deleteAllMeasurements(Number(id))
 
   const created = await Promise.all(
     newRows.map(input => createMeasurement(Number(id), input))

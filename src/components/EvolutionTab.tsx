@@ -39,6 +39,25 @@ const emptyInput = (): MeasurementInput => ({
 const proxyDownload = (patientId: number, fileId: number) =>
   `/api/patients/${patientId}/files/${fileId}/download?proxy=1`
 
+// Lê a resposta com segurança: se o corpo vier vazio ou não for JSON (ex.: 502 do
+// proxy, função derrubada por timeout), devolve uma mensagem legível em vez de
+// estourar "Unexpected end of JSON input".
+async function readJsonSafe(res: Response): Promise<Record<string, unknown>> {
+  const text = await res.text().catch(() => '')
+  if (!text.trim()) {
+    return {
+      error: res.ok
+        ? 'O servidor respondeu vazio. Tente novamente.'
+        : `O servidor não respondeu (erro ${res.status}). Isso costuma ser sobrecarga momentânea — tente novamente em instantes.`,
+    }
+  }
+  try {
+    return JSON.parse(text) as Record<string, unknown>
+  } catch {
+    return { error: `Resposta inesperada do servidor (erro ${res.status}). Tente novamente.` }
+  }
+}
+
 export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionPhotos, initialPrescriptions, currentUserName, readOnly = false }: Props) {
   const [measurements, setMeasurements] = useState<Measurement[]>(initialMeasurements)
   const [evolutionPhotos, setEvolutionPhotos] = useState<EvolutionPhoto[]>(initialEvolutionPhotos)
@@ -81,9 +100,9 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
     setReportText('')
     try {
       const res = await fetch(`/api/patients/${patientId}/evolution-report`)
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || `Erro ${res.status}`)
-      setReportText(data.report ?? '')
+      const data = await readJsonSafe(res)
+      if (!res.ok) throw new Error(String(data.error || `Erro ${res.status}`))
+      setReportText(String(data.report ?? ''))
       setReportOpen(true)
     } catch (err) {
       setReportError(err instanceof Error ? err.message : 'Erro desconhecido')
@@ -140,11 +159,11 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
         method: 'POST',
         body: formData,
       })
+      const payload = await readJsonSafe(res)
       if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error || 'Erro ao processar a foto')
+        throw new Error(String(payload.error || 'Erro ao processar a foto'))
       }
-      const data = await res.json()
+      const data = payload as { measurements?: Measurement[]; photoSaved?: boolean; warning?: string }
       // Novo formato: { measurements, photoSaved, warning } — com fallback pro antigo (array)
       const created: Measurement[] = Array.isArray(data) ? data : (data.measurements ?? [])
       const newItems = Array.isArray(created) ? created : [created]
@@ -196,11 +215,11 @@ export function EvolutionTab({ patientId, initialMeasurements, initialEvolutionP
       formData.append('file', file)
       formData.append('type', 'prescription')
       const res = await fetch(`/api/patients/${patientId}/files`, { method: 'POST', body: formData })
+      const payload = await readJsonSafe(res)
       if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error || 'Erro ao enviar prescrição')
+        throw new Error(String(payload.error || 'Erro ao enviar prescrição'))
       }
-      const created: EvolutionPhoto = await res.json()
+      const created = payload as unknown as EvolutionPhoto
       setPrescriptions(prev => [created, ...prev])
     } catch (err) {
       setPrescriptionError(err instanceof Error ? err.message : 'Erro desconhecido')
