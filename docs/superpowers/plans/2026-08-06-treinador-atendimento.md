@@ -95,9 +95,9 @@ describe('training/scoring', () => {
   })
 
   it('arredonda para uma casa decimal', () => {
-    // 9,7,9,8.5,9,7 => 50.5/6 = 8.4166...
+    // 9,7,9,8.5,9,7 => 49.5/6 = 8.25 -> arredonda para 8.3
     const s = scores({ acolhimento: 9, qualificacao: 7, argumentos: 9, objecoes: 8.5, fechamento: 9, precisao: 7 })
-    expect(averageOf(s)).toBe(8.4)
+    expect(averageOf(s)).toBe(8.3)
   })
 
   it('faixas de status nos limites', () => {
@@ -1946,7 +1946,8 @@ git add src/app/treinamento && git commit -m "feat(treinamento): sala de treino 
 
 ## Verificação final
 
-- [ ] `npx jest` — toda a suíte passa (41 testes novos + os que já existiam)
+- [ ] `npx jest __tests__/lib/training-*.test.ts` — 41 testes novos, todos passando
+- [ ] `npx jest` — as 4 suítes que **já estavam quebradas antes deste módulo** continuam sendo as únicas vermelhas: `task-definitions` (espera 18 tarefas, o código mudou), `task-completions` e `patients` (arquivos vazios), `PatientCard` (tipo `created_by` desatualizado). Nenhuma delas é escopo deste trabalho.
 - [ ] `npx tsc --noEmit` — sem erros
 - [ ] `npm run build` — build de produção passa
 - [ ] Com `ANTHROPIC_API_KEY` configurada: preencher a base em `/admin/treinamento`, abrir `/treinamento`, rodar um treino nível 3 cenário A até o fim e conferir que o relatório aparece com as 7 notas
