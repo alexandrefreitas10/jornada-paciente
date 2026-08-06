@@ -413,6 +413,45 @@ async function runMigrations() {
       END IF;
     END $$;
   `).catch(() => {})
+
+  // Treinador de Atendimento: base de conhecimento, sessões e mensagens
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS training_kb (
+      id SERIAL PRIMARY KEY,
+      data JSONB NOT NULL,
+      updated_by INTEGER REFERENCES users(id),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS training_sessions (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      level SMALLINT NOT NULL CHECK (level BETWEEN 1 AND 5),
+      scenario CHAR(1) NOT NULL,
+      persona JSONB NOT NULL,
+      kb_snapshot JSONB NOT NULL,
+      status TEXT NOT NULL DEFAULT 'em_andamento',
+      outcome TEXT,
+      scores JSONB,
+      average NUMERIC(3,1),
+      has_red_flag BOOLEAN DEFAULT FALSE,
+      verdict TEXT,
+      report JSONB,
+      started_at TIMESTAMPTZ DEFAULT NOW(),
+      ended_at TIMESTAMPTZ
+    );
+    CREATE TABLE IF NOT EXISTS training_messages (
+      id SERIAL PRIMARY KEY,
+      session_id INTEGER NOT NULL REFERENCES training_sessions(id) ON DELETE CASCADE,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      position INTEGER NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS training_messages_session_idx
+      ON training_messages (session_id, position);
+    CREATE INDEX IF NOT EXISTS training_sessions_user_idx
+      ON training_sessions (user_id, started_at DESC);
+  `)
 }
 
 export default sql
