@@ -1027,7 +1027,13 @@ export function breaksCharacter(text: string, personaName: string): boolean {
   if (!firstName) return false
   // Exige que o nome NÃO venha logo depois de "a"/"o"/"é"/"chamo" — nesses
   // casos o paciente está se apresentando, não falando de si em terceira pessoa.
-  const re = new RegExp(`(?<!\\b(?:a|o|é|e|sou|chamo|aqui)\\s)\\b${firstName}\\s+${THIRD_PERSON_VERBS}\\b`, 'i')
+  // O fecho é (?![...]) e NÃO \b: em JavaScript \b só conhece ASCII, então
+  // depois de "está" (termina em á) a fronteira de palavra nunca casa — era
+  // exatamente o caso real que motivou este teste.
+  const re = new RegExp(
+    `(?<!\\b(?:a|o|é|e|sou|chamo|aqui)\\s)\\b${firstName}\\s+${THIRD_PERSON_VERBS}(?![a-zA-ZÀ-ÿ])`,
+    'i'
+  )
   return re.test(text)
 }
 
