@@ -159,6 +159,9 @@ export interface TrainingKb {
     includes: string[]
     returnWeeks: number
   }
+  // Planos de acompanhamento. É o gabarito do cenário "consultou e não fechou
+  // o protocolo" — sem isso a IA não sabe se o valor citado pela secretária existe.
+  plans: { name: string; months: number; priceCents: number }[]
   payment: { methods: string[]; installments: string; discountPolicy: string }
   insurance: { accepts: boolean; note: string }
   procedures: { name: string; priceCents: number }[]
@@ -303,6 +306,7 @@ const valid: TrainingKb = {
     includes: ['Bioimpedância', 'Avaliação de exames', 'Planejamento alimentar com a nutricionista'],
     returnWeeks: 8,
   },
+  plans: [{ name: 'Acompanhamento 6 meses', months: 6, priceCents: 600000 }],
   payment: { methods: ['PIX', 'Cartão'], installments: '3x sem juros', discountPolicy: 'Não há desconto.' },
   insurance: { accepts: false, note: 'Não atendemos convênio. Emitimos nota para reembolso.' },
   procedures: [{ name: 'Criolipólise', priceCents: 80000 }],
@@ -367,6 +371,7 @@ import type { TrainingKb } from './types'
 export const EMPTY_KB: TrainingKb = {
   doctors: [],
   consultation: { priceCents: 0, durationLabel: '', includes: [], returnWeeks: 8 },
+  plans: [],
   payment: { methods: [], installments: '', discountPolicy: '' },
   insurance: { accepts: false, note: '' },
   procedures: [],
@@ -414,6 +419,7 @@ export function validateKb(data: unknown): TrainingKb {
   asObject(kb.payment, 'Bloco de pagamento')
   asObject(kb.insurance, 'Bloco de convênio')
   asObject(kb.links, 'Bloco de links')
+  if (!Array.isArray(kb.plans)) fail('Lista de planos de tratamento inválida.')
   if (!Array.isArray(kb.procedures)) fail('Lista de procedimentos inválida.')
   if (!Array.isArray(kb.modelAnswers)) fail('Lista de respostas-modelo inválida.')
 
@@ -440,6 +446,10 @@ export function formatKbForPrompt(kb: TrainingKb): string {
     ? kb.procedures.map(p => `- ${p.name}: ${brl(p.priceCents)}`).join('\n')
     : '- (nenhum cadastrado)'
 
+  const plans = kb.plans.length
+    ? kb.plans.map(p => `- ${p.name} (${p.months} meses): ${brl(p.priceCents)}`).join('\n')
+    : '- (nenhum cadastrado)'
+
   return [
     '## MÉDICOS', doctors,
     '',
@@ -448,6 +458,8 @@ export function formatKbForPrompt(kb: TrainingKb): string {
     `Duração: ${kb.consultation.durationLabel}`,
     `Retorno incluso em ${kb.consultation.returnWeeks} semanas.`,
     'Inclui:', ...kb.consultation.includes.map(i => `- ${i}`),
+    '',
+    '## PLANOS DE ACOMPANHAMENTO', plans,
     '',
     '## PAGAMENTO',
     `Formas: ${kb.payment.methods.join(', ')}`,
@@ -945,6 +957,11 @@ describe('training/patient — balões', () => {
   it('limita a 3 balões por turno', () => {
     expect(splitBubbles('a\n\nb\n\nc\n\nd\n\ne')).toHaveLength(3)
   })
+
+  it('remove token especial vazado pelo modelo', () => {
+    // Aconteceu de verdade: "Tô bem dividida ainda...<|eos|>"
+    expect(splitBubbles('to bem dividida ainda...<|eos|>')).toEqual(['to bem dividida ainda...'])
+  })
 })
 
 describe('training/patient — desfecho', () => {
@@ -1014,8 +1031,13 @@ export function breaksCharacter(text: string, personaName: string): boolean {
   return re.test(text)
 }
 
+// Modelos às vezes vazam token especial no texto (visto na conversa real:
+// "Tô bem dividida ainda...<|eos|>"). Nunca pode chegar na tela.
+const SPECIAL_TOKENS = /<\|[a-z_]+\|>/gi
+
 export function splitBubbles(raw: string): string[] {
   return raw
+    .replace(SPECIAL_TOKENS, '')
     .split(/\n\s*\n/)
     .map(s => s.trim())
     .filter(Boolean)
@@ -1147,7 +1169,7 @@ export async function nextPatientTurn(params: {
 - [ ] **Step 4: Rodar o teste e confirmar que passa**
 
 Run: `npx jest __tests__/lib/training-patient.test.ts`
-Expected: PASS — 12 testes
+Expected: PASS — 13 testes
 
 - [ ] **Step 5: Commit**
 
@@ -1847,9 +1869,9 @@ Leia o arquivo que existir e reaproveite a estrutura (cabeçalho, botão primár
 `src/app/admin/treinamento/page.tsx` — componente cliente com:
 
 - `useEffect` que faz `GET /api/admin/treinamento/kb` e preenche o estado
-- Um `<form>` com seções: Médicos (lista editável), Consulta (valor em reais, duração, itens inclusos, semanas até o retorno), Pagamento, Convênio, Procedimentos, Canetas, No-show, Links, Linhas vermelhas, Respostas-modelo
-- Listas (inclusos, linhas vermelhas, respostas-modelo, procedimentos, médicos) editadas com botões "+ adicionar" e "remover" por item
-- Valor da consulta digitado em reais e convertido para centavos no envio: `Math.round(parseFloat(valor.replace(',', '.')) * 100)`
+- Um `<form>` com seções: Médicos (lista editável), Consulta (valor em reais, duração, itens inclusos, semanas até o retorno), **Planos de acompanhamento** (nome, meses, valor), Pagamento, Convênio, Procedimentos, Canetas, No-show, Links, Linhas vermelhas, Respostas-modelo
+- Listas (inclusos, linhas vermelhas, respostas-modelo, planos, procedimentos, médicos) editadas com botões "+ adicionar" e "remover" por item
+- Todo valor digitado em reais e convertido para centavos no envio: `Math.round(parseFloat(valor.replace(',', '.')) * 100)`
 - Botão "Salvar" que faz `PUT /api/admin/treinamento/kb` com o JSON da base
 - Se a resposta for 400, mostrar `error` da API em destaque vermelho acima do formulário — as mensagens já vêm prontas em português de `validateKb`
 - Se for 403, mostrar "Acesso restrito ao administrador."
@@ -1924,7 +1946,7 @@ git add src/app/treinamento && git commit -m "feat(treinamento): sala de treino 
 
 ## Verificação final
 
-- [ ] `npx jest` — toda a suíte passa (33 testes novos + os que já existiam)
+- [ ] `npx jest` — toda a suíte passa (41 testes novos + os que já existiam)
 - [ ] `npx tsc --noEmit` — sem erros
 - [ ] `npm run build` — build de produção passa
 - [ ] Com `ANTHROPIC_API_KEY` configurada: preencher a base em `/admin/treinamento`, abrir `/treinamento`, rodar um treino nível 3 cenário A até o fim e conferir que o relatório aparece com as 7 notas

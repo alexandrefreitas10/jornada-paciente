@@ -139,6 +139,7 @@ poder rebater com informação da própria clínica) e no do avaliador (como gab
 |---|---|
 | **Médicos** | Nome completo, como é chamada no WhatsApp, especialidade, **anos de experiência**, formação, focos de atuação |
 | **Consulta** | Valor, duração, **o que inclui** (bioimpedância, avaliação de exames, planejamento, acompanhamento, retorno em N semanas, planejamento alimentar), prazo do retorno |
+| **Planos de tratamento** | Nome, duração e valor de cada plano de acompanhamento. Sem isto, o cenário "consultou e não fechou o protocolo" não tem gabarito |
 | **Dinheiro** | Formas de pagamento, parcelamento (quantas vezes, com/sem juros), **política de desconto**: existe, quem autoriza |
 | **Convênio** | Atende ou não; emite nota para reembolso ou não |
 | **Procedimentos** | Lista de procedimentos estéticos com preço |
@@ -156,6 +157,7 @@ Extraídas das conversas reais analisadas:
 - Citar estatística de sucesso inventada
 - Falar de medicação, injetável ou aplicação
 - Dar desconto por conta própria
+- **Inventar condição de parcelamento** ("dividimos em 12x de R$ 750") fora do que o cadastro autoriza
 - Falar mal de concorrente
 
 ---
