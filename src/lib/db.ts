@@ -1,7 +1,13 @@
 import postgres from 'postgres'
 
+// SSL depende de ONDE o banco está, não do ambiente. Bancos gerenciados
+// (Render, Railway) exigem TLS e cortam a conexão com ECONNRESET sem ele —
+// era o que impedia rodar `npm run dev` contra o banco de produção.
+// Só um Postgres na própria máquina dispensa TLS.
+const isLocalDb = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(process.env.DATABASE_URL ?? '')
+
 const sql = postgres(process.env.DATABASE_URL!, {
-  ssl: process.env.NODE_ENV === 'production' ? 'require' : false,
+  ssl: isLocalDb ? false : 'require',
   max: 10,
 })
 

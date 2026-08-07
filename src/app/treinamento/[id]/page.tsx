@@ -467,18 +467,26 @@ export default function TreinamentoSessionPage() {
             <div ref={bottomRef} />
           </div>
 
-          <form onSubmit={handleSend} className="border-t border-gray-200 bg-white p-3 flex gap-2">
-            <input
+          <form onSubmit={handleSend} className="border-t border-gray-200 bg-white p-3 flex gap-2 items-end">
+            <textarea
               value={input}
               onChange={e => setInput(e.target.value)}
+              // Enter envia (como no WhatsApp); Shift+Enter quebra linha.
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  handleSend(e)
+                }
+              }}
+              rows={3}
               disabled={ended || sending}
-              placeholder={ended ? 'Este treino foi encerrado.' : 'Escreva sua resposta...'}
-              className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:bg-gray-100 disabled:text-gray-400"
+              placeholder={ended ? 'Este treino foi encerrado.' : 'Escreva sua resposta...  (Enter envia, Shift+Enter quebra linha)'}
+              className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-sm leading-relaxed resize-y min-h-[72px] max-h-64 focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:bg-gray-100 disabled:text-gray-400"
             />
             <button
               type="submit"
               disabled={ended || sending || !input.trim()}
-              className="px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors"
+              className="px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors shrink-0"
             >
               Enviar
             </button>
