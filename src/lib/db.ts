@@ -1,7 +1,13 @@
 import postgres from 'postgres'
 
+// SSL depende de ONDE o banco está, não do ambiente. Bancos gerenciados
+// (Render, Railway) exigem TLS e cortam a conexão com ECONNRESET sem ele —
+// era o que impedia rodar `npm run dev` contra o banco de produção.
+// Só um Postgres na própria máquina dispensa TLS.
+const isLocalDb = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(process.env.DATABASE_URL ?? '')
+
 const sql = postgres(process.env.DATABASE_URL!, {
-  ssl: process.env.NODE_ENV === 'production' ? 'require' : false,
+  ssl: isLocalDb ? false : 'require',
   max: 10,
 })
 
@@ -413,6 +419,70 @@ async function runMigrations() {
       END IF;
     END $$;
   `).catch(() => {})
+
+  // Treinador de Atendimento: base de conhecimento, sessões e mensagens
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS training_kb (
+      id SERIAL PRIMARY KEY,
+      data JSONB NOT NULL,
+      updated_by INTEGER REFERENCES users(id),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS training_sessions (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      level SMALLINT NOT NULL CHECK (level BETWEEN 1 AND 5),
+      scenario CHAR(1) NOT NULL,
+      persona JSONB NOT NULL,
+      kb_snapshot JSONB NOT NULL,
+      status TEXT NOT NULL DEFAULT 'em_andamento',
+      outcome TEXT,
+      scores JSONB,
+      average NUMERIC(3,1),
+      has_red_flag BOOLEAN DEFAULT FALSE,
+      verdict TEXT,
+      report JSONB,
+      started_at TIMESTAMPTZ DEFAULT NOW(),
+      ended_at TIMESTAMPTZ
+    );
+    CREATE TABLE IF NOT EXISTS training_messages (
+      id SERIAL PRIMARY KEY,
+      session_id INTEGER NOT NULL REFERENCES training_sessions(id) ON DELETE CASCADE,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      position INTEGER NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS training_messages_session_idx
+      ON training_messages (session_id, position);
+    CREATE INDEX IF NOT EXISTS training_sessions_user_idx
+      ON training_sessions (user_id, started_at DESC);
+  `)
+  // Desfecho declarado pelo próprio paciente no marcador [[FIM:...]]. Fica numa
+  // coluna separada de outcome de propósito: outcome é o veredito da avaliadora,
+  // este é só o sinal que ela recebe como contexto. Sem isso, "sumiu" e "a
+  // conversa acabou" são indistinguíveis olhando só o transcript.
+  await sql.unsafe(
+    `ALTER TABLE training_sessions ADD COLUMN IF NOT EXISTS declared_outcome TEXT`
+  ).catch(() => {})
+
+  // Custo real por sessão: tokens de fato consumidos na API (não uma
+  // estimativa), acumulados inclusive sobre tentativas descartadas — ver
+  // comentário em patient.ts/evaluator.ts. patient_* somam todos os turnos da
+  // conversa (haiku, gravado incrementalmente); eval_* são da chamada de
+  // avaliação (opus, gravado uma vez em saveReport).
+  await sql.unsafe(
+    `ALTER TABLE training_sessions ADD COLUMN IF NOT EXISTS patient_input_tokens INTEGER NOT NULL DEFAULT 0`
+  ).catch(() => {})
+  await sql.unsafe(
+    `ALTER TABLE training_sessions ADD COLUMN IF NOT EXISTS patient_output_tokens INTEGER NOT NULL DEFAULT 0`
+  ).catch(() => {})
+  await sql.unsafe(
+    `ALTER TABLE training_sessions ADD COLUMN IF NOT EXISTS eval_input_tokens INTEGER NOT NULL DEFAULT 0`
+  ).catch(() => {})
+  await sql.unsafe(
+    `ALTER TABLE training_sessions ADD COLUMN IF NOT EXISTS eval_output_tokens INTEGER NOT NULL DEFAULT 0`
+  ).catch(() => {})
 }
 
 export default sql
