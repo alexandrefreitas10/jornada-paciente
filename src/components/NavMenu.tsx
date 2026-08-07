@@ -18,6 +18,9 @@ export function NavMenu({ userName, isAdmin, canEstoque }: Props) {
     { href: '/termos', label: 'Termos' },
     { href: '/implantes', label: 'Implantes' },
     { href: '/relatorios', label: 'Relatórios' },
+    // Treino é da equipe inteira; a base de conhecimento (o gabarito) é só do admin.
+    { href: '/treinamento', label: 'Treinamento' },
+    ...(isAdmin ? [{ href: '/admin/treinamento', label: 'Base do Treino' }] : []),
     ...(isAdmin || canEstoque ? [{ href: '/estoque', label: 'Estoque' }] : []),
     ...(isAdmin ? [{ href: '/feedbacks', label: 'Feedbacks' }] : []),
     ...(isAdmin ? [{ href: '/erros', label: 'Erros' }] : []),
