@@ -3,16 +3,28 @@ import { isAdminSession } from '@/lib/authz'
 import { getSession } from './sessions'
 import type { TrainingSession } from './types'
 
-// Remove os contadores de token da sessão. Custo é informação de gestão: só o
-// admin vê. Tem que sair NO SERVIDOR, não só ficar escondido na tela — a
-// resposta da API é visível no navegador de qualquer usuário logado.
-export function withoutCost(session: TrainingSession): TrainingSession {
+// Genérico (não só TrainingSession) de propósito: TrainingSessionListItem
+// (histórico/lista) carrega os MESMOS quatro contadores de token opcionais —
+// ver comentário em types.ts. Um novo formato de linha não pode reabrir o
+// buraco que este helper existe pra fechar.
+type WithCostFields = {
+  patient_input_tokens?: number
+  patient_output_tokens?: number
+  eval_input_tokens?: number
+  eval_output_tokens?: number
+}
+
+// Remove os contadores de token da sessão (ou linha de lista). Custo é
+// informação de gestão: só o admin vê. Tem que sair NO SERVIDOR, não só
+// ficar escondido na tela — a resposta da API é visível no navegador de
+// qualquer usuário logado.
+export function withoutCost<T extends WithCostFields>(session: T): T {
   const {
     patient_input_tokens: _pi, patient_output_tokens: _po,
     eval_input_tokens: _ei, eval_output_tokens: _eo,
     ...rest
   } = session
-  return rest
+  return rest as T
 }
 
 export async function currentUserId(): Promise<number | null> {

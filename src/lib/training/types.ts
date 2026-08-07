@@ -129,3 +129,37 @@ export interface TrainingSession {
   eval_input_tokens?: number
   eval_output_tokens?: number
 }
+
+// --- Linha de LISTA (histórico) ---
+//
+// Formato deliberadamente distinto de TrainingSession: a lista (histórico
+// pessoal ou, para o admin, o histórico de um funcionário) só renderiza
+// datas e notas, então a query de listagem (ver listSessions em sessions.ts)
+// não busca persona, kb_snapshot, report nem as mensagens — os dois blobs
+// JSONB grandes que tornavam GET /api/treinamento/sessions lento. Um tipo
+// que finge ter esses campos (todos opcionais em cima de TrainingSession)
+// mentiria sobre o que realmente vem do servidor e quebraria em runtime na
+// primeira vez que alguém lesse `.report` de uma linha de lista — por isso
+// é um tipo à parte, não um Partial<TrainingSession>.
+export interface TrainingSessionListItem {
+  id: number
+  user_id: number
+  // Nome de quem treinou — vem do JOIN com users. A tela do admin precisa do
+  // nome; a API só tinha user_id numérico até aqui.
+  username: string
+  level: Level
+  scenario: ScenarioKey
+  status: SessionStatus
+  outcome: Outcome | null
+  average: number | null
+  has_red_flag: boolean
+  verdict: Verdict | null
+  started_at: string
+  ended_at: string | null
+  // Mesma regra de TrainingSession: ausentes para quem não é admin (ver
+  // withoutCost em guard.ts) — custo é informação de gestão.
+  patient_input_tokens?: number
+  patient_output_tokens?: number
+  eval_input_tokens?: number
+  eval_output_tokens?: number
+}

@@ -1,7 +1,7 @@
 import sql, { initSchema } from '@/lib/db'
 import type {
   Level, MessageRole, Outcome, Persona, ScenarioKey, TrainingKb,
-  TrainingMessage, TrainingReport, TrainingSession,
+  TrainingMessage, TrainingReport, TrainingSession, TrainingSessionListItem,
 } from './types'
 import { averageOf, hasRedFlag, verdictFor } from './scoring'
 
@@ -14,6 +14,9 @@ function toNum(v: unknown): number | null {
   return Number.isFinite(n) ? n : null
 }
 function normalizeSession(row: TrainingSession): TrainingSession {
+  return { ...row, average: toNum(row.average) }
+}
+function normalizeListItem(row: TrainingSessionListItem): TrainingSessionListItem {
   return { ...row, average: toNum(row.average) }
 }
 
@@ -42,18 +45,44 @@ export async function getSession(id: number): Promise<TrainingSession | null> {
   return row ? normalizeSession(row) : null
 }
 
-export async function listSessions(opts: { userId?: number; limit?: number } = {}): Promise<TrainingSession[]> {
+// Query de LISTAGEM (histórico pessoal, e para o admin o histórico de um
+// funcionário ou de todo mundo com opts.userId omitido). Só busca o que a
+// lista de fato renderiza — nada de persona/kb_snapshot/report, os dois
+// blobs JSONB grandes (a base de conhecimento inteira da clínica + a
+// avaliação completa) que faziam essa rota levar 31s frio / 12,3s morno
+// com UMA sessão na tabela. getSession (abaixo) continua com SELECT * —
+// a tela do chat de fato precisa da sessão inteira.
+//
+// JOIN com users: a tela do admin escolhe a pessoa pelo nome, não por um
+// user_id numérico — o username tem que vir junto de cada linha.
+export async function listSessions(opts: { userId?: number; limit?: number } = {}): Promise<TrainingSessionListItem[]> {
   await initSchema()
   const limit = opts.limit ?? 50
   const rows = opts.userId != null
-    ? await sql<TrainingSession[]>`
-        SELECT * FROM training_sessions WHERE user_id = ${opts.userId}
-        ORDER BY started_at DESC LIMIT ${limit}
+    ? await sql<TrainingSessionListItem[]>`
+        SELECT
+          ts.id, ts.user_id, u.username, ts.level, ts.scenario, ts.status,
+          ts.outcome, ts.average, ts.has_red_flag, ts.verdict,
+          ts.started_at, ts.ended_at,
+          ts.patient_input_tokens, ts.patient_output_tokens,
+          ts.eval_input_tokens, ts.eval_output_tokens
+        FROM training_sessions ts
+        JOIN users u ON u.id = ts.user_id
+        WHERE ts.user_id = ${opts.userId}
+        ORDER BY ts.started_at DESC LIMIT ${limit}
       `
-    : await sql<TrainingSession[]>`
-        SELECT * FROM training_sessions ORDER BY started_at DESC LIMIT ${limit}
+    : await sql<TrainingSessionListItem[]>`
+        SELECT
+          ts.id, ts.user_id, u.username, ts.level, ts.scenario, ts.status,
+          ts.outcome, ts.average, ts.has_red_flag, ts.verdict,
+          ts.started_at, ts.ended_at,
+          ts.patient_input_tokens, ts.patient_output_tokens,
+          ts.eval_input_tokens, ts.eval_output_tokens
+        FROM training_sessions ts
+        JOIN users u ON u.id = ts.user_id
+        ORDER BY ts.started_at DESC LIMIT ${limit}
       `
-  return rows.map(normalizeSession)
+  return rows.map(normalizeListItem)
 }
 
 export async function listMessages(sessionId: number): Promise<TrainingMessage[]> {
