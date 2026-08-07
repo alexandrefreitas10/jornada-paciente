@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { loadOwnedSession } from '@/lib/training/guard'
+import { isAdminSession } from '@/lib/authz'
+import { loadOwnedSession, withoutCost } from '@/lib/training/guard'
 import { listMessages } from '@/lib/training/sessions'
 
 export async function GET(
@@ -11,5 +12,10 @@ export async function GET(
   if ('error' in result) return NextResponse.json({ error: result.error }, { status: result.status })
 
   const messages = await listMessages(result.session.id)
-  return NextResponse.json({ session: result.session, messages })
+  const isAdmin = await isAdminSession()
+  return NextResponse.json({
+    session: isAdmin ? result.session : withoutCost(result.session),
+    messages,
+    isAdmin,
+  })
 }

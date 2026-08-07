@@ -56,11 +56,12 @@ function fmtDate(iso: string) {
 // Custo em dólar de uma sessão, a partir dos tokens de fato consumidos na API
 // (gravados por sessions.ts) — não uma estimativa.
 function sessionCost(s: TrainingSession) {
+  // Chegam undefined para quem não é admin: a API remove os contadores.
   return sessionCostUsd({
-    patientInputTokens: s.patient_input_tokens,
-    patientOutputTokens: s.patient_output_tokens,
-    evalInputTokens: s.eval_input_tokens,
-    evalOutputTokens: s.eval_output_tokens,
+    patientInputTokens: s.patient_input_tokens ?? 0,
+    patientOutputTokens: s.patient_output_tokens ?? 0,
+    evalInputTokens: s.eval_input_tokens ?? 0,
+    evalOutputTokens: s.eval_output_tokens ?? 0,
   }).total
 }
 
@@ -118,6 +119,7 @@ export default function TreinamentoPage() {
   const [kbMissing, setKbMissing] = useState(false)
 
   const [sessions, setSessions] = useState<TrainingSession[]>([])
+  const [isAdmin, setIsAdmin] = useState(false)
   const [loadingHistory, setLoadingHistory] = useState(true)
   const [historyError, setHistoryError] = useState<string | null>(null)
 
@@ -131,8 +133,9 @@ export default function TreinamentoPage() {
           setLoadingHistory(false)
           return
         }
-        const data = (await res.json()) as { sessions: TrainingSession[] }
+        const data = (await res.json()) as { sessions: TrainingSession[]; isAdmin?: boolean }
         setSessions(data.sessions)
+        setIsAdmin(!!data.isAdmin)
         setLoadingHistory(false)
       })
       .catch(() => {
@@ -244,7 +247,7 @@ export default function TreinamentoPage() {
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-gray-700">Seu histórico</h2>
-            {!loadingHistory && !historyError && sessions.length > 0 && (
+            {isAdmin && !loadingHistory && !historyError && sessions.length > 0 && (
               <p className="text-xs text-gray-500">
                 Custo total: <span className="font-semibold text-gray-700">{formatUsd(sessions.reduce((sum, s) => sum + sessionCost(s), 0))}</span>
               </p>
@@ -297,7 +300,9 @@ export default function TreinamentoPage() {
                         {s.average !== null && (
                           <span className="text-xs font-semibold text-gray-700">{s.average.toFixed(1)}</span>
                         )}
-                        <span className="text-xs text-gray-400">{formatUsd(sessionCost(s))}</span>
+                        {isAdmin && (
+                          <span className="text-xs text-gray-400">{formatUsd(sessionCost(s))}</span>
+                        )}
                         {s.verdict && (
                           <span className={`text-xs px-2 py-0.5 rounded-full ${VERDICT_CLASS[s.verdict] ?? 'bg-gray-100 text-gray-600'}`}>
                             {VERDICT_LABELS[s.verdict] ?? s.verdict}

@@ -3,6 +3,18 @@ import { isAdminSession } from '@/lib/authz'
 import { getSession } from './sessions'
 import type { TrainingSession } from './types'
 
+// Remove os contadores de token da sessão. Custo é informação de gestão: só o
+// admin vê. Tem que sair NO SERVIDOR, não só ficar escondido na tela — a
+// resposta da API é visível no navegador de qualquer usuário logado.
+export function withoutCost(session: TrainingSession): TrainingSession {
+  const {
+    patient_input_tokens: _pi, patient_output_tokens: _po,
+    eval_input_tokens: _ei, eval_output_tokens: _eo,
+    ...rest
+  } = session
+  return rest
+}
+
 export async function currentUserId(): Promise<number | null> {
   const session = await auth()
   const id = Number((session?.user as { id?: string })?.id)

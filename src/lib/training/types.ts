@@ -121,8 +121,11 @@ export interface TrainingSession {
   // descartadas (retry por quebra de personagem / avaliação inválida) — ver
   // comentário em patient.ts e evaluator.ts. patient_* somam todos os turnos
   // da conversa (haiku); eval_* são da chamada única de avaliação (opus).
-  patient_input_tokens: number
-  patient_output_tokens: number
-  eval_input_tokens: number
-  eval_output_tokens: number
+  // Opcionais porque a API REMOVE estes campos para quem não é admin: custo é
+  // informação de gestão. Esconder só na tela não bastaria — a resposta da API
+  // fica visível no navegador de qualquer usuário.
+  patient_input_tokens?: number
+  patient_output_tokens?: number
+  eval_input_tokens?: number
+  eval_output_tokens?: number
 }

@@ -4,7 +4,7 @@ import { readKb } from '@/lib/training/kb'
 import { pickPersona, SCENARIOS } from '@/lib/training/personas'
 import { nextPatientTurn, OutOfCreditsError } from '@/lib/training/patient'
 import { addMessages, addPatientUsage, createSession, listSessions, markEnded } from '@/lib/training/sessions'
-import { currentUserId } from '@/lib/training/guard'
+import { currentUserId, withoutCost } from '@/lib/training/guard'
 import type { Level, ScenarioKey } from '@/lib/training/types'
 
 // IA-paciente (haiku) roda uma vez para abrir a conversa, com até 2 tentativas
@@ -15,9 +15,13 @@ export async function GET(req: NextRequest) {
   const userId = await currentUserId()
   if (userId === null) return NextResponse.json({ error: 'Sessão inválida.' }, { status: 401 })
 
-  const all = req.nextUrl.searchParams.get('all') === '1' && (await isAdminSession())
+  const isAdmin = await isAdminSession()
+  const all = req.nextUrl.searchParams.get('all') === '1' && isAdmin
   const sessions = await listSessions(all ? {} : { userId })
-  return NextResponse.json({ sessions })
+  return NextResponse.json({
+    sessions: isAdmin ? sessions : sessions.map(withoutCost),
+    isAdmin,
+  })
 }
 
 export async function POST(req: NextRequest) {

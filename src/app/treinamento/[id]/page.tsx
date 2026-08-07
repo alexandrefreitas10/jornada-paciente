@@ -92,18 +92,22 @@ function TypingIndicator() {
 
 // --- Relatório ------------------------------------------------------------
 
-function ReportView({ session, report }: { session: TrainingSession; report: TrainingReport }) {
+function ReportView(
+  { session, report, isAdmin }:
+  { session: TrainingSession; report: TrainingReport; isAdmin: boolean }
+) {
   // A verdade sobre "cruzou linha vermelha" é do SERVIDOR (session.has_red_flag,
   // calculado em saveReport a partir de redFlags.length E da nota de risco —
   // duas afirmações independentes do modelo). Nunca recalcular aqui: um relatório
   // com risco baixo e redFlags vazio (o modelo esqueceu de listar o alerta) já
   // reprova no servidor, e a tela não pode mostrar "tudo certo" por cima disso.
   const hasRedFlags = session.has_red_flag
+  // Os contadores chegam undefined para quem não é admin: a API os remove.
   const cost = sessionCostUsd({
-    patientInputTokens: session.patient_input_tokens,
-    patientOutputTokens: session.patient_output_tokens,
-    evalInputTokens: session.eval_input_tokens,
-    evalOutputTokens: session.eval_output_tokens,
+    patientInputTokens: session.patient_input_tokens ?? 0,
+    patientOutputTokens: session.patient_output_tokens ?? 0,
+    evalInputTokens: session.eval_input_tokens ?? 0,
+    evalOutputTokens: session.eval_output_tokens ?? 0,
   })
 
   return (
@@ -180,30 +184,40 @@ function ReportView({ session, report }: { session: TrainingSession; report: Tra
           tentativas descartadas (ver comentário em patient.ts/evaluator.ts).
           A avaliação (opus) é o modelo caro do módulo: o split deixa claro
           que ela domina o total mesmo sendo uma chamada só por sessão. */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
-        <h2 className="text-sm font-semibold text-gray-700 mb-2">Custo desta sessão</h2>
-        <p className="text-2xl font-bold text-gray-900">{formatUsd(cost.total)}</p>
-        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="border-t border-gray-100 pt-3 sm:border-t-0 sm:pt-0">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-medium text-gray-800">Conversa (paciente)</p>
-              <p className="text-sm font-bold text-violet-700">{formatUsd(cost.patient)}</p>
-            </div>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {fmtTokens(session.patient_input_tokens)} tokens de entrada · {fmtTokens(session.patient_output_tokens)} de saída
-            </p>
+      {isAdmin && (
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+          <div className="flex items-baseline justify-between gap-3 flex-wrap">
+            <h2 className="text-sm font-semibold text-gray-700">Custo desta sessão</h2>
+            <p className="text-2xl font-bold text-gray-900">{formatUsd(cost.total)}</p>
           </div>
-          <div className="border-t border-gray-100 pt-3 sm:border-t-0 sm:pt-0">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-medium text-gray-800">Avaliação (grader)</p>
-              <p className="text-sm font-bold text-violet-700">{formatUsd(cost.grader)}</p>
-            </div>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {fmtTokens(session.eval_input_tokens)} tokens de entrada · {fmtTokens(session.eval_output_tokens)} de saída
-            </p>
+          <div className="mt-3 space-y-3">
+            {[
+              {
+                label: 'Conversa (paciente)',
+                valor: cost.patient,
+                entrada: session.patient_input_tokens ?? 0,
+                saida: session.patient_output_tokens ?? 0,
+              },
+              {
+                label: 'Avaliação (grader)',
+                valor: cost.grader,
+                entrada: session.eval_input_tokens ?? 0,
+                saida: session.eval_output_tokens ?? 0,
+              },
+            ].map(linha => (
+              <div key={linha.label} className="border-b border-gray-100 last:border-0 pb-3 last:pb-0">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium text-gray-800">{linha.label}</p>
+                  <p className="text-sm font-bold text-violet-700">{formatUsd(linha.valor)}</p>
+                </div>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {fmtTokens(linha.entrada)} tokens de entrada · {fmtTokens(linha.saida)} de saída
+                </p>
+              </div>
+            ))}
           </div>
         </div>
-      </div>
+      )}
 
       {/* 5. Pontos fortes */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
@@ -258,6 +272,7 @@ export default function TreinamentoSessionPage() {
   const id = params.id
 
   const [session, setSession] = useState<TrainingSession | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [bubbles, setBubbles] = useState<Bubble[]>([])
   const [report, setReport] = useState<TrainingReport | null>(null)
   const [loading, setLoading] = useState(true)
@@ -286,8 +301,11 @@ export default function TreinamentoSessionPage() {
           setLoading(false)
           return
         }
-        const data = (await res.json()) as { session: TrainingSession; messages: TrainingMessage[] }
+        const data = (await res.json()) as {
+          session: TrainingSession; messages: TrainingMessage[]; isAdmin?: boolean
+        }
         setSession(data.session)
+        setIsAdmin(!!data.isAdmin)
         setBubbles(messagesToBubbles(data.messages))
         if (data.session.report) setReport(data.session.report)
         if (data.session.status !== 'em_andamento') setEnded(true)
@@ -545,7 +563,7 @@ export default function TreinamentoSessionPage() {
           </div>
         )}
 
-        {report && <ReportView session={session} report={report} />}
+        {report && <ReportView session={session} report={report} isAdmin={isAdmin} />}
       </div>
     </main>
   )
