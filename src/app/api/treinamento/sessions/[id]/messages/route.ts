@@ -31,6 +31,8 @@ export async function POST(
   await addMessages(session.id, [{ role: 'secretaria', content }])
 
   // Teto de 30 mensagens da secretária: encerra sem gastar mais uma chamada de IA.
+  // Sem declared_outcome de propósito — este NAO_AGENDOU é corte do sistema, não
+  // algo que o paciente sinalizou. Gravá-lo faria a avaliadora ler um sinal falso.
   const sent = await countSecretariaMessages(session.id)
   if (sent >= MAX_SECRETARIA_MESSAGES) {
     await markEnded(session.id)
@@ -51,7 +53,9 @@ export async function POST(
     if (bubbles.length > 0) {
       await addMessages(session.id, bubbles.map(c => ({ role: 'paciente' as const, content: c })))
     }
-    if (outcome) await markEnded(session.id)
+    // Guarda o desfecho declarado pelo paciente junto do encerramento: é o único
+    // momento em que ele existe, e a avaliadora vai precisar dele lá no finish.
+    if (outcome) await markEnded(session.id, outcome)
     return NextResponse.json({ bubbles, outcome, ended: outcome !== null })
   } catch (err) {
     if (err instanceof OutOfCreditsError) {

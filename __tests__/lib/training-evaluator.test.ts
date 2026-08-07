@@ -1,5 +1,11 @@
 // __tests__/lib/training-evaluator.test.ts
-import { parseReport, REPORT_SCHEMA, CRITERION_LABELS, evaluatorFailureReason } from '@/lib/training/evaluator'
+import {
+  parseReport, REPORT_SCHEMA, CRITERION_LABELS,
+  evaluatorFailureReason, buildEvaluatorPrompt,
+} from '@/lib/training/evaluator'
+import { EMPTY_KB } from '@/lib/training/kb'
+import { pickPersona } from '@/lib/training/personas'
+import type { Outcome } from '@/lib/training/types'
 
 const good = {
   outcome: 'AGENDOU',
@@ -103,5 +109,45 @@ describe('training/evaluator — evaluatorFailureReason (item 3: recusa/corte an
 
   it('resposta normal e completa não é falha', () => {
     expect(evaluatorFailureReason('end_turn', '{"outcome":"AGENDOU"}')).toBeNull()
+  })
+})
+
+describe('training/evaluator — sinal de desfecho declarado pelo paciente', () => {
+  const base = { persona: pickPersona(3, 'A'), level: 3 as const, scenario: 'A' as const, kb: EMPTY_KB }
+
+  it('sem desfecho declarado, o prompt não ganha a seção', () => {
+    expect(buildEvaluatorPrompt(base)).not.toMatch(/SINAL DO PACIENTE/)
+    expect(buildEvaluatorPrompt({ ...base, declaredOutcome: null })).not.toMatch(/SINAL DO PACIENTE/)
+  })
+
+  it('SUMIU chega explicado — "acabou" e "abandonou" são indistinguíveis só pelo transcript', () => {
+    const prompt = buildEvaluatorPrompt({ ...base, declaredOutcome: 'SUMIU' })
+    expect(prompt).toMatch(/SINAL DO PACIENTE/)
+    expect(prompt).toMatch(/SUMIU/)
+    expect(prompt).toMatch(/parar de responder/i)
+  })
+
+  it('o sinal é apresentado como contexto, não como veredito', () => {
+    const prompt = buildEvaluatorPrompt({ ...base, declaredOutcome: 'DISPENSOU_BEM' })
+    expect(prompt).toMatch(/não o veredito|quem decide o desfecho é você/i)
+    expect(prompt).toMatch(/corrija/i)
+  })
+
+  it('todo desfecho possível tem explicação — nenhum vira sigla solta no prompt', () => {
+    const outcomes: Outcome[] = ['AGENDOU', 'NAO_AGENDOU', 'SUMIU', 'PERDEU_O_PACIENTE', 'DISPENSOU_BEM']
+    for (const declaredOutcome of outcomes) {
+      const line = buildEvaluatorPrompt({ ...base, declaredOutcome })
+        .split('\n')
+        .find(l => l.includes(`sinalizou o desfecho ${declaredOutcome}`))
+      expect(line).toBeDefined()
+      // "— <explicação>" depois da sigla, não a sigla sozinha.
+      expect(line).toMatch(new RegExp(`${declaredOutcome} — .+`))
+    }
+  })
+
+  it('a seção não desmonta o resto do prompt', () => {
+    const prompt = buildEvaluatorPrompt({ ...base, declaredOutcome: 'AGENDOU' })
+    expect(prompt).toMatch(/# GABARITO/)
+    expect(prompt).toMatch(/# COMO AVALIAR/)
   })
 })

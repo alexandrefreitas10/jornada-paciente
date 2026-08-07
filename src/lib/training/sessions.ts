@@ -1,6 +1,6 @@
 import sql, { initSchema } from '@/lib/db'
 import type {
-  Level, MessageRole, Persona, ScenarioKey, TrainingKb,
+  Level, MessageRole, Outcome, Persona, ScenarioKey, TrainingKb,
   TrainingMessage, TrainingReport, TrainingSession,
 } from './types'
 import { averageOf, hasRedFlag, verdictFor } from './scoring'
@@ -98,10 +98,18 @@ export async function countSecretariaMessages(sessionId: number): Promise<number
   return total
 }
 
-export async function markEnded(sessionId: number): Promise<void> {
+// declaredOutcome: o desfecho que o PACIENTE sinalizou no marcador [[FIM:...]],
+// quando houve um. Não é o veredito — quem decide continua sendo a avaliadora,
+// em saveReport. COALESCE porque markEnded também é chamado sem desfecho (a
+// secretária clicando em "Encerrar e avaliar"): nesse caminho um sinal já
+// gravado não pode ser apagado por um NULL.
+export async function markEnded(sessionId: number, declaredOutcome?: Outcome | null): Promise<void> {
   await initSchema()
   await sql`
-    UPDATE training_sessions SET status = 'encerrada', ended_at = NOW()
+    UPDATE training_sessions SET
+      status = 'encerrada',
+      ended_at = NOW(),
+      declared_outcome = COALESCE(${declaredOutcome ?? null}::text, declared_outcome)
     WHERE id = ${sessionId} AND status = 'em_andamento'
   `
 }

@@ -452,6 +452,13 @@ async function runMigrations() {
     CREATE INDEX IF NOT EXISTS training_sessions_user_idx
       ON training_sessions (user_id, started_at DESC);
   `)
+  // Desfecho declarado pelo próprio paciente no marcador [[FIM:...]]. Fica numa
+  // coluna separada de outcome de propósito: outcome é o veredito da avaliadora,
+  // este é só o sinal que ela recebe como contexto. Sem isso, "sumiu" e "a
+  // conversa acabou" são indistinguíveis olhando só o transcript.
+  await sql.unsafe(
+    `ALTER TABLE training_sessions ADD COLUMN IF NOT EXISTS declared_outcome TEXT`
+  ).catch(() => {})
 }
 
 export default sql

@@ -116,20 +116,47 @@ export function parseReport(data: unknown): TrainingReport {
   return data as TrainingReport
 }
 
+// Como o paciente descreve, em primeira pessoa, cada desfecho que ele pode
+// declarar. Espelha a lista do marcador [[FIM:...]] em patient.ts — o texto está
+// aqui de novo porque a avaliadora precisa saber o que o sinal SIGNIFICA, não só
+// a sigla. "SUMIU" sozinho é ambíguo; "ele decidiu parar de responder" não é.
+const DECLARED_OUTCOME_MEANINGS: Record<Outcome, string> = {
+  AGENDOU: 'ele considera que marcou consulta, com dia e hora',
+  NAO_AGENDOU: 'para ele a conversa acabou sem agendamento e sem briga',
+  SUMIU: 'ele decidiu parar de responder — não é o fim natural da conversa, é abandono',
+  PERDEU_O_PACIENTE: 'ele foi embora irritado, ou entendeu que a secretária desistiu dele',
+  DISPENSOU_BEM: 'ele se reconhece como caso impossível e achou que ela encerrou com firmeza e educação',
+}
+
+// O sinal do paciente entra como CONTEXTO, nunca como veredito: quem julga é a
+// avaliadora (modelo forte) olhando o transcript — o paciente é o haiku barato e
+// pode ter se enganado, ou declarado o fim por cansaço. Sem esta seção, porém,
+// ela recebia um transcript que simplesmente para e tinha que adivinhar se o
+// paciente sumiu ou se a conversa terminou.
+function declaredOutcomeSection(declared: Outcome | null | undefined): string {
+  if (!declared) return ''
+  return `
+# SINAL DO PACIENTE
+Ao encerrar, o paciente simulado sinalizou o desfecho ${declared} — ${DECLARED_OUTCOME_MEANINGS[declared]}.
+Isso é um SINAL, não o veredito: quem decide o desfecho é você. Confirme se ele bate com o que a conversa mostra e, se não bater, corrija — o campo "outcome" do relatório é o SEU julgamento, não a repetição deste sinal.
+`
+}
+
 export function buildEvaluatorPrompt(params: {
   persona: Persona
   level: Level
   scenario: ScenarioKey
   kb: TrainingKb
+  declaredOutcome?: Outcome | null
 }): string {
-  const { persona, level, scenario, kb } = params
+  const { persona, level, scenario, kb, declaredOutcome } = params
   return `Você é um treinador de atendimento de clínicas médicas. Avalie a conversa abaixo, em que uma SECRETÁRIA atendeu um paciente simulado no WhatsApp.
 
 # O TREINO
 Paciente: ${persona.name}, ${persona.age} anos. ${persona.story}
 Cenário: ${SCENARIOS[scenario]}
 Nível ${level}: ${LEVELS[level]}
-
+${declaredOutcomeSection(declaredOutcome)}
 # GABARITO — a verdade sobre esta clínica
 Tudo que a secretária afirmar diferente disto é ERRO DE PRECISÃO, mesmo que soe bem.
 
@@ -198,6 +225,7 @@ export async function evaluateSession(params: {
   scenario: ScenarioKey
   kb: TrainingKb
   messages: TrainingMessage[]
+  declaredOutcome?: Outcome | null
 }): Promise<TrainingReport> {
   const system = buildEvaluatorPrompt(params)
   const user = `# A CONVERSA\n\n${transcript(params.messages)}`

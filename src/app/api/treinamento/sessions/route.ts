@@ -53,7 +53,9 @@ export async function POST(req: NextRequest) {
     if (bubbles.length > 0) {
       await addMessages(session.id, bubbles.map(content => ({ role: 'paciente' as const, content })))
     }
-    if (outcome) await markEnded(session.id)
+    // Guarda o desfecho declarado pelo paciente junto do encerramento: é o único
+    // momento em que ele existe, e a avaliadora vai precisar dele lá no finish.
+    if (outcome) await markEnded(session.id, outcome)
     return NextResponse.json({ session, bubbles, outcome })
   } catch (err) {
     if (err instanceof OutOfCreditsError) {

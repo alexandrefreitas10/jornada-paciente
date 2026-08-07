@@ -80,6 +80,9 @@ export async function POST(
           scenario: session.scenario,
           kb: session.kb_snapshot,
           messages,
+          // fresh primeiro: se o paciente declarou o fim entre o loadOwnedSession
+          // e a trava, o sinal só existe na releitura.
+          declaredOutcome: fresh?.declared_outcome ?? session.declared_outcome,
         })
         const updated = await saveReport(session.id, report)
         // saveReport devolve null se nenhuma linha bateu (ex.: sessão removida

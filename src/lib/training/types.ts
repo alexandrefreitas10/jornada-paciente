@@ -105,7 +105,11 @@ export interface TrainingSession {
   persona: Persona
   kb_snapshot: TrainingKb
   status: SessionStatus
+  // Veredito da IA-avaliadora (preenchido só em saveReport).
   outcome: Outcome | null
+  // Desfecho que o próprio paciente declarou no marcador [[FIM:...]]. Entra no
+  // prompt da avaliadora como sinal, não como decisão — ver evaluator.ts.
+  declared_outcome: Outcome | null
   scores: Scores | null
   average: number | null
   has_red_flag: boolean
