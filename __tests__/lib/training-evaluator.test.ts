@@ -1,5 +1,5 @@
 // __tests__/lib/training-evaluator.test.ts
-import { parseReport, REPORT_SCHEMA, CRITERION_LABELS } from '@/lib/training/evaluator'
+import { parseReport, REPORT_SCHEMA, CRITERION_LABELS, evaluatorFailureReason } from '@/lib/training/evaluator'
 
 const good = {
   outcome: 'AGENDOU',
@@ -80,5 +80,28 @@ describe('training/evaluator — schema e rótulos', () => {
 
   it('há rótulo em português para cada um dos 7 critérios', () => {
     expect(Object.keys(CRITERION_LABELS)).toHaveLength(7)
+  })
+
+  it('scoreProp não usa minimum/maximum — não suportado no structured output da Anthropic', () => {
+    const scoreProp = REPORT_SCHEMA.properties.scores.properties.acolhimento as Record<string, unknown>
+    expect(scoreProp).toEqual({ type: 'number' })
+  })
+})
+
+describe('training/evaluator — evaluatorFailureReason (item 3: recusa/corte antes do JSON.parse)', () => {
+  it('recusa de segurança não é retryable', () => {
+    expect(evaluatorFailureReason('refusal', '')).toBe('refusal')
+  })
+
+  it('max_tokens é retryable, mesmo com algum texto parcial', () => {
+    expect(evaluatorFailureReason('max_tokens', '{"outcome": "AGE')).toBe('incomplete')
+  })
+
+  it('resposta vazia sem stop_reason de recusa também é retryable', () => {
+    expect(evaluatorFailureReason('end_turn', '')).toBe('incomplete')
+  })
+
+  it('resposta normal e completa não é falha', () => {
+    expect(evaluatorFailureReason('end_turn', '{"outcome":"AGENDOU"}')).toBeNull()
   })
 })

@@ -24,6 +24,12 @@ const LEAK_MARKERS = [
 const THIRD_PERSON_VERBS =
   '(?:ainda\\s+)?(?:está|esta|ficou|fica|acha|achou|quer|queria|vai|pensa|pensou|prefere|sente|sentiu|decidiu)'
 
+// Escapa metacaracteres de regex antes de interpolar texto livre num RegExp.
+// As 11 personas de hoje têm nomes só com letras, mas isso não é garantido pra sempre.
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 export function breaksCharacter(text: string, personaName: string): boolean {
   if (LEAK_MARKERS.some(re => re.test(text))) return true
 
@@ -36,7 +42,7 @@ export function breaksCharacter(text: string, personaName: string): boolean {
   // seguido de espaço, \b considera as duas pontas "não-palavra" e falha em bater.
   // Por isso o fim do verbo é fechado com um lookahead negativo explícito.
   const re = new RegExp(
-    `(?<!\\b(?:a|o|é|e|sou|chamo|aqui)\\s)\\b${firstName}\\s+${THIRD_PERSON_VERBS}(?![a-zA-ZÀ-ÿ])`,
+    `(?<!\\b(?:a|o|é|e|sou|chamo|aqui)\\s)\\b${escapeRegExp(firstName)}\\s+${THIRD_PERSON_VERBS}(?![a-zA-ZÀ-ÿ])`,
     'i'
   )
   return re.test(text)
@@ -55,11 +61,18 @@ export function splitBubbles(raw: string): string[] {
     .slice(0, MAX_BUBBLES)
 }
 
+// Tolerante a variação do modelo: espaço em volta dos dois-pontos/colchetes e
+// caixa baixa ("[[FIM: agendou]]") — sem isso o marcador vaza pra tela como texto.
+const END_MARKER_SOURCE = '\\[\\[\\s*FIM\\s*:\\s*([A-Z_]+)\\s*\\]\\]'
+
 export function detectEnding(raw: string): { text: string; outcome: Outcome | null } {
-  const match = raw.match(/\[\[FIM:([A-Z_]+)\]\]/)
-  const text = raw.replace(/\[\[FIM:[A-Z_]+\]\]/g, '').trim()
+  const match = raw.match(new RegExp(END_MARKER_SOURCE, 'i'))
+  let text = raw.replace(new RegExp(END_MARKER_SOURCE, 'gi'), '').trim()
+  // Markdown que envolvia o marcador (ex: "**[[FIM:AGENDOU]]**") vira resíduo tipo
+  // "****" depois de remover o marcador — se sobrou só isso, não é uma mensagem.
+  if (/^[*_\s]*$/.test(text)) text = ''
   if (!match) return { text, outcome: null }
-  const candidate = match[1] as Outcome
+  const candidate = match[1].toUpperCase() as Outcome
   return { text, outcome: OUTCOMES.includes(candidate) ? candidate : null }
 }
 
@@ -118,12 +131,22 @@ export class OutOfCreditsError extends Error {
   constructor() { super('Os créditos da IA acabaram. A conversa foi salva e pode ser avaliada depois.') }
 }
 
-// Saldo zerado na Anthropic volta como 400 (ou 403 de billing) — não como um erro
-// dedicado. Sem esta checagem, vira "Unexpected end of JSON input" na tela.
+// Extrai só a frase de erro da API — err.message vem com o JSON inteiro.
+// (mesma forma usada em measurements/extract/route.ts)
+function apiMessage(err: InstanceType<typeof Anthropic.APIError>): string {
+  const body = (err as { error?: { error?: { message?: string } } }).error
+  return body?.error?.message ?? err.message
+}
+
+// Saldo zerado na Anthropic volta como 400 com mensagem de billing — não como um
+// erro dedicado. Sem esta checagem, vira "Unexpected end of JSON input" na tela.
+// Um 400 comum (ex: requisição malformada) NÃO é erro de crédito — não pode virar
+// "recarregue seus créditos" pra quem só mandou um pedido inválido. 403 também fica
+// de fora: é permission_error (chave revogada/errada), não cobrança.
 export function isCreditError(err: unknown): boolean {
   if (!(err instanceof Anthropic.APIError)) return false
-  const type = (err as { type?: string }).type
-  return err.status === 400 || err.status === 403 || type === 'billing_error'
+  if (err.status !== 400) return false
+  return /credit balance is too low|insufficient credit|billing/i.test(apiMessage(err))
 }
 
 function toAnthropicMessages(history: TrainingMessage[]): Anthropic.MessageParam[] {
@@ -132,6 +155,24 @@ function toAnthropicMessages(history: TrainingMessage[]): Anthropic.MessageParam
     role: m.role === 'paciente' ? ('assistant' as const) : ('user' as const),
     content: m.content,
   }))
+}
+
+// Decide o que fazer com uma resposta bruta do modelo-paciente: aceitar o turno,
+// ou sinalizar que precisa tentar de novo (retorna null). Função pura — sem
+// chamada de rede — pra dar pra testar os casos de borda sem mockar a API.
+export function resolvePatientTurn(
+  raw: string,
+  personaName: string
+): { bubbles: string[]; outcome: Outcome | null } | null {
+  const { text, outcome } = detectEnding(raw)
+  if (!text) {
+    // Só veio o marcador, sem texto de verdade. Se o desfecho é válido, é um fim
+    // de conversa silencioso — não pode virar retry infinito nem "travou aqui".
+    return outcome ? { bubbles: [], outcome } : null
+  }
+  if (breaksCharacter(text, personaName)) return null
+  const bubbles = splitBubbles(text)
+  return bubbles.length > 0 ? { bubbles, outcome } : null
 }
 
 // Gera o próximo turno do paciente. Descarta e regera uma vez se a IA quebrar o personagem.
@@ -165,11 +206,8 @@ export async function nextPatientTurn(params: {
       throw err
     }
 
-    const { text, outcome } = detectEnding(raw)
-    if (!text) continue
-    if (breaksCharacter(text, params.persona.name)) continue
-    const bubbles = splitBubbles(text)
-    if (bubbles.length > 0) return { bubbles, outcome }
+    const resolved = resolvePatientTurn(raw, params.persona.name)
+    if (resolved) return resolved
   }
 
   // Duas tentativas quebraram o personagem — devolve algo neutro em vez de vazar avaliação.

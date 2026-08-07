@@ -5,6 +5,18 @@ import type {
 } from './types'
 import { averageOf, verdictFor } from './scoring'
 
+// average é NUMERIC(3,1) — o driver postgres.js devolve string, não number.
+// TrainingSession.average é tipado number; sem normalizar, average.toFixed(1)
+// na tela quebra (mesmo problema já resolvido em measurements.ts e stock.ts).
+function toNum(v: unknown): number | null {
+  if (v == null) return null
+  const n = typeof v === 'number' ? v : Number(v)
+  return Number.isFinite(n) ? n : null
+}
+function normalizeSession(row: TrainingSession): TrainingSession {
+  return { ...row, average: toNum(row.average) }
+}
+
 export async function createSession(params: {
   userId: number
   level: Level
@@ -27,27 +39,29 @@ export async function createSession(params: {
 export async function getSession(id: number): Promise<TrainingSession | null> {
   await initSchema()
   const [row] = await sql<TrainingSession[]>`SELECT * FROM training_sessions WHERE id = ${id}`
-  return row ?? null
+  return row ? normalizeSession(row) : null
 }
 
 export async function listSessions(opts: { userId?: number; limit?: number } = {}): Promise<TrainingSession[]> {
   await initSchema()
   const limit = opts.limit ?? 50
-  if (opts.userId != null) {
-    return sql<TrainingSession[]>`
-      SELECT * FROM training_sessions WHERE user_id = ${opts.userId}
-      ORDER BY started_at DESC LIMIT ${limit}
-    `
-  }
-  return sql<TrainingSession[]>`
-    SELECT * FROM training_sessions ORDER BY started_at DESC LIMIT ${limit}
-  `
+  const rows = opts.userId != null
+    ? await sql<TrainingSession[]>`
+        SELECT * FROM training_sessions WHERE user_id = ${opts.userId}
+        ORDER BY started_at DESC LIMIT ${limit}
+      `
+    : await sql<TrainingSession[]>`
+        SELECT * FROM training_sessions ORDER BY started_at DESC LIMIT ${limit}
+      `
+  return rows.map(normalizeSession)
 }
 
 export async function listMessages(sessionId: number): Promise<TrainingMessage[]> {
   await initSchema()
+  // position ASC sozinho não desempata: duas mensagens gravadas com a mesma
+  // posição (ver addMessages) voltavam em ordem arbitrária. id ASC é estável.
   return sql<TrainingMessage[]>`
-    SELECT * FROM training_messages WHERE session_id = ${sessionId} ORDER BY position ASC
+    SELECT * FROM training_messages WHERE session_id = ${sessionId} ORDER BY position ASC, id ASC
   `
 }
 
@@ -56,19 +70,22 @@ export async function addMessages(
   entries: { role: MessageRole; content: string }[]
 ): Promise<TrainingMessage[]> {
   await initSchema()
+  if (entries.length === 0) return []
   const [{ next }] = await sql<{ next: number }[]>`
     SELECT COALESCE(MAX(position), 0) + 1 AS next FROM training_messages WHERE session_id = ${sessionId}
   `
-  const saved: TrainingMessage[] = []
-  for (let i = 0; i < entries.length; i++) {
-    const [row] = await sql<TrainingMessage[]>`
-      INSERT INTO training_messages (session_id, role, content, position)
-      VALUES (${sessionId}, ${entries[i].role}, ${entries[i].content}, ${next + i})
-      RETURNING *
-    `
-    saved.push(row)
-  }
-  return saved
+  const rows = entries.map((e, i) => ({
+    session_id: sessionId,
+    role: e.role,
+    content: e.content,
+    position: next + i,
+  }))
+  // Um único INSERT multi-linha em vez de N inserts em loop: reduz a janela em
+  // que duas chamadas concorrentes leem o mesmo "next" e colidem posições.
+  return sql<TrainingMessage[]>`
+    INSERT INTO training_messages ${sql(rows, 'session_id', 'role', 'content', 'position') as never}
+    RETURNING *
+  `
 }
 
 // Quantas mensagens a SECRETÁRIA já mandou — é o teto de 30 da spec.
@@ -89,10 +106,13 @@ export async function markEnded(sessionId: number): Promise<void> {
   `
 }
 
-export async function saveReport(sessionId: number, report: TrainingReport): Promise<TrainingSession> {
+export async function saveReport(sessionId: number, report: TrainingReport): Promise<TrainingSession | null> {
   await initSchema()
   const average = averageOf(report.scores)
-  const hasRedFlag = report.redFlags.length > 0
+  // redFlags e risco são duas afirmações independentes do modelo: o prompt define
+  // risco 0 como "cruzou uma linha vermelha" mesmo que a lista redFlags venha vazia
+  // (o modelo pode esquecer de listar o alerta). Qualquer um dos dois veta a aprovação.
+  const hasRedFlag = report.redFlags.length > 0 || report.scores.risco < 10
   const verdict = verdictFor(average, hasRedFlag)
   const [row] = await sql<TrainingSession[]>`
     UPDATE training_sessions SET
@@ -107,5 +127,7 @@ export async function saveReport(sessionId: number, report: TrainingReport): Pro
     WHERE id = ${sessionId}
     RETURNING *
   `
-  return row
+  // Zero linhas casadas (id inexistente) não pode virar "undefined" escondido
+  // atrás de um Promise<TrainingSession> não-nulo — mesma convenção de getSession.
+  return row ? normalizeSession(row) : null
 }

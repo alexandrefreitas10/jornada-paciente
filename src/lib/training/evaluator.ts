@@ -23,7 +23,11 @@ export const CRITERION_LABELS: Record<CriterionKey, string> = {
 const CRITERION_KEYS = Object.keys(CRITERION_LABELS) as CriterionKey[]
 const OUTCOMES: Outcome[] = ['AGENDOU', 'NAO_AGENDOU', 'SUMIU', 'PERDEU_O_PACIENTE', 'DISPENSOU_BEM']
 
-const scoreProp = { type: 'number', minimum: 0, maximum: 10 }
+// Sem minimum/maximum: constraints numéricas não são suportadas no structured
+// output da Anthropic (só são removidas automaticamente no caminho zodOutputFormat/
+// messages.parse — aqui o schema vai cru pro output_config.format e pode voltar 400).
+// O intervalo 0–10 é garantido por parseReport, não pelo schema.
+const scoreProp = { type: 'number' }
 const stringProp = { type: 'string' }
 
 export const REPORT_SCHEMA = {
@@ -176,6 +180,21 @@ function transcript(messages: TrainingMessage[]): string {
     .join('\n')
 }
 
+// Classifica o resultado bruto de uma chamada ao avaliador antes de tentar o
+// JSON.parse. Pura — sem chamada de rede — pra testar sem mockar a API.
+// - "refusal": claude-opus-5 recusou por segurança (HTTP 200, conteúdo vazio).
+//   Tentar de novo com o mesmo pedido não muda nada, então NÃO é retryable.
+// - "incomplete": max_tokens cortou a resposta (thinking + texto dividem o teto),
+//   ou o bloco de texto veio vazio por algum outro motivo. É retryable.
+export function evaluatorFailureReason(
+  stopReason: string | null,
+  raw: string
+): 'refusal' | 'incomplete' | null {
+  if (stopReason === 'refusal') return 'refusal'
+  if (stopReason === 'max_tokens' || !raw) return 'incomplete'
+  return null
+}
+
 export async function evaluateSession(params: {
   persona: Persona
   level: Level
@@ -189,6 +208,7 @@ export async function evaluateSession(params: {
   let lastError: unknown
   for (let attempt = 0; attempt < 2; attempt++) {
     let raw: string
+    let stopReason: string | null
     try {
       // Streaming porque claude-opus-5 pensa por padrão, e max_tokens limita
       // thinking + texto juntos — sem stream a requisição pode estourar timeout.
@@ -208,9 +228,21 @@ export async function evaluateSession(params: {
         .finalMessage()
       const block = message.content.find(b => b.type === 'text') as { type: 'text'; text: string } | undefined
       raw = block?.text ?? ''
+      stopReason = message.stop_reason
     } catch (err) {
       if (isCreditError(err)) throw new OutOfCreditsError()
       throw err
+    }
+
+    // Checa ANTES do JSON.parse — resposta vazia (recusa ou corte) vira um
+    // "Unexpected end of JSON input" cru se deixar chegar no parse direto.
+    const reason = evaluatorFailureReason(stopReason, raw)
+    if (reason === 'refusal') {
+      throw new Error('A IA se recusou a avaliar esta conversa. Avalie manualmente ou rode o treino de novo.')
+    }
+    if (reason === 'incomplete') {
+      lastError = new Error('A avaliação voltou incompleta da IA (resposta cortada).')
+      continue
     }
 
     try {
