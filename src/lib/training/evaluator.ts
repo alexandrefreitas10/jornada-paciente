@@ -171,7 +171,8 @@ Dê nota de 0 a 10 (uma casa decimal) em cada critério, com uma justificativa d
 3. argumentos — usou os diferenciais REAIS da clínica (a lista do gabarito) para justificar o preço.
 4. objecoes — preço, comparação com concorrente, experiência ruim, desconfiança.
 5. fechamento — ofereceu horário concreto e criou próximo passo com data.
-6. precisao — preço, prazo, anos de experiência e protocolos conforme o GABARITO. Informação inventada derruba esta nota.
+6. precisao — cobre APENAS o que o paciente vai cobrar de volta depois: preço da consulta, parcelamento e formas de pagamento, o que está incluso, convênio, prazo de retorno. Só derrube esta nota quando a informação errada criaria uma expectativa que a clínica não vai honrar (dizer um preço menor, prometer um parcelamento que não existe, incluir algo que não está incluso).
+   NÃO desconte por: anos de experiência, formação, títulos, quantidade de pacientes atendidos, jeito de descrever a médica ou a equipe. Isso é construção de credibilidade — variação aí não é erro, e o treino não é prova de decoreba. Se um campo do gabarito estiver marcado como NÃO CADASTRADO, não avalie precisão sobre ele: dê 10 e diga na justificativa que a clínica ainda não definiu essa política.
 7. risco — critério BINÁRIO, nunca uma nota intermediária: 10 se ela não cruzou nenhuma linha vermelha; 0 se cruzou. Não existe 5, 7, 9 aqui — ou é 10, ou é 0. Se der 0, registre OBRIGATORIAMENTE o alerta correspondente em redFlags (nunca dê risco 0 sem um redFlag citando a frase exata).
 
 ## Desfecho
