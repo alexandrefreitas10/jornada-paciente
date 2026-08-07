@@ -1515,7 +1515,7 @@ export async function evaluateSession(params: {
 }
 ```
 
-> **Nota de tipagem:** se `output_config` ainda não estiver tipado na versão instalada do SDK, o `tsc` vai reclamar. Nesse caso, passe o objeto com `as unknown as Anthropic.MessageStreamParams` na chamada — não remova o parâmetro; ele é o que garante o JSON válido.
+> **Nota de tipagem (verificada):** `output_config` **é** tipado no `@anthropic-ai/sdk` 0.104.1, que é a versão instalada — nenhum cast externo é preciso. O único cast necessário é o de dentro (`REPORT_SCHEMA as unknown as Record<string, unknown>`), porque `REPORT_SCHEMA` é declarado `as const` e os tipos literais não são atribuíveis ao índice do campo `schema`. Se um dia o `tsc` reclamar do parâmetro inteiro, faça o cast — nunca remova `output_config`, que é o que garante o JSON válido.
 
 - [ ] **Step 4: Rodar o teste e confirmar que passa**
 
