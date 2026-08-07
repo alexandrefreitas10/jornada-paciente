@@ -74,7 +74,7 @@ export async function POST(
       await markEnded(session.id)
 
       try {
-        const report = await evaluateSession({
+        const { report, usage } = await evaluateSession({
           persona: session.persona,
           level: session.level,
           scenario: session.scenario,
@@ -84,7 +84,7 @@ export async function POST(
           // e a trava, o sinal só existe na releitura.
           declaredOutcome: fresh?.declared_outcome ?? session.declared_outcome,
         })
-        const updated = await saveReport(session.id, report)
+        const updated = await saveReport(session.id, report, usage)
         // saveReport devolve null se nenhuma linha bateu (ex.: sessão removida
         // entre a leitura e a gravação) — não pode virar um TrainingSession falso.
         if (!updated) {

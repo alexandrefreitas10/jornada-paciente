@@ -175,6 +175,11 @@ export function resolvePatientTurn(
   return bubbles.length > 0 ? { bubbles, outcome } : null
 }
 
+export interface TokenUsage {
+  inputTokens: number
+  outputTokens: number
+}
+
 // Gera o próximo turno do paciente. Descarta e regera uma vez se a IA quebrar o personagem.
 export async function nextPatientTurn(params: {
   persona: Persona
@@ -182,13 +187,20 @@ export async function nextPatientTurn(params: {
   scenario: ScenarioKey
   kb: TrainingKb
   history: TrainingMessage[]
-}): Promise<{ bubbles: string[]; outcome: Outcome | null }> {
+}): Promise<{ bubbles: string[]; outcome: Outcome | null; usage: TokenUsage }> {
   const system = buildPatientSystemPrompt(params)
   const messages = toAnthropicMessages(params.history)
   // Primeira mensagem da conversa: o paciente abre, então precisa de um turno de user.
   if (messages.length === 0 || messages[0].role !== 'user') {
     messages.unshift({ role: 'user', content: '(A secretária ainda não respondeu. Abra a conversa.)' })
   }
+
+  // Acumula tokens de TODAS as tentativas, mesmo as que quebram o personagem
+  // e são descartadas — elas foram cobradas da mesma forma, então um relatório
+  // de custo que só contasse a tentativa vencedora estaria subestimando o
+  // gasto real. Ver mesma lógica em evaluator.ts.
+  let inputTokens = 0
+  let outputTokens = 0
 
   for (let attempt = 0; attempt < 2; attempt++) {
     let raw: string
@@ -199,6 +211,8 @@ export async function nextPatientTurn(params: {
         system,
         messages,
       })
+      inputTokens += message.usage.input_tokens
+      outputTokens += message.usage.output_tokens
       const block = message.content.find(b => b.type === 'text') as { type: 'text'; text: string } | undefined
       raw = block?.text ?? ''
     } catch (err) {
@@ -207,9 +221,9 @@ export async function nextPatientTurn(params: {
     }
 
     const resolved = resolvePatientTurn(raw, params.persona.name)
-    if (resolved) return resolved
+    if (resolved) return { ...resolved, usage: { inputTokens, outputTokens } }
   }
 
   // Duas tentativas quebraram o personagem — devolve algo neutro em vez de vazar avaliação.
-  return { bubbles: ['desculpa, travou aqui... vc pode repetir?'], outcome: null }
+  return { bubbles: ['desculpa, travou aqui... vc pode repetir?'], outcome: null, usage: { inputTokens, outputTokens } }
 }

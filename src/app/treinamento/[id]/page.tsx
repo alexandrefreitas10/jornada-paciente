@@ -7,6 +7,7 @@ import type {
   CriterionKey, MessageRole, Outcome, TrainingMessage, TrainingReport, TrainingSession, Verdict,
 } from '@/lib/training/types'
 import { CRITERION_LABELS, CRITERION_ORDER } from '@/lib/training/labels'
+import { formatUsd, sessionCostUsd } from '@/lib/training/pricing'
 
 // DISPENSOU_BEM é um bom desfecho (o caso era impossível e ela encerrou bem) —
 // por isso tem o mesmo tom de sucesso que AGENDOU, não o tom de PERDEU_O_PACIENTE.
@@ -54,6 +55,10 @@ function fmtDate(iso: string) {
   })
 }
 
+function fmtTokens(n: number) {
+  return n.toLocaleString('pt-BR')
+}
+
 // --- Balões de chat -----------------------------------------------------
 
 function ChatBubble({ role, content }: { role: MessageRole; content: string }) {
@@ -94,6 +99,12 @@ function ReportView({ session, report }: { session: TrainingSession; report: Tra
   // com risco baixo e redFlags vazio (o modelo esqueceu de listar o alerta) já
   // reprova no servidor, e a tela não pode mostrar "tudo certo" por cima disso.
   const hasRedFlags = session.has_red_flag
+  const cost = sessionCostUsd({
+    patientInputTokens: session.patient_input_tokens,
+    patientOutputTokens: session.patient_output_tokens,
+    evalInputTokens: session.eval_input_tokens,
+    evalOutputTokens: session.eval_output_tokens,
+  })
 
   return (
     <div className="space-y-4">
@@ -163,6 +174,35 @@ function ReportView({ session, report }: { session: TrainingSession; report: Tra
             {VERDICT_LABELS[session.verdict]}
           </span>
         )}
+      </div>
+
+      {/* 4b. Custo desta sessão — tokens de fato consumidos na API, inclusive
+          tentativas descartadas (ver comentário em patient.ts/evaluator.ts).
+          A avaliação (opus) é o modelo caro do módulo: o split deixa claro
+          que ela domina o total mesmo sendo uma chamada só por sessão. */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+        <h2 className="text-sm font-semibold text-gray-700 mb-2">Custo desta sessão</h2>
+        <p className="text-2xl font-bold text-gray-900">{formatUsd(cost.total)}</p>
+        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="border-t border-gray-100 pt-3 sm:border-t-0 sm:pt-0">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-medium text-gray-800">Conversa (paciente)</p>
+              <p className="text-sm font-bold text-violet-700">{formatUsd(cost.patient)}</p>
+            </div>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {fmtTokens(session.patient_input_tokens)} tokens de entrada · {fmtTokens(session.patient_output_tokens)} de saída
+            </p>
+          </div>
+          <div className="border-t border-gray-100 pt-3 sm:border-t-0 sm:pt-0">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-medium text-gray-800">Avaliação (grader)</p>
+              <p className="text-sm font-bold text-violet-700">{formatUsd(cost.grader)}</p>
+            </div>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {fmtTokens(session.eval_input_tokens)} tokens de entrada · {fmtTokens(session.eval_output_tokens)} de saída
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* 5. Pontos fortes */}

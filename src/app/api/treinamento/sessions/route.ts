@@ -3,7 +3,7 @@ import { isAdminSession } from '@/lib/authz'
 import { readKb } from '@/lib/training/kb'
 import { pickPersona, SCENARIOS } from '@/lib/training/personas'
 import { nextPatientTurn, OutOfCreditsError } from '@/lib/training/patient'
-import { addMessages, createSession, listSessions, markEnded } from '@/lib/training/sessions'
+import { addMessages, addPatientUsage, createSession, listSessions, markEnded } from '@/lib/training/sessions'
 import { currentUserId } from '@/lib/training/guard'
 import type { Level, ScenarioKey } from '@/lib/training/types'
 
@@ -47,12 +47,15 @@ export async function POST(req: NextRequest) {
   const session = await createSession({ userId, level, scenario, persona, kb })
 
   try {
-    const { bubbles, outcome } = await nextPatientTurn({ persona, level, scenario, kb, history: [] })
+    const { bubbles, outcome, usage } = await nextPatientTurn({ persona, level, scenario, kb, history: [] })
     // bubbles vazio com outcome preenchido = o paciente "encerrou" sem mandar
     // texto (caso raro na abertura, mas possível) — não grava mensagem vazia.
     if (bubbles.length > 0) {
       await addMessages(session.id, bubbles.map(content => ({ role: 'paciente' as const, content })))
     }
+    // Grava os tokens gastos nesta chamada (inclusive tentativas descartadas
+    // dentro de nextPatientTurn) mesmo quando não sobra bolha nenhuma pra salvar.
+    await addPatientUsage(session.id, usage)
     // Guarda o desfecho declarado pelo paciente junto do encerramento: é o único
     // momento em que ele existe, e a avaliadora vai precisar dele lá no finish.
     if (outcome) await markEnded(session.id, outcome)

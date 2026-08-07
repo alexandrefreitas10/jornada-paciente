@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { LEVELS, SCENARIOS } from '@/lib/training/personas'
+import { formatUsd, sessionCostUsd } from '@/lib/training/pricing'
 import type { Level, ScenarioKey, TrainingSession } from '@/lib/training/types'
 
 // Sala de treino: escolher nível/cenário e ver o histórico pessoal. A lógica
@@ -50,6 +51,17 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('pt-BR', {
     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
   })
+}
+
+// Custo em dólar de uma sessão, a partir dos tokens de fato consumidos na API
+// (gravados por sessions.ts) — não uma estimativa.
+function sessionCost(s: TrainingSession) {
+  return sessionCostUsd({
+    patientInputTokens: s.patient_input_tokens,
+    patientOutputTokens: s.patient_output_tokens,
+    evalInputTokens: s.eval_input_tokens,
+    evalOutputTokens: s.eval_output_tokens,
+  }).total
 }
 
 function LevelPicker({ value, onChange }: { value: Level | null; onChange: (l: Level) => void }) {
@@ -230,8 +242,13 @@ export default function TreinamentoPage() {
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-gray-700">Seu histórico</h2>
+            {!loadingHistory && !historyError && sessions.length > 0 && (
+              <p className="text-xs text-gray-500">
+                Custo total: <span className="font-semibold text-gray-700">{formatUsd(sessions.reduce((sum, s) => sum + sessionCost(s), 0))}</span>
+              </p>
+            )}
           </div>
 
           {loadingHistory && (
@@ -280,6 +297,7 @@ export default function TreinamentoPage() {
                         {s.average !== null && (
                           <span className="text-xs font-semibold text-gray-700">{s.average.toFixed(1)}</span>
                         )}
+                        <span className="text-xs text-gray-400">{formatUsd(sessionCost(s))}</span>
                         {s.verdict && (
                           <span className={`text-xs px-2 py-0.5 rounded-full ${VERDICT_CLASS[s.verdict] ?? 'bg-gray-100 text-gray-600'}`}>
                             {VERDICT_LABELS[s.verdict] ?? s.verdict}

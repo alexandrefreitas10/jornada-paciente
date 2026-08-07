@@ -465,6 +465,24 @@ async function runMigrations() {
   await sql.unsafe(
     `ALTER TABLE training_sessions ADD COLUMN IF NOT EXISTS declared_outcome TEXT`
   ).catch(() => {})
+
+  // Custo real por sessão: tokens de fato consumidos na API (não uma
+  // estimativa), acumulados inclusive sobre tentativas descartadas — ver
+  // comentário em patient.ts/evaluator.ts. patient_* somam todos os turnos da
+  // conversa (haiku, gravado incrementalmente); eval_* são da chamada de
+  // avaliação (opus, gravado uma vez em saveReport).
+  await sql.unsafe(
+    `ALTER TABLE training_sessions ADD COLUMN IF NOT EXISTS patient_input_tokens INTEGER NOT NULL DEFAULT 0`
+  ).catch(() => {})
+  await sql.unsafe(
+    `ALTER TABLE training_sessions ADD COLUMN IF NOT EXISTS patient_output_tokens INTEGER NOT NULL DEFAULT 0`
+  ).catch(() => {})
+  await sql.unsafe(
+    `ALTER TABLE training_sessions ADD COLUMN IF NOT EXISTS eval_input_tokens INTEGER NOT NULL DEFAULT 0`
+  ).catch(() => {})
+  await sql.unsafe(
+    `ALTER TABLE training_sessions ADD COLUMN IF NOT EXISTS eval_output_tokens INTEGER NOT NULL DEFAULT 0`
+  ).catch(() => {})
 }
 
 export default sql

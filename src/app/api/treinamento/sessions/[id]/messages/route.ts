@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { loadOwnedSession } from '@/lib/training/guard'
 import { nextPatientTurn, OutOfCreditsError } from '@/lib/training/patient'
-import { addMessages, countSecretariaMessages, listMessages, markEnded } from '@/lib/training/sessions'
+import { addMessages, addPatientUsage, countSecretariaMessages, listMessages, markEnded } from '@/lib/training/sessions'
 
 const MAX_SECRETARIA_MESSAGES = 30
 
@@ -41,7 +41,7 @@ export async function POST(
 
   const history = await listMessages(session.id)
   try {
-    const { bubbles, outcome } = await nextPatientTurn({
+    const { bubbles, outcome, usage } = await nextPatientTurn({
       persona: session.persona,
       level: session.level,
       scenario: session.scenario,
@@ -53,6 +53,9 @@ export async function POST(
     if (bubbles.length > 0) {
       await addMessages(session.id, bubbles.map(c => ({ role: 'paciente' as const, content: c })))
     }
+    // Grava os tokens gastos neste turno (inclusive tentativas descartadas
+    // dentro de nextPatientTurn) mesmo quando não sobra bolha nenhuma pra salvar.
+    await addPatientUsage(session.id, usage)
     // Guarda o desfecho declarado pelo paciente junto do encerramento: é o único
     // momento em que ele existe, e a avaliadora vai precisar dele lá no finish.
     if (outcome) await markEnded(session.id, outcome)

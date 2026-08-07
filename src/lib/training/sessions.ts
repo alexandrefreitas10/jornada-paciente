@@ -114,7 +114,29 @@ export async function markEnded(sessionId: number, declaredOutcome?: Outcome | n
   `
 }
 
-export async function saveReport(sessionId: number, report: TrainingReport): Promise<TrainingSession | null> {
+// Acumula os tokens do turno do paciente (haiku) recém-gerado. UPDATE
+// incremental (SET x = x + $n) em vez de ler o valor atual e regravar em
+// TypeScript: dois turnos concorrentes (duas abas, por exemplo) não podem se
+// pisar e perder o incremento um do outro — um read-modify-write no cliente
+// teria exatamente essa corrida.
+export async function addPatientUsage(
+  sessionId: number,
+  usage: { inputTokens: number; outputTokens: number }
+): Promise<void> {
+  await initSchema()
+  await sql`
+    UPDATE training_sessions SET
+      patient_input_tokens = patient_input_tokens + ${usage.inputTokens},
+      patient_output_tokens = patient_output_tokens + ${usage.outputTokens}
+    WHERE id = ${sessionId}
+  `
+}
+
+export async function saveReport(
+  sessionId: number,
+  report: TrainingReport,
+  usage: { inputTokens: number; outputTokens: number }
+): Promise<TrainingSession | null> {
   await initSchema()
   const average = averageOf(report.scores)
   // redFlags e risco são duas afirmações independentes do modelo: o prompt define
@@ -124,6 +146,8 @@ export async function saveReport(sessionId: number, report: TrainingReport): Pro
   // prompt, mas uma nota intermediária (ex.: 9) não pode vetar sozinha.
   const flagged = hasRedFlag(report.redFlags.length, report.scores.risco)
   const verdict = verdictFor(average, flagged)
+  // eval_* é escrito de uma vez só (uma única chamada ao avaliador por sessão)
+  // — ao contrário de patient_*, não precisa de UPDATE incremental.
   const [row] = await sql<TrainingSession[]>`
     UPDATE training_sessions SET
       status = 'avaliada',
@@ -133,6 +157,8 @@ export async function saveReport(sessionId: number, report: TrainingReport): Pro
       has_red_flag = ${flagged},
       verdict = ${verdict},
       report = ${sql.json(report as never)},
+      eval_input_tokens = ${usage.inputTokens},
+      eval_output_tokens = ${usage.outputTokens},
       ended_at = COALESCE(ended_at, NOW())
     WHERE id = ${sessionId}
     RETURNING *

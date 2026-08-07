@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { formatKbForPrompt } from './kb'
 import { LEVELS, SCENARIOS } from './personas'
 import { isCreditError, OutOfCreditsError } from './patient'
+import type { TokenUsage } from './patient'
 import type {
   CriterionKey, Level, Outcome, Persona, ScenarioKey,
   TrainingKb, TrainingMessage, TrainingReport,
@@ -227,9 +228,16 @@ export async function evaluateSession(params: {
   kb: TrainingKb
   messages: TrainingMessage[]
   declaredOutcome?: Outcome | null
-}): Promise<TrainingReport> {
+}): Promise<{ report: TrainingReport; usage: TokenUsage }> {
   const system = buildEvaluatorPrompt(params)
   const user = `# A CONVERSA\n\n${transcript(params.messages)}`
+
+  // Acumula tokens de TODAS as tentativas, inclusive as descartadas por vir
+  // incompletas (max_tokens cortou) — claude-opus-5 é o modelo caro do módulo,
+  // e uma tentativa de 32k tokens jogada fora ainda foi cobrada integralmente.
+  // Mesma lógica em patient.ts.
+  let inputTokens = 0
+  let outputTokens = 0
 
   let lastError: unknown
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -252,6 +260,8 @@ export async function evaluateSession(params: {
           messages: [{ role: 'user', content: user }],
         })
         .finalMessage()
+      inputTokens += message.usage.input_tokens
+      outputTokens += message.usage.output_tokens
       const block = message.content.find(b => b.type === 'text') as { type: 'text'; text: string } | undefined
       raw = block?.text ?? ''
       stopReason = message.stop_reason
@@ -272,7 +282,7 @@ export async function evaluateSession(params: {
     }
 
     try {
-      return parseReport(JSON.parse(raw))
+      return { report: parseReport(JSON.parse(raw)), usage: { inputTokens, outputTokens } }
     } catch (err) {
       lastError = err
     }
