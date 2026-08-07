@@ -8,7 +8,26 @@ interface StockMovement {
   patient_id: number | null; patient_name: string | null; observation: string | null; created_by: string | null; created_at: string
 }
 
-type ReportType = 'movimentos' | 'top_saidas' | 'por_lote' | 'por_produto' | 'por_paciente' | 'atividade_paciente'
+interface StockItem {
+  id: number; name: string; unit: string; quantity: number
+  notes: string | null; lot: string | null; expiry_date: string | null
+}
+
+type ReportType = 'movimentos' | 'repor' | 'top_saidas' | 'por_lote' | 'por_produto' | 'por_paciente' | 'atividade_paciente'
+
+// Mesma régua da aba "Estoque Atual": abaixo de 5 unidades entra na lista de
+// compra. Zerado e negativo são mais urgentes que "Pedir" e vêm primeiro.
+const LOW_STOCK_THRESHOLD = 5
+function reorderRank(q: number): number {
+  if (q < 0) return 0   // saldo negativo — erro de lançamento, corrigir
+  if (q === 0) return 1 // zerado
+  return 2              // 1 a 4 → "Pedir"
+}
+function reorderLabel(q: number): string {
+  if (q < 0) return '🚨 Saldo negativo'
+  if (q === 0) return '🚨 Zerado'
+  return '⚠️ Pedir'
+}
 
 interface PatientActivity {
   patient_id: number
@@ -50,7 +69,7 @@ function filterByRange(movs: StockMovement[], dateStart: string, dateEnd: string
   })
 }
 
-export function RelatoriosTab({ movements }: { movements: StockMovement[] }) {
+export function RelatoriosTab({ movements, items = [] }: { movements: StockMovement[]; items?: StockItem[] }) {
   const [report, setReport] = useState<ReportType>('movimentos')
   const [movFilter, setMovFilter] = useState<'all' | 'entrada' | 'saida'>('all')
   const [activityData, setActivityData] = useState<PatientActivity[]>([])
@@ -86,6 +105,18 @@ export function RelatoriosTab({ movements }: { movements: StockMovement[] }) {
 
   const entries = filtered.filter(m => m.type === 'entrada')
   const exits = filtered.filter(m => m.type === 'saida')
+
+  // ── Repor estoque ──
+  // Baseado no saldo ATUAL do item, não no período: é uma lista de compra.
+  const toReorder = useMemo(() => {
+    return items
+      .filter(i => i.quantity < LOW_STOCK_THRESHOLD)
+      .sort((a, b) =>
+        reorderRank(a.quantity) - reorderRank(b.quantity) ||
+        a.quantity - b.quantity ||
+        a.name.localeCompare(b.name)
+      )
+  }, [items])
 
   // ── Top saídas ──
   const topExits = useMemo(() => {
@@ -152,6 +183,18 @@ export function RelatoriosTab({ movements }: { movements: StockMovement[] }) {
       exits.forEach(m => lines.push(`  • ${m.item_name} | -${m.quantity}${m.lot ? ` | Lote: ${m.lot}` : ''}${m.patient_name ? ` | ${m.patient_name}` : ''} | ${formatDateTime(m.created_at)}${m.created_by ? ` | ${m.created_by}` : ''}`))
       return lines.join('\n')
     }
+    if (report === 'repor') {
+      // Lista de compra: saldo atual, sem período
+      const today = new Date().toLocaleDateString('pt-BR')
+      if (toReorder.length === 0) return `Repor Estoque — ${today}\n\nNenhum ativo abaixo de ${LOW_STOCK_THRESHOLD} unidades. Estoque em dia. ✅`
+      const lines: string[] = [`Repor Estoque — ${today}`, '']
+      toReorder.forEach(i => {
+        const meta = [i.lot ? `Lote: ${i.lot}` : null, i.expiry_date ? `Val: ${i.expiry_date}` : null].filter(Boolean).join(' | ')
+        lines.push(`• ${i.name} — ${i.quantity} ${i.unit} ${reorderLabel(i.quantity)}${meta ? ` (${meta})` : ''}`)
+      })
+      lines.push('', `Total: ${toReorder.length} ativo(s) para repor.`)
+      return lines.join('\n')
+    }
     if (report === 'top_saidas') {
       const lines: string[] = [`Top Saídas — ${period}`, '']
       topExits.forEach((x, i) => lines.push(`${i + 1}. ${x.name} — ${x.qty} unidades`))
@@ -192,6 +235,7 @@ export function RelatoriosTab({ movements }: { movements: StockMovement[] }) {
 
   const reportOptions: { key: ReportType; label: string; icon: string }[] = [
     { key: 'movimentos', label: 'Entradas e Saídas', icon: '📊' },
+    { key: 'repor', label: 'Repor Estoque', icon: '⚠️' },
     { key: 'top_saidas', label: 'Top Saídas', icon: '🏆' },
     { key: 'por_lote', label: 'Por Lote', icon: '🗂️' },
     { key: 'por_produto', label: 'Por Produto', icon: '💊' },
@@ -211,7 +255,8 @@ export function RelatoriosTab({ movements }: { movements: StockMovement[] }) {
         ))}
       </div>
 
-      {/* Date filters */}
+      {/* Filtro de data — não se aplica a "Repor Estoque", que usa o saldo atual */}
+      {report !== 'repor' && (
       <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
@@ -241,6 +286,7 @@ export function RelatoriosTab({ movements }: { movements: StockMovement[] }) {
         )}
         <p className="text-xs text-gray-400">{filtered.length} movimentação(ões) no período</p>
       </div>
+      )}
 
       {/* Copy button */}
       <div className="flex justify-end">
@@ -249,6 +295,48 @@ export function RelatoriosTab({ movements }: { movements: StockMovement[] }) {
           {copied ? '✅ Copiado!' : '📋 Copiar relatório'}
         </button>
       </div>
+
+      {/* ── REPOR ESTOQUE ── */}
+      {report === 'repor' && (
+        toReorder.length === 0 ? (
+          <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
+            <p className="text-2xl mb-1">✅</p>
+            <p className="text-sm font-semibold text-green-700">Estoque em dia</p>
+            <p className="text-xs text-green-600 mt-0.5">Nenhum ativo abaixo de {LOW_STOCK_THRESHOLD} unidades.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-center">
+              <p className="text-2xl font-bold text-orange-600">{toReorder.length}</p>
+              <p className="text-xs text-orange-600 font-medium mt-0.5">ativo(s) para repor</p>
+              <p className="text-xs text-orange-500">abaixo de {LOW_STOCK_THRESHOLD} unidades</p>
+            </div>
+
+            {toReorder.map(i => {
+              const critical = i.quantity <= 0
+              return (
+                <div key={i.id}
+                  className={`rounded-xl border p-4 shadow-sm flex items-start gap-4 ${critical ? 'bg-red-50 border-red-300' : 'bg-white border-gray-200'}`}>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-800">{i.name}</p>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                      {i.lot && <p className="text-xs text-gray-500">Lote: <span className="font-medium">{i.lot}</span></p>}
+                      {i.expiry_date && <p className="text-xs text-gray-500">Val: <span className="font-medium">{i.expiry_date}</span></p>}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className={`text-xl font-bold ${critical ? 'text-red-500' : 'text-orange-500'}`}>{i.quantity}</p>
+                    <p className="text-xs text-gray-400">{i.unit}</p>
+                    <p className={`text-xs font-semibold mt-0.5 ${critical ? 'text-red-600' : 'text-orange-500'}`}>
+                      {reorderLabel(i.quantity)}
+                    </p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )
+      )}
 
       {/* ── MOVIMENTOS ── */}
       {report === 'movimentos' && (
