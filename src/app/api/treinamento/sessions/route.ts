@@ -17,7 +17,17 @@ export async function GET(req: NextRequest) {
 
   const isAdmin = await isAdminSession()
   const all = req.nextUrl.searchParams.get('all') === '1' && isAdmin
-  const sessions = await listSessions(all ? {} : { userId })
+
+  // ?userId=<id>: admin escolhendo o histórico de UM funcionário específico
+  // (Fase 2 da tela). Gate idêntico ao de `all` — `&& isAdmin` não é um
+  // detalhe de estilo, é o que impede alguém logado de trocar o parâmetro
+  // na URL e ler o histórico de outra pessoa. Um userId não-numérico (ou
+  // ausente) simplesmente não sobrescreve o padrão "o próprio usuário".
+  const targetUserIdParam = req.nextUrl.searchParams.get('userId')
+  const parsedTargetUserId = targetUserIdParam !== null ? Number(targetUserIdParam) : NaN
+  const targetUserId = isAdmin && Number.isFinite(parsedTargetUserId) ? parsedTargetUserId : userId
+
+  const sessions = await listSessions(all ? {} : { userId: targetUserId })
   return NextResponse.json({
     sessions: isAdmin ? sessions : sessions.map(withoutCost),
     isAdmin,

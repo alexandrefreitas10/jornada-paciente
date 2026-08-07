@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { LEVELS, SCENARIOS } from '@/lib/training/personas'
 import { formatUsd, sessionCostUsd } from '@/lib/training/pricing'
-import type { Level, ScenarioKey, TrainingSession } from '@/lib/training/types'
+import { summarizeSessions } from '@/lib/training/summary'
+import type { Level, ScenarioKey, TrainingSession, TrainingSessionListItem } from '@/lib/training/types'
 
 // Sala de treino: escolher nível/cenário e ver o histórico pessoal. A lógica
 // de nota (média, veto) mora no servidor — aqui só exibimos o que a API manda.
@@ -46,6 +47,18 @@ const VERDICT_CLASS: Record<string, string> = {
 
 const primaryBtn = 'px-5 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors'
 const secondaryBtn = 'px-4 py-2 border border-violet-200 text-violet-700 text-sm font-medium rounded-lg hover:bg-violet-50 transition-colors'
+const inputClass = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400'
+
+// Abas "Meu histórico" / "Histórico de um funcionário" — mesmo idioma visual
+// dos LevelPicker/ScenarioPicker acima (borda + fundo violeta quando ativo),
+// só que compactas o bastante para caber lado a lado com o título da seção.
+function tabBtnClass(active: boolean) {
+  return `px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+    active
+      ? 'border-violet-500 bg-violet-50 text-violet-700'
+      : 'border-gray-200 text-gray-600 hover:border-violet-300'
+  }`
+}
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('pt-BR', {
@@ -55,7 +68,7 @@ function fmtDate(iso: string) {
 
 // Custo em dólar de uma sessão, a partir dos tokens de fato consumidos na API
 // (gravados por sessions.ts) — não uma estimativa.
-function sessionCost(s: TrainingSession) {
+function sessionCost(s: TrainingSessionListItem) {
   // Chegam undefined para quem não é admin: a API remove os contadores.
   return sessionCostUsd({
     patientInputTokens: s.patient_input_tokens ?? 0,
@@ -63,6 +76,11 @@ function sessionCost(s: TrainingSession) {
     evalInputTokens: s.eval_input_tokens ?? 0,
     evalOutputTokens: s.eval_output_tokens ?? 0,
   }).total
+}
+
+interface StaffMember {
+  id: number
+  username: string
 }
 
 function LevelPicker({ value, onChange }: { value: Level | null; onChange: (l: Level) => void }) {
@@ -118,10 +136,21 @@ export default function TreinamentoPage() {
   const [startError, setStartError] = useState<string | null>(null)
   const [kbMissing, setKbMissing] = useState(false)
 
-  const [sessions, setSessions] = useState<TrainingSession[]>([])
+  const [sessions, setSessions] = useState<TrainingSessionListItem[]>([])
   const [isAdmin, setIsAdmin] = useState(false)
   const [loadingHistory, setLoadingHistory] = useState(true)
   const [historyError, setHistoryError] = useState<string | null>(null)
+
+  // Fase 2 (admin): alternar entre o próprio histórico e o de um funcionário
+  // escolhido pelo nome. viewMode só tem efeito visual para quem é admin —
+  // para todo mundo, sessions/loadingHistory/historyError acima já são "meu
+  // histórico" e é só isso que aparece.
+  const [viewMode, setViewMode] = useState<'self' | 'staff'>('self')
+  const [staffList, setStaffList] = useState<StaffMember[]>([])
+  const [selectedStaffId, setSelectedStaffId] = useState<number | null>(null)
+  const [staffSessions, setStaffSessions] = useState<TrainingSessionListItem[]>([])
+  const [loadingStaffHistory, setLoadingStaffHistory] = useState(false)
+  const [staffHistoryError, setStaffHistoryError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -133,7 +162,7 @@ export default function TreinamentoPage() {
           setLoadingHistory(false)
           return
         }
-        const data = (await res.json()) as { sessions: TrainingSession[]; isAdmin?: boolean }
+        const data = (await res.json()) as { sessions: TrainingSessionListItem[]; isAdmin?: boolean }
         setSessions(data.sessions)
         setIsAdmin(!!data.isAdmin)
         setLoadingHistory(false)
@@ -146,6 +175,57 @@ export default function TreinamentoPage() {
       })
     return () => { cancelled = true }
   }, [])
+
+  // Lista de funcionários para o seletor — só é buscada depois de sabermos
+  // que a sessão é de admin (a API de /api/usuarios já é 403 pra quem não é,
+  // mas nem vale a pena tentar antes disso).
+  useEffect(() => {
+    if (!isAdmin) return
+    let cancelled = false
+    fetch('/api/usuarios')
+      .then(async res => {
+        if (cancelled || !res.ok) return
+        const data = (await res.json()) as { id: number; username: string }[]
+        setStaffList(data.map(u => ({ id: u.id, username: u.username })))
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [isAdmin])
+
+  // Histórico do funcionário escolhido — refeito a cada troca de pessoa.
+  useEffect(() => {
+    if (!isAdmin || selectedStaffId === null) return
+    let cancelled = false
+    setLoadingStaffHistory(true)
+    setStaffHistoryError(null)
+    fetch(`/api/treinamento/sessions?userId=${selectedStaffId}`)
+      .then(async res => {
+        if (cancelled) return
+        if (!res.ok) {
+          setStaffHistoryError('Não foi possível carregar o histórico dessa pessoa.')
+          setLoadingStaffHistory(false)
+          return
+        }
+        const data = (await res.json()) as { sessions: TrainingSessionListItem[] }
+        setStaffSessions(data.sessions)
+        setLoadingStaffHistory(false)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setStaffHistoryError('Não foi possível carregar o histórico dessa pessoa.')
+          setLoadingStaffHistory(false)
+        }
+      })
+    return () => { cancelled = true }
+  }, [isAdmin, selectedStaffId])
+
+  // O que a lista efetivamente mostra: o próprio histórico, ou o da pessoa
+  // escolhida — nunca os dois ao mesmo tempo.
+  const viewingStaff = isAdmin && viewMode === 'staff'
+  const displayedSessions = viewingStaff ? staffSessions : sessions
+  const displayedLoading = viewingStaff ? (selectedStaffId !== null && loadingStaffHistory) : loadingHistory
+  const displayedError = viewingStaff ? staffHistoryError : historyError
+  const staffSummary = summarizeSessions(staffSessions)
 
   function randomize() {
     const randomLevel = LEVEL_KEYS[Math.floor(Math.random() * LEVEL_KEYS.length)]
@@ -245,33 +325,78 @@ export default function TreinamentoPage() {
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-gray-700">Seu histórico</h2>
-            {isAdmin && !loadingHistory && !historyError && sessions.length > 0 && (
-              <p className="text-xs text-gray-500">
-                Custo total: <span className="font-semibold text-gray-700">{formatUsd(sessions.reduce((sum, s) => sum + sessionCost(s), 0))}</span>
-              </p>
+          <div className="px-5 py-4 border-b border-gray-100 space-y-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <h2 className="text-sm font-semibold text-gray-700">
+                {viewingStaff ? 'Histórico de um funcionário' : 'Seu histórico'}
+              </h2>
+              <div className="flex items-center gap-2">
+                {isAdmin && (
+                  <>
+                    <button type="button" onClick={() => setViewMode('self')} className={tabBtnClass(!viewingStaff)}>
+                      Meu histórico
+                    </button>
+                    <button type="button" onClick={() => setViewMode('staff')} className={tabBtnClass(viewingStaff)}>
+                      Um funcionário
+                    </button>
+                  </>
+                )}
+                {isAdmin && !displayedLoading && !displayedError && displayedSessions.length > 0 && (
+                  <p className="text-xs text-gray-500">
+                    Custo total: <span className="font-semibold text-gray-700">{formatUsd(displayedSessions.reduce((sum, s) => sum + sessionCost(s), 0))}</span>
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {viewingStaff && (
+              <select
+                value={selectedStaffId ?? ''}
+                onChange={e => setSelectedStaffId(e.target.value ? Number(e.target.value) : null)}
+                className={inputClass}
+              >
+                <option value="">Selecione um funcionário...</option>
+                {staffList.map(u => (
+                  <option key={u.id} value={u.id}>{u.username}</option>
+                ))}
+              </select>
+            )}
+
+            {viewingStaff && selectedStaffId !== null && !loadingStaffHistory && !staffHistoryError && (
+              <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-500">
+                <span>Treinos: <span className="font-semibold text-gray-700">{staffSummary.count}</span></span>
+                <span>
+                  Média: <span className="font-semibold text-gray-700">
+                    {staffSummary.averageScore !== null ? staffSummary.averageScore.toFixed(1) : '—'}
+                  </span>
+                </span>
+                <span>Com red flag: <span className="font-semibold text-gray-700">{staffSummary.redFlagCount}</span></span>
+              </div>
             )}
           </div>
 
-          {loadingHistory && (
+          {viewingStaff && selectedStaffId === null && (
+            <p className="text-sm text-gray-400 text-center py-8 px-5">Escolha um funcionário para ver o histórico.</p>
+          )}
+
+          {(!viewingStaff || selectedStaffId !== null) && displayedLoading && (
             <div className="text-center py-10">
               <div className="w-8 h-8 border-4 border-violet-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
               <p className="text-sm text-gray-500">Carregando histórico...</p>
             </div>
           )}
 
-          {!loadingHistory && historyError && (
-            <p className="text-sm text-red-600 text-center py-8 px-5">{historyError}</p>
+          {(!viewingStaff || selectedStaffId !== null) && !displayedLoading && displayedError && (
+            <p className="text-sm text-red-600 text-center py-8 px-5">{displayedError}</p>
           )}
 
-          {!loadingHistory && !historyError && sessions.length === 0 && (
+          {(!viewingStaff || selectedStaffId !== null) && !displayedLoading && !displayedError && displayedSessions.length === 0 && (
             <p className="text-sm text-gray-400 text-center py-8 px-5">Nenhum treino realizado ainda.</p>
           )}
 
-          {!loadingHistory && !historyError && sessions.length > 0 && (
+          {(!viewingStaff || selectedStaffId !== null) && !displayedLoading && !displayedError && displayedSessions.length > 0 && (
             <ul>
-              {sessions.map(s => {
+              {displayedSessions.map(s => {
                 const unfinished = s.status === 'em_andamento'
                 return (
                   <li key={s.id} className="border-b border-gray-100 last:border-0">
