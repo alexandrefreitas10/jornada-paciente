@@ -6,23 +6,7 @@ import Link from 'next/link'
 import type {
   CriterionKey, MessageRole, Outcome, TrainingMessage, TrainingReport, TrainingSession, Verdict,
 } from '@/lib/training/types'
-
-// CRITERION_LABELS mora em src/lib/training/evaluator.ts, mas esse arquivo
-// importa '@anthropic-ai/sdk' no topo — importar de lá aqui levaria o SDK
-// inteiro (e a chave de API) pro bundle do navegador. Por isso o mapa é
-// duplicado aqui, só com os rótulos (sem nenhuma lógica de chamada de IA).
-const CRITERION_LABELS: Record<CriterionKey, string> = {
-  acolhimento: 'Acolhimento e clareza',
-  qualificacao: 'Qualificação',
-  argumentos: 'Argumentos e valor',
-  objecoes: 'Objeções',
-  fechamento: 'Fechamento',
-  precisao: 'Precisão',
-  risco: 'Risco',
-}
-const CRITERION_ORDER: CriterionKey[] = [
-  'acolhimento', 'qualificacao', 'argumentos', 'objecoes', 'fechamento', 'precisao', 'risco',
-]
+import { CRITERION_LABELS, CRITERION_ORDER } from '@/lib/training/labels'
 
 // DISPENSOU_BEM é um bom desfecho (o caso era impossível e ela encerrou bem) —
 // por isso tem o mesmo tom de sucesso que AGENDOU, não o tom de PERDEU_O_PACIENTE.

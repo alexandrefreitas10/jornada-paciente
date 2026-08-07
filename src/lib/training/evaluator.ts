@@ -10,15 +10,12 @@ import type {
 // Uma chamada por sessão. É o produto — vale o modelo forte.
 const EVALUATOR_MODEL = 'claude-opus-5'
 
-export const CRITERION_LABELS: Record<CriterionKey, string> = {
-  acolhimento: 'Acolhimento e clareza',
-  qualificacao: 'Qualificação',
-  argumentos: 'Argumentos e valor',
-  objecoes: 'Objeções',
-  fechamento: 'Fechamento',
-  precisao: 'Precisão',
-  risco: 'Risco',
-}
+import { CRITERION_LABELS } from './labels'
+
+// Reexportado para não quebrar quem já importava daqui. A definição mora em
+// labels.ts porque a tela do relatório também precisa dela e não pode importar
+// deste arquivo (aqui tem o SDK da Anthropic).
+export { CRITERION_LABELS }
 
 const CRITERION_KEYS = Object.keys(CRITERION_LABELS) as CriterionKey[]
 const OUTCOMES: Outcome[] = ['AGENDOU', 'NAO_AGENDOU', 'SUMIU', 'PERDEU_O_PACIENTE', 'DISPENSOU_BEM']
