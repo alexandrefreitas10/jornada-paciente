@@ -1461,7 +1461,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
 
       {/* ── ABA RELATÓRIOS ── */}
       {tab === 'relatorios' && (
-        <RelatoriosTab movements={movements} />
+        <RelatoriosTab movements={movements} items={items} />
       )}
     </div>
   )
