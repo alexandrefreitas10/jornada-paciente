@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type { TrainingKb } from '@/lib/training/types'
+import { centsToReais, reaisToCents } from '@/lib/training/money'
 
 // A tela é o cadastro do gabarito que a IA usa para simular pacientes e
 // avaliar a secretária. Sem isso preenchido, o módulo de treino inteiro
@@ -75,16 +76,6 @@ const EMPTY_DRAFT: KbDraft = {
   links: { site: '', instagram: '', google: '' },
   redLines: [],
   modelAnswers: [],
-}
-
-function centsToReais(cents: number): string {
-  return cents ? (cents / 100).toFixed(2).replace('.', ',') : ''
-}
-
-// Nunca devolve NaN: campo vazio ou pela metade vira 0 até o usuário terminar.
-function reaisToCents(value: string): number {
-  const n = parseFloat(value.replace(',', '.'))
-  return Number.isFinite(n) ? Math.round(n * 100) : 0
 }
 
 function toInt(value: string): number {

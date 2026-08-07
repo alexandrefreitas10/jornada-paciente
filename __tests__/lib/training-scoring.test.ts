@@ -1,5 +1,5 @@
 // __tests__/lib/training-scoring.test.ts
-import { averageOf, verdictFor, AVERAGED_CRITERIA } from '@/lib/training/scoring'
+import { averageOf, verdictFor, AVERAGED_CRITERIA, hasRedFlag } from '@/lib/training/scoring'
 import type { Scores } from '@/lib/training/types'
 
 function scores(partial: Partial<Scores> = {}): Scores {
@@ -36,5 +36,31 @@ describe('training/scoring', () => {
 
   it('alerta vermelho reprova mesmo com média alta', () => {
     expect(verdictFor(9.8, true)).toBe('REPROVADA')
+  })
+})
+
+describe('training/scoring — hasRedFlag (item 5: veto não pode ser gatilho sensível)', () => {
+  it('risco 0 (linha vermelha clara) sempre veta', () => {
+    expect(hasRedFlag(0, 0)).toBe(true)
+  })
+
+  it('risco no limiar (5) ainda veta', () => {
+    expect(hasRedFlag(0, 5)).toBe(true)
+  })
+
+  it('risco logo acima do limiar (6) não veta — nota "quase perfeita" não pode reprovar sozinha', () => {
+    expect(hasRedFlag(0, 6)).toBe(false)
+  })
+
+  it('risco 9 (o caso do bug original) não veta mais', () => {
+    expect(hasRedFlag(0, 9)).toBe(false)
+  })
+
+  it('risco 10 nunca veta', () => {
+    expect(hasRedFlag(0, 10)).toBe(false)
+  })
+
+  it('redFlags preenchido veta mesmo com risco alto', () => {
+    expect(hasRedFlag(1, 10)).toBe(true)
   })
 })

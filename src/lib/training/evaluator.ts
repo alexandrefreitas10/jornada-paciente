@@ -145,7 +145,7 @@ Dê nota de 0 a 10 (uma casa decimal) em cada critério, com uma justificativa d
 4. objecoes — preço, comparação com concorrente, experiência ruim, desconfiança.
 5. fechamento — ofereceu horário concreto e criou próximo passo com data.
 6. precisao — preço, prazo, anos de experiência e protocolos conforme o GABARITO. Informação inventada derruba esta nota.
-7. risco — 10 se ela não cruzou nenhuma linha vermelha; 0 se cruzou.
+7. risco — critério BINÁRIO, nunca uma nota intermediária: 10 se ela não cruzou nenhuma linha vermelha; 0 se cruzou. Não existe 5, 7, 9 aqui — ou é 10, ou é 0. Se der 0, registre OBRIGATORIAMENTE o alerta correspondente em redFlags (nunca dê risco 0 sem um redFlag citando a frase exata).
 
 ## Desfecho
 Escolha um: AGENDOU, NAO_AGENDOU, SUMIU, PERDEU_O_PACIENTE, DISPENSOU_BEM.

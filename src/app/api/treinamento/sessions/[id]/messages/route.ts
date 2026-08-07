@@ -14,7 +14,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const result = await loadOwnedSession(Number(id))
+  // ownerOnly: responder dentro de um treino é ação do dono, mesmo para admin
+  // (o admin só tem leitura aqui — ver docs/superpowers/specs/2026-08-06-treinador-atendimento-design.md).
+  const result = await loadOwnedSession(Number(id), { ownerOnly: true })
   if ('error' in result) return NextResponse.json({ error: result.error }, { status: result.status })
   const { session } = result
 

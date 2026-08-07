@@ -22,7 +22,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const result = await loadOwnedSession(Number(id))
+  // ownerOnly: encerrar/avaliar é ação do dono, mesmo para admin — o relatório
+  // é salvo em nome de quem treinou, um admin não pode gerá-lo por outra pessoa
+  // (ver docs/superpowers/specs/2026-08-06-treinador-atendimento-design.md).
+  const result = await loadOwnedSession(Number(id), { ownerOnly: true })
   if ('error' in result) return NextResponse.json({ error: result.error }, { status: result.status })
   const { session } = result
 
@@ -38,11 +41,16 @@ export async function POST(
     )
   }
 
-  // Trava contra duplo clique em "Encerrar e avaliar": reserva uma conexão
-  // dedicada (fora do pool) e tenta um advisory lock NÃO bloqueante para esta
-  // sessão. Se outra chamada já está avaliando a mesma sessão, devolve 409 em
-  // vez de rodar uma segunda chamada cara ao Opus e sobrescrever o relatório
-  // que a primeira está prestes a salvar.
+  // Trava contra duplo clique em "Encerrar e avaliar": sql.reserve() tira uma
+  // conexão DO pool (max: 10 em src/lib/db.ts) e a segura, exclusiva, até o
+  // reserved.release() no finally — necessário porque o advisory lock é por
+  // conexão de sessão, não por transação, e a chamada ao Opus pode demorar
+  // bastante (maxDuration acima). Prender uma conexão inteira por uma chamada
+  // longa é um custo aceitável aqui: é uma ferramenta interna de uma clínica
+  // só, com no máximo um punhado de avaliações concorrentes. Se outra chamada
+  // já está avaliando a mesma sessão, devolve 409 em vez de rodar uma segunda
+  // chamada cara ao Opus e sobrescrever o relatório que a primeira está
+  // prestes a salvar.
   const reserved = await sql.reserve()
   try {
     const [{ locked }] = await reserved<{ locked: boolean }[]>`

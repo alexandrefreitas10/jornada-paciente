@@ -9,10 +9,12 @@ export async function currentUserId(): Promise<number | null> {
   return Number.isFinite(id) ? id : null
 }
 
-// Defesa contra IDOR: a sessão de treino é do dono, ou de qualquer admin.
-// Devolve 404 (não 403) para quem não é dono — não confirma que a sessão existe.
+// Defesa contra IDOR: a sessão de treino é do dono, ou (leitura) de qualquer
+// admin. Devolve 404 (não 403) para quem não tem acesso — não confirma que a
+// sessão existe.
 export async function loadOwnedSession(
-  sessionId: number
+  sessionId: number,
+  opts: { ownerOnly?: boolean } = {}
 ): Promise<{ session: TrainingSession; userId: number } | { error: string; status: number }> {
   const userId = await currentUserId()
   if (userId === null) return { error: 'Sessão inválida.', status: 401 }
@@ -24,8 +26,15 @@ export async function loadOwnedSession(
   const session = await getSession(sessionId)
   if (!session) return { error: 'Treino não encontrado.', status: 404 }
 
-  if (session.user_id !== userId && !(await isAdminSession())) {
-    return { error: 'Treino não encontrado.', status: 404 }
+  if (session.user_id !== userId) {
+    // ownerOnly: usado pelas rotas de escrita (mensagens, encerrar/avaliar) —
+    // admin não pode responder dentro do treino nem avaliar por outra pessoa,
+    // mesmo podendo LER (GET) qualquer sessão. Sempre 404, nunca 403: tanto
+    // faz o motivo (não é dono e não é admin, ou é admin mas a rota é ownerOnly),
+    // a resposta não pode revelar se a sessão existe nem por que o acesso foi negado.
+    if (opts.ownerOnly || !(await isAdminSession())) {
+      return { error: 'Treino não encontrado.', status: 404 }
+    }
   }
   return { session, userId }
 }

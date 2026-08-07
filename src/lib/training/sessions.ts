@@ -3,7 +3,7 @@ import type {
   Level, MessageRole, Persona, ScenarioKey, TrainingKb,
   TrainingMessage, TrainingReport, TrainingSession,
 } from './types'
-import { averageOf, verdictFor } from './scoring'
+import { averageOf, hasRedFlag, verdictFor } from './scoring'
 
 // average é NUMERIC(3,1) — o driver postgres.js devolve string, não number.
 // TrainingSession.average é tipado number; sem normalizar, average.toFixed(1)
@@ -112,15 +112,17 @@ export async function saveReport(sessionId: number, report: TrainingReport): Pro
   // redFlags e risco são duas afirmações independentes do modelo: o prompt define
   // risco 0 como "cruzou uma linha vermelha" mesmo que a lista redFlags venha vazia
   // (o modelo pode esquecer de listar o alerta). Qualquer um dos dois veta a aprovação.
-  const hasRedFlag = report.redFlags.length > 0 || report.scores.risco < 10
-  const verdict = verdictFor(average, hasRedFlag)
+  // Limiar em <=5, não <10 — ver comentário em scoring.ts: risco é binário no
+  // prompt, mas uma nota intermediária (ex.: 9) não pode vetar sozinha.
+  const flagged = hasRedFlag(report.redFlags.length, report.scores.risco)
+  const verdict = verdictFor(average, flagged)
   const [row] = await sql<TrainingSession[]>`
     UPDATE training_sessions SET
       status = 'avaliada',
       outcome = ${report.outcome},
       scores = ${sql.json(report.scores as never)},
       average = ${average},
-      has_red_flag = ${hasRedFlag},
+      has_red_flag = ${flagged},
       verdict = ${verdict},
       report = ${sql.json(report as never)},
       ended_at = COALESCE(ended_at, NOW())

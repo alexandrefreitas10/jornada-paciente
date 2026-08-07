@@ -88,7 +88,12 @@ function TypingIndicator() {
 // --- Relatório ------------------------------------------------------------
 
 function ReportView({ session, report }: { session: TrainingSession; report: TrainingReport }) {
-  const hasRedFlags = report.redFlags.length > 0
+  // A verdade sobre "cruzou linha vermelha" é do SERVIDOR (session.has_red_flag,
+  // calculado em saveReport a partir de redFlags.length E da nota de risco —
+  // duas afirmações independentes do modelo). Nunca recalcular aqui: um relatório
+  // com risco baixo e redFlags vazio (o modelo esqueceu de listar o alerta) já
+  // reprova no servidor, e a tela não pode mostrar "tudo certo" por cima disso.
+  const hasRedFlags = session.has_red_flag
 
   return (
     <div className="space-y-4">
@@ -98,15 +103,24 @@ function ReportView({ session, report }: { session: TrainingSession; report: Tra
           <h2 className="text-base font-bold text-red-800 flex items-center gap-2 mb-3">
             🚨 Alertas vermelhos
           </h2>
-          <div className="space-y-3">
-            {report.redFlags.map((flag, i) => (
-              <div key={i} className="bg-white border border-red-200 rounded-xl p-3">
-                <p className="text-sm text-gray-800 italic">&ldquo;{flag.quote}&rdquo;</p>
-                <p className="text-xs font-semibold text-red-700 mt-2">Linha cruzada: {flag.redLine}</p>
-                <p className="text-xs text-gray-600 mt-1">{flag.why}</p>
-              </div>
-            ))}
-          </div>
+          {report.redFlags.length > 0 ? (
+            <div className="space-y-3">
+              {report.redFlags.map((flag, i) => (
+                <div key={i} className="bg-white border border-red-200 rounded-xl p-3">
+                  <p className="text-sm text-gray-800 italic">&ldquo;{flag.quote}&rdquo;</p>
+                  <p className="text-xs font-semibold text-red-700 mt-2">Linha cruzada: {flag.redLine}</p>
+                  <p className="text-xs text-gray-600 mt-1">{flag.why}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-white border border-red-200 rounded-xl p-3">
+              <p className="text-sm text-gray-800">
+                A avaliação sinalizou risco nesta conversa, mas sem uma frase específica citada.
+              </p>
+              <p className="text-xs text-gray-600 mt-1">{report.rationales.risco}</p>
+            </div>
+          )}
         </div>
       ) : (
         <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-2xl px-5 py-4">
@@ -252,9 +266,17 @@ export default function TreinamentoSessionPage() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [bubbles, typing])
 
-  function pushBubble(role: MessageRole, content: string) {
+  // Devolve a key do balão criado, pra poder desfazer (rollback) se o POST
+  // que devia persisti-lo falhar — ver handleSend.
+  function pushBubble(role: MessageRole, content: string): string {
     bubbleCounter.current += 1
-    setBubbles(prev => [...prev, { key: `local-${bubbleCounter.current}`, role, content }])
+    const key = `local-${bubbleCounter.current}`
+    setBubbles(prev => [...prev, { key, role, content }])
+    return key
+  }
+
+  function removeBubble(key: string) {
+    setBubbles(prev => prev.filter(b => b.key !== key))
   }
 
   // Revela os balões do paciente um a um, no ritmo de uma conversa real.
@@ -282,7 +304,7 @@ export default function TreinamentoSessionPage() {
     if (!content || sending || ended || !session) return
 
     setSendError(null)
-    pushBubble('secretaria', content)
+    const bubbleKey = pushBubble('secretaria', content)
     setInput('')
     setSending(true)
     setTyping(true)
@@ -297,7 +319,10 @@ export default function TreinamentoSessionPage() {
     } catch {
       setTyping(false)
       setSending(false)
-      setSendError('Não foi possível conectar ao servidor. A mensagem pode não ter sido salva — tente novamente.')
+      // O POST não chegou a ser confirmado — o balão otimista não pode ficar
+      // na tela como se tivesse sido salvo (item 4). Ela pode digitar de novo.
+      removeBubble(bubbleKey)
+      setSendError('Não foi possível conectar ao servidor. A mensagem não foi salva — tente enviar de novo.')
       return
     }
 
@@ -305,7 +330,8 @@ export default function TreinamentoSessionPage() {
       const data = await res.json().catch(() => ({}) as { error?: string })
       setTyping(false)
       setSending(false)
-      setSendError(data.error || 'Os créditos da IA acabaram. A conversa está salva e pode continuar depois.')
+      removeBubble(bubbleKey)
+      setSendError(data.error || 'Os créditos da IA acabaram. A mensagem não foi salva — tente enviar de novo mais tarde.')
       return
     }
 
@@ -313,6 +339,11 @@ export default function TreinamentoSessionPage() {
       const data = await res.json().catch(() => ({}) as { error?: string })
       setTyping(false)
       setSending(false)
+      removeBubble(bubbleKey)
+      // 409: o treino já foi encerrado no servidor (ex.: uma avaliação anterior
+      // falhou depois de já ter chamado markEnded — ver handleFinish). Refletir
+      // isso aqui também, e não só lá, cobre a corrida entre as duas telas/abas.
+      if (res.status === 409) setEnded(true)
       setSendError(data.error || 'Não foi possível enviar a mensagem. Tente novamente.')
       return
     }
@@ -342,14 +373,25 @@ export default function TreinamentoSessionPage() {
     if (res.status === 503) {
       const data = await res.json().catch(() => ({}) as { error?: string })
       setFinishing(false)
-      setFinishError(data.error || 'Os créditos da IA acabaram. A conversa está salva — tente avaliar de novo mais tarde.')
+      // O servidor já chamou markEnded antes de tentar a avaliação (ver
+      // finish/route.ts) — a sessão está encerrada lá mesmo com a avaliação
+      // falhando. Refletir isso aqui trava o chat e evita perder a próxima
+      // mensagem digitada num balão que o servidor rejeitaria com 409 (item 4).
+      setEnded(true)
+      setFinishError(data.error || 'Os créditos da IA acabaram. A conversa está salva — clique em "Encerrar e avaliar" de novo mais tarde para tentar a avaliação.')
       return
     }
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}) as { error?: string })
       setFinishing(false)
-      setFinishError(data.error || 'Não foi possível gerar a avaliação. Tente novamente.')
+      // 400 (nenhuma mensagem ainda) e 409 (outra chamada já está avaliando)
+      // acontecem ANTES do markEnded no servidor — a sessão segue em andamento,
+      // não pode travar o chat. Qualquer outro erro (502 relatório inválido,
+      // 404 sessão sumiu) acontece DEPOIS do markEnded — mesmo motivo do 503
+      // acima: refletir localmente para não perder a próxima mensagem (item 4).
+      if (res.status !== 400 && res.status !== 409) setEnded(true)
+      setFinishError(data.error || 'Não foi possível gerar a avaliação. A conversa está salva — você pode tentar avaliar de novo.')
       return
     }
 
