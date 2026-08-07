@@ -135,7 +135,9 @@ async function handleExtract(
   const mediaType = 'image/jpeg' as const
 
   const message = await getClient().messages.create({
-    model: 'claude-opus-4-8',
+    // Haiku 4.5: ~1/5 do custo do Opus e suficiente para ler números de tabela.
+    // Se a precisão cair em tabelas manuscritas, voltar para 'claude-opus-4-8'.
+    model: 'claude-haiku-4-5',
     max_tokens: 2048,
     messages: [
       {
