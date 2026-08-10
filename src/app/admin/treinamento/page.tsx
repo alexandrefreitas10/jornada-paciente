@@ -43,6 +43,7 @@ interface KbDraft {
     returnWeeks: string
   }
   plans: PlanDraft[]
+  plansNote: string
   payment: {
     methods: string[]
     installments: string
@@ -68,6 +69,7 @@ const EMPTY_DRAFT: KbDraft = {
   doctors: [],
   consultation: { price: '', durationLabel: '', includes: [], returnWeeks: '' },
   plans: [],
+  plansNote: '',
   payment: { methods: [], installments: '', discountPolicy: '' },
   insurance: { accepts: false, note: '' },
   procedures: [],
@@ -100,6 +102,7 @@ function kbToDraft(kb: TrainingKb): KbDraft {
       includes: [...kb.consultation.includes],
       returnWeeks: kb.consultation.returnWeeks ? String(kb.consultation.returnWeeks) : '',
     },
+    plansNote: kb.plansNote ?? '',
     plans: kb.plans.map(p => ({
       name: p.name,
       months: p.months ? String(p.months) : '',
@@ -141,6 +144,7 @@ function draftToKb(f: KbDraft): TrainingKb {
       months: toInt(p.months),
       priceCents: reaisToCents(p.price),
     })),
+    plansNote: f.plansNote.trim(),
     payment: {
       methods: f.payment.methods.map(s => s.trim()).filter(Boolean),
       installments: f.payment.installments.trim(),
@@ -543,6 +547,23 @@ export default function TreinamentoAdminPage() {
 
               <Section title="Planos de acompanhamento" description="Gabarito para quando a paciente já consultou e está decidindo o protocolo.">
                 <PlansEditor plans={draft.plans} onChange={plans => setDraft(d => ({ ...d, plans }))} />
+                <div className="mt-4">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Como funciona o valor dos planos
+                  </label>
+                  <textarea
+                    value={draft.plansNote}
+                    onChange={e => setDraft(d => ({ ...d, plansNote: e.target.value }))}
+                    rows={3}
+                    placeholder="Ex.: o valor do plano não é tabelado — a médica define caso a caso na consulta, conforme o protocolo. A secretária nunca informa um valor de plano."
+                    className={textareaClass}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Use este campo quando os planos não têm preço fixo. Sem ele, a avaliação entende
+                    que o assunto não foi cadastrado e deixa de cobrar — quando na verdade citar um
+                    valor inventado é justamente o erro a ser pego.
+                  </p>
+                </div>
               </Section>
 
               <Section title="Pagamento">

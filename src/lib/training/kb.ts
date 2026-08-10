@@ -7,6 +7,7 @@ export const EMPTY_KB: TrainingKb = {
   doctors: [],
   consultation: { priceCents: 0, durationLabel: '', includes: [], returnWeeks: 8 },
   plans: [],
+  plansNote: '',
   payment: { methods: [], installments: '', discountPolicy: '' },
   insurance: { accepts: false, note: '' },
   procedures: [],

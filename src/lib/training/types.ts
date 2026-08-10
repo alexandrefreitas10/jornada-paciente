@@ -37,6 +37,11 @@ export interface TrainingKb {
   // Planos de acompanhamento. É o gabarito do cenário "consultou e não fechou
   // o protocolo" — sem isso a IA não sabe se o valor citado pela secretária existe.
   plans: { name: string; months: number; priceCents: number }[]
+  // Política dos planos, para clínicas onde o valor NÃO é tabelado — é a médica
+  // que define caso a caso na consulta. Sem isto, uma lista `plans` vazia faria a
+  // avaliadora entender "não cadastrado, não avalie", quando a verdade é o
+  // oposto: citar um valor de plano é justamente o erro a ser pego.
+  plansNote?: string
   payment: { methods: string[]; installments: string; discountPolicy: string }
   insurance: { accepts: boolean; note: string }
   procedures: { name: string; priceCents: number }[]
