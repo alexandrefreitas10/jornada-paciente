@@ -483,6 +483,18 @@ async function runMigrations() {
   await sql.unsafe(
     `ALTER TABLE training_sessions ADD COLUMN IF NOT EXISTS eval_output_tokens INTEGER NOT NULL DEFAULT 0`
   ).catch(() => {})
+
+  // Código de acesso ao portal (substitui o convite por link).
+  await sql.unsafe(`
+    ALTER TABLE patient_users ADD COLUMN IF NOT EXISTS invite_code TEXT;
+    ALTER TABLE patient_users ADD COLUMN IF NOT EXISTS invite_expires_at TIMESTAMPTZ;
+    CREATE UNIQUE INDEX IF NOT EXISTS patient_users_invite_code_idx
+      ON patient_users (invite_code) WHERE invite_code IS NOT NULL;
+  `).catch(() => {})
+  // O e-mail passa a ser escolhido pelo PACIENTE na ativação, então a linha
+  // nasce sem e-mail. O índice UNIQUE continua valendo: Postgres aceita
+  // vários NULL num índice único.
+  await sql.unsafe(`ALTER TABLE patient_users ALTER COLUMN email DROP NOT NULL`).catch(() => {})
 }
 
 export default sql

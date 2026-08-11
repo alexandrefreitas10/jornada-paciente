@@ -1,50 +1,59 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createPortalInvite, findPortalUserByPatientId, revokePortalAccess } from '@/lib/patient-portal'
+import { auth } from '@/auth'
+import { logAudit } from '@/lib/audit'
+import {
+  findPortalUserByPatientId, gerarCodigoAcesso, revokePortalAccess,
+} from '@/lib/patient-portal'
+import { classificarCodigo } from '@/lib/portal-invite-code'
 
 export const dynamic = 'force-dynamic'
 
 type Params = { params: Promise<{ id: string }> }
 
-// GET — retorna status atual do acesso do paciente
+// GET — status atual do acesso do paciente
 export async function GET(_req: NextRequest, { params }: Params) {
   const { id } = await params
   const user = await findPortalUserByPatientId(Number(id))
-
   if (!user) return NextResponse.json({ status: 'none' })
 
   if (user.invite_used_at) {
     return NextResponse.json({ status: 'active', email: user.email })
   }
-
-  if (user.invite_token) {
-    return NextResponse.json({ status: 'pending', email: user.email, token: user.invite_token })
+  // Código ainda válido: a secretária pode reabrir o card e ver o MESMO código.
+  // Sem isso, "perdi a mensagem" viraria sempre um código novo, e o paciente que
+  // já tinha anotado o antigo ficaria sem entender por que parou de funcionar.
+  if (user.invite_code && classificarCodigo(user) === 'valido') {
+    return NextResponse.json({
+      status: 'pending',
+      email: user.email,
+      code: user.invite_code,
+      expiresAt: user.invite_expires_at,
+    })
   }
-
-  return NextResponse.json({ status: 'none' })
+  // Convite antigo por link, ainda pendente — segue válido pela rota antiga.
+  if (user.invite_token) {
+    return NextResponse.json({ status: 'pending_link', email: user.email, token: user.invite_token })
+  }
+  return NextResponse.json({ status: 'expired', email: user.email })
 }
 
-// POST — gera novo convite (cria patient_users ou sobrescreve token)
-export async function POST(req: NextRequest, { params }: Params) {
+// POST — gera (ou regera) o código. Não recebe e-mail: quem escolhe é o paciente.
+export async function POST(_req: NextRequest, { params }: Params) {
   const { id } = await params
-  const { email } = await req.json()
-
-  if (!email || !email.includes('@')) {
-    return NextResponse.json({ error: 'E-mail inválido' }, { status: 400 })
-  }
-
   try {
-    const token = await createPortalInvite(Number(id), email)
-    // Atrás de proxy (Railway), nextUrl.origin retorna o host interno (localhost:PORT).
-    // Usa os headers de forwarded para montar o domínio público real.
-    const proto = req.headers.get('x-forwarded-proto') ?? 'https'
-    const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? req.nextUrl.host
-    const link = `${proto}://${host}/portal/ativar/${token}`
-    return NextResponse.json({ ok: true, token, link })
+    const { code, expiresAt } = await gerarCodigoAcesso(Number(id))
+    // Regerar apaga a senha do paciente — precisa ficar registrado quem fez.
+    const session = await auth()
+    await logAudit({
+      userName: session?.user?.name ?? 'desconhecido',
+      action: 'portal.codigo.gerado',
+      entityType: 'patient_user',
+      patientId: Number(id),
+      details: `Código de acesso ao portal gerado (válido até ${expiresAt}). Senha anterior, se havia, foi apagada.`,
+    }).catch(() => {})
+    return NextResponse.json({ ok: true, code, expiresAt })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
-    if (msg.includes('unique') || msg.includes('duplicate')) {
-      return NextResponse.json({ error: 'Este e-mail já está em uso por outro paciente' }, { status: 409 })
-    }
     return NextResponse.json({ error: msg }, { status: 500 })
   }
 }

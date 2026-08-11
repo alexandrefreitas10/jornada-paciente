@@ -140,7 +140,7 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
           )}
         </div>
         {!readOnly && <ProgressBar completed={completedKeys.length} total={ALL_TASK_KEYS.length} />}
-        {!readOnly && <PortalAccessBlock patientId={patient.id} />}
+        {!readOnly && <PortalAccessBlock patientId={patient.id} patientName={patient.name} />}
       </div>
 
       {/* Abas */}
@@ -223,16 +223,15 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
   )
 }
 
-function PortalAccessBlock({ patientId }: { patientId: number }) {
-  const [status, setStatus] = useState<'loading' | 'none' | 'pending' | 'active'>('loading')
+function PortalAccessBlock({ patientId, patientName }: { patientId: number; patientName: string }) {
+  const [status, setStatus] = useState<'loading' | 'none' | 'pending' | 'pending_link' | 'expired' | 'active'>('loading')
   const [email, setEmail] = useState('')
-  const [token, setToken] = useState('')
+  const [code, setCode] = useState('')
+  const [expiresAt, setExpiresAt] = useState('')
   const [link, setLink] = useState('')
   const [copied, setCopied] = useState(false)
-  const [emailInput, setEmailInput] = useState('')
   const [generating, setGenerating] = useState(false)
   const [revoking, setRevoking] = useState(false)
-  const [resetting, setResetting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -241,32 +240,31 @@ function PortalAccessBlock({ patientId }: { patientId: number }) {
       .then(data => {
         setStatus(data.status)
         if (data.email) setEmail(data.email)
+        if (data.code) setCode(data.code)
+        if (data.expiresAt) setExpiresAt(data.expiresAt)
         if (data.token) {
-          setToken(data.token)
+          // Monta o link no navegador — o servidor atrás de proxy (Railway) não conhece o domínio público
           setLink(`${window.location.origin}/portal/ativar/${data.token}`)
         }
       })
       .catch(() => setStatus('none'))
   }, [patientId])
 
-  async function handleGenerate(e: React.FormEvent) {
-    e.preventDefault()
+  async function handleGenerate() {
+    // Regerar apaga a senha atual — só nesse estado existe senha pra perder.
+    if (status === 'active' && !confirm(
+      'Isso apaga a senha atual do paciente. Ele vai precisar do código novo para escolher outra. Continuar?'
+    )) return
+
     setGenerating(true)
     setError(null)
-    const res = await fetch(`/api/patients/${patientId}/portal-invite`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: emailInput }),
-    })
+    const res = await fetch(`/api/patients/${patientId}/portal-invite`, { method: 'POST' })
     const data = await res.json()
-    if (!res.ok) { setError(data.error || 'Erro ao gerar convite'); setGenerating(false); return }
-    setEmail(emailInput)
-    setToken(data.token)
-    // Monta o link no navegador — o servidor atrás de proxy (Railway) não conhece o domínio público
-    setLink(`${window.location.origin}/portal/ativar/${data.token}`)
+    if (!res.ok) { setError(data.error || 'Erro ao gerar código'); setGenerating(false); return }
+    setCode(data.code)
+    setExpiresAt(data.expiresAt)
     setStatus('pending')
     setGenerating(false)
-    setResetting(false)
   }
 
   async function handleRevoke() {
@@ -275,10 +273,18 @@ function PortalAccessBlock({ patientId }: { patientId: number }) {
     await fetch(`/api/patients/${patientId}/portal-invite`, { method: 'DELETE' })
     setStatus('none')
     setEmail('')
-    setToken('')
+    setCode('')
+    setExpiresAt('')
     setLink('')
-    setEmailInput('')
     setRevoking(false)
+  }
+
+  function copyMessage() {
+    const mensagem = `Oi ${patientName}! Seu acesso ao portal: entre em ${window.location.origin}/portal/ativar e digite o código ${code}`
+    navigator.clipboard.writeText(mensagem).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
   }
 
   function copyLink() {
@@ -288,68 +294,49 @@ function PortalAccessBlock({ patientId }: { patientId: number }) {
     })
   }
 
-  function openReset() {
-    setEmailInput(email)
-    setError(null)
-    setResetting(true)
-  }
-
   if (status === 'loading') return null
 
-  const resetForm = (
-    <form onSubmit={handleGenerate} className="space-y-2 bg-violet-50 border border-violet-100 rounded-lg p-3">
-      <p className="text-xs text-gray-600">
-        {status === 'active'
-          ? 'Um novo link será gerado e a senha atual deixará de funcionar. Você pode manter ou trocar o e-mail.'
-          : 'O convite será gerado novamente para o e-mail abaixo.'}
-      </p>
-      <input
-        type="email"
-        value={emailInput}
-        onChange={e => setEmailInput(e.target.value)}
-        required
-        placeholder="E-mail do paciente"
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
-      />
-      {error && <p className="text-xs text-red-600">{error}</p>}
-      <div className="flex gap-2">
-        <button type="submit" disabled={generating}
-          className="flex-1 py-2 bg-violet-600 text-white text-xs font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
-          {generating ? 'Gerando...' : '🔗 Gerar novo link'}
-        </button>
-        <button type="button" onClick={() => setResetting(false)}
-          className="px-3 py-2 border border-gray-300 rounded-lg text-xs hover:bg-gray-50 transition-colors">
-          Cancelar
-        </button>
-      </div>
-    </form>
-  )
+  const validadeFormatada = expiresAt ? new Date(expiresAt).toLocaleDateString('pt-BR') : ''
 
   return (
     <div className="border-t border-gray-100 pt-4 mt-4">
       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Acesso do Paciente ao Portal</p>
 
       {status === 'none' && (
-        <form onSubmit={handleGenerate} className="space-y-2">
-          <input
-            type="email"
-            value={emailInput}
-            onChange={e => setEmailInput(e.target.value)}
-            required
-            placeholder="E-mail do paciente"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
-          />
+        <div className="space-y-2">
           {error && <p className="text-xs text-red-600">{error}</p>}
-          <button type="submit" disabled={generating}
+          <button onClick={handleGenerate} disabled={generating}
             className="w-full py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
-            {generating ? 'Gerando...' : '🔗 Gerar link de convite'}
+            {generating ? 'Gerando...' : '🔑 Gerar código de acesso'}
           </button>
-        </form>
+        </div>
       )}
 
       {status === 'pending' && (
         <div className="space-y-2">
-          <p className="text-xs text-amber-600 font-medium">⏳ Aguardando ativação — {email}</p>
+          <p className="text-xs text-amber-600 font-medium">⏳ Aguardando ativação</p>
+          <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-center">
+            <p className="text-2xl font-mono font-bold tracking-[0.3em] text-gray-900">{code}</p>
+            <p className="text-xs text-gray-500 mt-1">válido até {validadeFormatada}</p>
+          </div>
+          {error && <p className="text-xs text-red-600">{error}</p>}
+          <div className="flex gap-2">
+            <button onClick={copyMessage}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-xs hover:bg-gray-50 transition-colors">
+              {copied ? '✓ Copiado' : '📋 Copiar mensagem'}
+            </button>
+            <button onClick={handleRevoke} disabled={revoking}
+              className="px-3 py-2 text-xs text-red-500 hover:text-red-700 transition-colors shrink-0">
+              {revoking ? 'Revogando...' : '× Revogar'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {status === 'pending_link' && (
+        <div className="space-y-2">
+          <p className="text-xs text-amber-600 font-medium">⏳ Convite antigo aguardando ativação — {email}</p>
+          <p className="text-xs text-gray-500">Este é um convite antigo por link. Gerar um código novo substitui este convite.</p>
           <div className="flex gap-2">
             <input readOnly value={link}
               className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-500 bg-gray-50" />
@@ -358,36 +345,45 @@ function PortalAccessBlock({ patientId }: { patientId: number }) {
               {copied ? '✓ Copiado' : '📋 Copiar'}
             </button>
           </div>
-          {resetting ? resetForm : (
-            <div className="flex gap-3">
-              <button onClick={openReset}
-                className="text-xs text-violet-600 hover:text-violet-800 transition-colors">
-                ✏️ Trocar e-mail
-              </button>
-              <button onClick={handleRevoke} disabled={revoking}
-                className="text-xs text-red-500 hover:text-red-700 transition-colors">
-                {revoking ? 'Revogando...' : '× Revogar convite'}
-              </button>
-            </div>
-          )}
+          {error && <p className="text-xs text-red-600">{error}</p>}
+          <div className="flex gap-3">
+            <button onClick={handleGenerate} disabled={generating}
+              className="text-xs text-violet-600 hover:text-violet-800 transition-colors">
+              {generating ? 'Gerando...' : '🔑 Gerar código de acesso'}
+            </button>
+            <button onClick={handleRevoke} disabled={revoking}
+              className="text-xs text-red-500 hover:text-red-700 transition-colors">
+              {revoking ? 'Revogando...' : '× Revogar convite'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {status === 'expired' && (
+        <div className="space-y-2">
+          <p className="text-xs text-red-500 font-medium">✕ O código expirou</p>
+          {error && <p className="text-xs text-red-600">{error}</p>}
+          <button onClick={handleGenerate} disabled={generating}
+            className="w-full py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
+            {generating ? 'Gerando...' : '🔑 Gerar novo código'}
+          </button>
         </div>
       )}
 
       {status === 'active' && (
         <div className="space-y-2">
           <p className="text-xs text-emerald-600 font-medium">✅ Portal ativo — {email}</p>
-          {resetting ? resetForm : (
-            <div className="flex gap-3">
-              <button onClick={openReset}
-                className="text-xs text-violet-600 hover:text-violet-800 transition-colors">
-                🔄 Redefinir acesso (nova senha / trocar e-mail)
-              </button>
-              <button onClick={handleRevoke} disabled={revoking}
-                className="text-xs text-red-500 hover:text-red-700 transition-colors">
-                {revoking ? 'Revogando...' : '× Revogar acesso'}
-              </button>
-            </div>
-          )}
+          {error && <p className="text-xs text-red-600">{error}</p>}
+          <div className="flex gap-3">
+            <button onClick={handleGenerate} disabled={generating}
+              className="text-xs text-violet-600 hover:text-violet-800 transition-colors">
+              {generating ? 'Gerando...' : '🔄 Gerar novo código (redefinir senha)'}
+            </button>
+            <button onClick={handleRevoke} disabled={revoking}
+              className="text-xs text-red-500 hover:text-red-700 transition-colors">
+              {revoking ? 'Revogando...' : '× Revogar acesso'}
+            </button>
+          </div>
         </div>
       )}
     </div>
