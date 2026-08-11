@@ -4,6 +4,28 @@ import sql, { initSchema } from './db'
 // Render, onde memória de processo não é compartilhada). Uma linha por
 // (scope, identifier); o incremento é uma única instrução atômica.
 
+// Extrai o IP do cliente para usar como identificador da trava. Por convenção,
+// o proxy reverso (Render) ANEXA o IP do peer ao final de X-Forwarded-For —
+// não substitui, não prepende. Um cliente que manda seu próprio cabeçalho
+// X-Forwarded-For só controla os elementos da frente da lista; o ÚLTIMO é
+// sempre o que o proxy escreveu. Ler o [0] (primeiro), como o código antigo
+// fazia, lê exatamente o valor que o atacante escolheu — `curl -H
+// 'X-Forwarded-For: qualquer-coisa'` bastava para cair sempre num balde novo
+// e desligar a trava de força bruta. Por isso pegamos o último valor NÃO
+// VAZIO: um cabeçalho presente mas vazio ('') não é nullish, então `??` não
+// pega o fallback — sem filtrar string vazia, isso faria toda requisição
+// nessas condições cair no mesmo balde de x-real-ip.
+export function getClientIp(req: { headers: { get(name: string): string | null } }): string {
+  const xff = req.headers.get('x-forwarded-for')
+  if (xff) {
+    const partes = xff.split(',').map(p => p.trim()).filter(Boolean)
+    if (partes.length > 0) return partes[partes.length - 1]
+  }
+  const real = req.headers.get('x-real-ip')?.trim()
+  if (real) return real
+  return 'desconhecido'
+}
+
 const MAX_FAILS = 5 // falhas na janela antes do lockout. Janela e lockout: 15 min (literais no SQL).
 
 // portal_code: tentativas de adivinhar o código de acesso ao portal. O

@@ -1,7 +1,7 @@
 // __tests__/lib/portal-invite-code.test.ts
 import {
   ALFABETO, TAMANHO, VALIDADE_DIAS,
-  sortearCodigo, normalizarCodigo, classificarCodigo,
+  sortearCodigo, normalizarCodigo, classificarCodigo, codigoMalformado,
 } from '@/lib/portal-invite-code'
 
 describe('portal-invite-code — alfabeto', () => {
@@ -95,5 +95,33 @@ describe('portal-invite-code — estado', () => {
     // Linha antiga (convite por link) não tem invite_expires_at — não pode virar
     // um código válido para sempre por omissão.
     expect(classificarCodigo({ invite_used_at: null, invite_expires_at: null }, agora)).toBe('invalido')
+  })
+
+  it('quem já ativou continua encontrável — só invite_used_at marca o consumo', () => {
+    // Regressão do bug bloqueante: ativarComCodigo NÃO deve mais zerar
+    // invite_code na ativação. classificarCodigo nem olha para invite_code —
+    // só para invite_used_at/invite_expires_at — então uma linha de código já
+    // consumido, mas ainda encontrável pelo WHERE invite_code = ..., precisa
+    // classificar como 'usado', nunca 'invalido'.
+    expect(classificarCodigo(
+      { invite_used_at: '2026-08-05T09:00:00Z', invite_expires_at: futuro }, agora,
+    )).toBe('usado')
+  })
+})
+
+describe('portal-invite-code — malformado vs. bem formado mas não encontrado', () => {
+  it('marca como malformado o que nunca deveria virar consulta ao banco', () => {
+    expect(codigoMalformado('K7P2M')).toBe(true) // tamanho errado
+    expect(codigoMalformado('K7P2M99')).toBe(true) // tamanho errado
+    expect(codigoMalformado('')).toBe(true) // vazio
+    expect(codigoMalformado('K7P2MO')).toBe(true) // O fora do alfabeto de propósito
+    expect(codigoMalformado(null as unknown as string)).toBe(true)
+  })
+
+  it('código bem formado não é malformado, mesmo que não exista no banco', () => {
+    // Aqui é a rota que decide se conta como tentativa — a distinção que
+    // importa é só "nunca chegou a consultar" vs. "consultou e não achou".
+    expect(codigoMalformado('K7P2M9')).toBe(false)
+    expect(codigoMalformado('k7p2-m9')).toBe(false)
   })
 })

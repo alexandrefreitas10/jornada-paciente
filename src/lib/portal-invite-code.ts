@@ -23,6 +23,15 @@ export function normalizarCodigo(bruto: string): string | null {
   return s
 }
 
+// Erro de digitação (tamanho errado, ou uma letra que o alfabeto exclui de
+// propósito) nunca chega a consultar o banco — não é tentativa de adivinhar
+// um código, é o paciente errando o teclado. Só um código BEM FORMADO que
+// não existe (ou expirou) é, de fato, uma tentativa. A rota usa isto para não
+// contar tropeço de digitação como tentativa de força bruta.
+export function codigoMalformado(bruto: string): boolean {
+  return normalizarCodigo(bruto) === null
+}
+
 export type EstadoCodigo = 'valido' | 'invalido' | 'usado' | 'expirado'
 
 export interface LinhaCodigo {

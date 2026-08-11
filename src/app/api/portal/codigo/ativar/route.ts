@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ativarComCodigo, SENHA_MINIMA } from '@/lib/patient-portal'
-import { assertNotLocked, clearAttempts, registerFailure } from '@/lib/rate-limit'
+import { assertNotLocked, clearAttempts, getClientIp, registerFailure } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
-
-function ipDe(req: NextRequest): string {
-  return req.headers.get('x-forwarded-for')?.split(',')[0].trim()
-    ?? req.headers.get('x-real-ip')
-    ?? 'desconhecido'
-}
 
 const MENSAGEM: Record<string, string> = {
   invalido: 'Código não encontrado. Confira as 6 letras e números.',
@@ -19,7 +13,7 @@ const MENSAGEM: Record<string, string> = {
 }
 
 export async function POST(req: NextRequest) {
-  const ip = ipDe(req)
+  const ip = getClientIp(req)
   if ((await assertNotLocked('portal_code', ip)).blocked) {
     return NextResponse.json(
       { error: 'Muitas tentativas. Aguarde alguns minutos e tente de novo.' },

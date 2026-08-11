@@ -2,7 +2,7 @@ import sql, { initSchema } from './db'
 import bcrypt from 'bcryptjs'
 import { randomUUID } from 'crypto'
 import {
-  classificarCodigo, normalizarCodigo, sortearCodigo, VALIDADE_DIAS,
+  classificarCodigo, codigoMalformado, normalizarCodigo, sortearCodigo, VALIDADE_DIAS,
   type EstadoCodigo,
 } from './portal-invite-code'
 import { logAudit } from './audit'
@@ -101,17 +101,27 @@ export async function gerarCodigoAcesso(
   // honesto do que torcer: sem isso, uma colisão viraria erro 500 sem sentido.
   for (let tentativa = 0; tentativa < 5; tentativa++) {
     const code = sortearCodigo()
-    const rows = await sql<{ invite_expires_at: string }[]>`
-      INSERT INTO patient_users (patient_id, invite_code, invite_expires_at)
-      VALUES (${patientId}, ${code}, NOW() + (${VALIDADE_DIAS} || ' days')::interval)
-      ON CONFLICT (patient_id) DO UPDATE SET
-        invite_code = EXCLUDED.invite_code,
-        invite_expires_at = EXCLUDED.invite_expires_at,
-        invite_used_at = NULL,
-        password_hash = NULL
-      RETURNING invite_expires_at
-    `.catch(() => [] as { invite_expires_at: string }[])
-    if (rows.length > 0) return { code, expiresAt: rows[0].invite_expires_at }
+    try {
+      const rows = await sql<{ invite_expires_at: string }[]>`
+        INSERT INTO patient_users (patient_id, invite_code, invite_expires_at)
+        VALUES (${patientId}, ${code}, NOW() + (${VALIDADE_DIAS} || ' days')::interval)
+        ON CONFLICT (patient_id) DO UPDATE SET
+          invite_code = EXCLUDED.invite_code,
+          invite_expires_at = EXCLUDED.invite_expires_at,
+          invite_used_at = NULL,
+          password_hash = NULL
+        RETURNING invite_expires_at
+      `
+      if (rows.length > 0) return { code, expiresAt: rows[0].invite_expires_at }
+    } catch (err) {
+      // Só colisão do código sorteado (violação do índice único parcial em
+      // invite_code, SQLSTATE 23505 — postgres.js expõe em err.code) vale
+      // tentar de novo. Qualquer outro erro — FK inexistente, NOT NULL em
+      // email se a migração não rodou, etc. — precisa subir para quem chamou;
+      // engolir e tentar de novo cinco vezes só trocaria um erro real por uma
+      // mensagem de "tente de novo" que nunca vai funcionar, sem log nenhum.
+      if ((err as { code?: string } | undefined)?.code !== '23505') throw err
+    }
   }
   throw new Error('Não deu pra gerar o código. Tente de novo.')
 }
@@ -119,13 +129,17 @@ export async function gerarCodigoAcesso(
 export interface LeituraCodigo {
   estado: EstadoCodigo
   patientName?: string
+  // true quando o código nem chegou a ser consultado no banco (tamanho errado
+  // ou caractere fora do alfabeto) — a rota usa isto para não contar erro de
+  // digitação como tentativa de força bruta.
+  malformado?: boolean
 }
 
 // Lê o estado do código ANTES de o paciente preencher e-mail e senha —
 // descobrir que expirou só no envio seria perder todo o preenchimento.
 export async function lerCodigoAcesso(bruto: string): Promise<LeituraCodigo> {
-  const code = normalizarCodigo(bruto)
-  if (!code) return { estado: 'invalido' }
+  if (codigoMalformado(bruto)) return { estado: 'invalido', malformado: true }
+  const code = normalizarCodigo(bruto) as string
   await initSchema()
   const [row] = await sql<{
     invite_used_at: string | null
@@ -182,11 +196,19 @@ export async function ativarComCodigo(input: {
     `
     if (emUso) return { ok: false, motivo: 'email_em_uso' } as ResultadoAtivacao
 
+    // invite_code É MANTIDO de propósito — não zerar. invite_used_at já marca
+    // o código como consumido (classificarCodigo checa isso primeiro); se
+    // zerássemos invite_code, lerCodigoAcesso (WHERE invite_code = ...) nunca
+    // mais encontraria a linha, e um paciente reabrindo o WhatsApp antigo e
+    // digitando o código de novo leria "código não encontrado" em vez de
+    // "já foi usado" — exatamente o bug que este código de 6 caracteres
+    // existe para eliminar. Manter o valor não tem custo: o índice único é
+    // parcial (WHERE invite_code IS NOT NULL) e regenerar sobrescreve a
+    // mesma linha via ON CONFLICT (patient_id).
     await tx`
       UPDATE patient_users
       SET email = ${email},
           password_hash = ${hash},
-          invite_code = NULL,
           invite_token = NULL,
           invite_used_at = NOW(),
           email_registered_at = NOW()

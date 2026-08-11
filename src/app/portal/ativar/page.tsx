@@ -60,6 +60,7 @@ export default function AtivarComCodigoPage() {
 
   // Passo 2 — e-mail e senha
   const [email, setEmail] = useState('')
+  const [confirmEmail, setConfirmEmail] = useState('')
   const [senha, setSenha] = useState('')
   const [confirmSenha, setConfirmSenha] = useState('')
   const [mostrarSenha, setMostrarSenha] = useState(false)
@@ -110,6 +111,13 @@ export default function AtivarComCodigoPage() {
     e.preventDefault()
     setErroAtivar(null)
 
+    // Comparação sem diferenciar maiúsculas/minúsculas e ignorando espaço nas
+    // pontas: e-mail não é case-sensitive na prática, e cobrar isso do
+    // paciente só geraria um "não coincide" falso.
+    if (email.trim().toLowerCase() !== confirmEmail.trim().toLowerCase()) {
+      setErroAtivar('Os e-mails não coincidem.')
+      return
+    }
     if (senha.length < 6) {
       setErroAtivar('A senha precisa ter pelo menos 6 caracteres.')
       return
@@ -180,6 +188,15 @@ export default function AtivarComCodigoPage() {
                 required
                 autoComplete="email"
                 placeholder="seu@email.com"
+                style={inputStyle}
+              />
+              <input
+                type="email"
+                value={confirmEmail}
+                onChange={e => setConfirmEmail(e.target.value)}
+                required
+                autoComplete="email"
+                placeholder="Confirmar e-mail"
                 style={inputStyle}
               />
               <div style={{ position: 'relative' }}>
