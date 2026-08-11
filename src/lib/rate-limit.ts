@@ -6,7 +6,10 @@ import sql, { initSchema } from './db'
 
 const MAX_FAILS = 5 // falhas na janela antes do lockout. Janela e lockout: 15 min (literais no SQL).
 
-export type RateScope = 'staff' | 'portal' | 'reauth'
+// portal_code: tentativas de adivinhar o código de acesso ao portal. O
+// identificador é o IP, nunca o código — se fosse o código, cada tentativa
+// cairia num balde diferente e a trava nunca dispararia.
+export type RateScope = 'staff' | 'portal' | 'reauth' | 'portal_code'
 export interface RateStatus { blocked: boolean; retryAfterSec: number }
 
 function norm(id: string) { return id.toLowerCase().trim() }
