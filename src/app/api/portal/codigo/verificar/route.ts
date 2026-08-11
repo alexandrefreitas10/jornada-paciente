@@ -23,7 +23,13 @@ export async function POST(req: NextRequest) {
 
   const { code } = (await req.json().catch(() => ({}))) as { code?: string }
   const leitura = await lerCodigoAcesso(String(code ?? ''))
-  if (leitura.estado !== 'valido') await registerFailure('portal_code', ip)
+  // Só conta como tentativa de adivinhação o que É adivinhação. "Já usado"
+  // fica de fora de propósito: é o caso mais comum na prática — o paciente
+  // ativou, esqueceu, e reabre o código antigo. Contando esse, ele se trancaria
+  // sozinho justamente quando está tentando entrar.
+  if (leitura.estado === 'invalido' || leitura.estado === 'expirado') {
+    await registerFailure('portal_code', ip)
+  }
 
   return NextResponse.json(leitura)
 }
