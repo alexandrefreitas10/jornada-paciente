@@ -210,7 +210,7 @@ export function classificarCodigo(linha: LinhaCodigo | null, agora: Date = new D
 - [ ] **Step 4: Rodar e confirmar que passa**
 
 Run: `npx jest __tests__/lib/portal-invite-code.test.ts`
-Expected: PASS — 11 testes
+Expected: PASS — 13 testes
 
 - [ ] **Step 5: Commit**
 
@@ -712,7 +712,7 @@ git add src/components/PatientDetailClient.tsx && git commit -m "feat(portal): c
 
 ## Verificação final
 
-- [ ] `npx jest __tests__/lib/portal-invite-code.test.ts` — 11 testes passando
+- [ ] `npx jest __tests__/lib/portal-invite-code.test.ts` — 13 testes passando
 - [ ] `npx jest` — as 4 suítes que **já estavam quebradas antes deste trabalho** continuam sendo as únicas vermelhas
 - [ ] `npx tsc --noEmit` — sem erros novos
 - [ ] `npm run build` — passa
