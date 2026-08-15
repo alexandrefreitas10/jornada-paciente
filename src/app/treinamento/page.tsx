@@ -370,7 +370,12 @@ export default function TreinamentoPage() {
                     {staffSummary.averageScore !== null ? staffSummary.averageScore.toFixed(1) : '—'}
                   </span>
                 </span>
-                <span>Com red flag: <span className="font-semibold text-gray-700">{staffSummary.redFlagCount}</span></span>
+                <span className={staffSummary.redFlagCount > 0 ? 'text-red-700' : undefined}>
+                  Com linha vermelha:{' '}
+                  <span className={`font-semibold ${staffSummary.redFlagCount > 0 ? 'text-red-700' : 'text-gray-700'}`}>
+                    {staffSummary.redFlagCount}
+                  </span>
+                </span>
               </div>
             )}
           </div>
@@ -422,7 +427,22 @@ export default function TreinamentoPage() {
                             {OUTCOME_LABELS[s.outcome] ?? s.outcome}
                           </span>
                         )}
-                        {s.average !== null && (
+                        {/* O alerta vermelho é o motivo INTEIRO da reprovação, e antes
+                            só aparecia dentro do relatório — na lista lia-se
+                            "Agendou · 5.5 · Reprovada", que parece contradição.
+                            Aqui ele fica visível na própria linha. */}
+                        {s.has_red_flag && (
+                          <span
+                            className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium"
+                            title="Cruzou uma linha vermelha — reprova independente da nota"
+                          >
+                            🚨 Linha vermelha
+                          </span>
+                        )}
+                        {/* Com veto, a média não explica nada: ela poderia ser 9 e
+                            reprovaria igual. Mostrá-la ao lado de "Reprovada" sugere
+                            que a nota foi o motivo — não foi. */}
+                        {s.average !== null && !s.has_red_flag && (
                           <span className="text-xs font-semibold text-gray-700">{s.average.toFixed(1)}</span>
                         )}
                         {isAdmin && (

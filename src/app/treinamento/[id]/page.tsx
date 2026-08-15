@@ -168,15 +168,26 @@ function ReportView(
       </div>
 
       {/* 4. Média e status — vêm da sessão, nunca recalculados no cliente */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h2 className="text-sm font-semibold text-gray-700">Média</h2>
-          <p className="text-2xl font-bold text-gray-900">{session.average !== null ? session.average.toFixed(1) : '—'}</p>
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-700">Média</h2>
+            <p className="text-2xl font-bold text-gray-900">{session.average !== null ? session.average.toFixed(1) : '—'}</p>
+          </div>
+          {session.verdict && (
+            <span className={`text-sm font-medium px-3 py-1.5 rounded-full border ${VERDICT_CLASS[session.verdict]}`}>
+              {VERDICT_LABELS[session.verdict]}
+            </span>
+          )}
         </div>
-        {session.verdict && (
-          <span className={`text-sm font-medium px-3 py-1.5 rounded-full border ${VERDICT_CLASS[session.verdict]}`}>
-            {VERDICT_LABELS[session.verdict]}
-          </span>
+        {/* Sem esta linha, a média ao lado de "Reprovada" sugere que a nota foi o
+            motivo. Não foi: com linha vermelha cruzada, reprova mesmo com 10 nos
+            outros seis critérios. */}
+        {hasRedFlags && (
+          <p className="text-xs text-red-700 mt-3 pt-3 border-t border-gray-100">
+            Reprovada pelo alerta vermelho, não pela média — uma linha vermelha cruzada
+            reprova a sessão independente das outras notas.
+          </p>
         )}
       </div>
 
