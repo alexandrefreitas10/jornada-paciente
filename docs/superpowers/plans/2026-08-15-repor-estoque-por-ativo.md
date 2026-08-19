@@ -18,7 +18,9 @@
 |---|---|
 | `src/lib/stock-actives.ts` | **Novo.** Catálogo dos ativos, normalização, busca e agrupamento. Puro — sem banco, sem React. É o que os testes cobrem. |
 | `__tests__/lib/stock-actives.test.ts` | **Novo.** |
-| `src/app/estoque/RelatoriosTab.tsx` | Consome o agrupamento; exibe o limite por linha. |
+| `src/lib/stock.ts` | `listStockItems` ganha `{ incluirZerados }` — a lista de compra precisa ver o que zerou. |
+| `src/app/api/estoque/items/route.ts` | Aceita `?zerados=1`. Sem o parâmetro nada muda. |
+| `src/app/estoque/RelatoriosTab.tsx` | Busca a lista com zerados, consome o agrupamento, exibe o limite por linha. |
 
 `src/app/estoque/EstoqueClient.tsx` **não é tocado** — a régua de 5 por lote na aba Estoque Atual continua.
 
@@ -388,20 +390,205 @@ git add src/lib/stock-actives.ts __tests__/lib/stock-actives.test.ts && git comm
 
 ---
 
-## Task 2: Relatório usa o agrupamento
+## Task 2: A lista de compra passa a enxergar os zerados
+
+**Descoberto durante a execução, contra o banco real:** `listStockItems` termina com
+`HAVING COALESCE(...) <> 0`, então **item com saldo exatamente zero não chega em
+tela nenhuma**. Isso foi decidido de propósito para a aba Estoque Atual
+("esgotado é normal"), mas numa lista de compra é o contrário: L-carnitina
+(3 lotes, todos zerados) e Magnésio 400 mg (zerado) são justamente os dois
+ativos que o dono precisa comprar, e eram os únicos dos 22 que não apareceriam.
+
+O dono decidiu: **os 22 ativos controlados aparecem mesmo zerados; os demais
+itens continuam sumindo quando zeram.** A aba Estoque Atual não muda.
 
 **Files:**
+- Modify: `src/lib/stock.ts:32`
+- Modify: `src/app/api/estoque/items/route.ts:8`
+
+Não há harness de teste para banco ou rota neste projeto — a verificação deste
+task é por consulta real, no Step 3.
+
+- [ ] **Step 1: `listStockItems` aceita incluir os zerados**
+
+Em `src/lib/stock.ts`, trocar a assinatura e o `HAVING`. O corpo do SELECT não muda.
+
+De:
+
+```typescript
+export async function listStockItems(): Promise<StockItem[]> {
+  await initSchema()
+  const rows = await sql<StockItem[]>`
+```
+
+para:
+
+```typescript
+// incluirZerados: a aba Estoque Atual esconde saldo zero de propósito
+// ("esgotado é normal" — ver o HAVING abaixo). A lista de compra do relatório
+// precisa do contrário: o que zerou é o que mais importa comprar.
+export async function listStockItems(opts?: { incluirZerados?: boolean }): Promise<StockItem[]> {
+  await initSchema()
+  const incluirZerados = opts?.incluirZerados ?? false
+  const rows = await sql<StockItem[]>`
+```
+
+E trocar o bloco `HAVING`. De:
+
+```typescript
+    -- Esconde apenas os zerados (esgotado é normal). Saldo NEGATIVO aparece
+    -- para o operador ver e corrigir, em vez de sumir silenciosamente.
+    HAVING COALESCE(
+      SUM(CASE WHEN m.type = 'entrada' THEN m.quantity ELSE 0 END) -
+      SUM(CASE WHEN m.type = 'saida'   THEN m.quantity ELSE 0 END),
+      0
+    ) <> 0
+```
+
+para:
+
+```typescript
+    -- Esconde apenas os zerados (esgotado é normal). Saldo NEGATIVO aparece
+    -- para o operador ver e corrigir, em vez de sumir silenciosamente.
+    HAVING ${incluirZerados}::boolean OR COALESCE(
+      SUM(CASE WHEN m.type = 'entrada' THEN m.quantity ELSE 0 END) -
+      SUM(CASE WHEN m.type = 'saida'   THEN m.quantity ELSE 0 END),
+      0
+    ) <> 0
+```
+
+O `::boolean` não é decorativo: sem ele o Postgres recebe o parâmetro como
+`unknown` e recusa o `OR`.
+
+Os dois chamadores existentes (`src/app/api/estoque/items/route.ts:9` e
+`src/app/api/estoque/report/route.ts:17`) chamam sem argumento e continuam
+recebendo a lista sem zerados. Não os altere — só o de `items` ganha o parâmetro,
+no Step 2.
+
+- [ ] **Step 2: A rota aceita `?zerados=1`**
+
+Em `src/app/api/estoque/items/route.ts`, substituir o GET.
+
+De:
+
+```typescript
+export async function GET() {
+  const items = await listStockItems()
+  return NextResponse.json(items)
+}
+```
+
+para:
+
+```typescript
+// ?zerados=1 é usado só pelo relatório "Repor Estoque". Sem o parâmetro o
+// comportamento é o de sempre — todas as outras telas continuam sem os zerados.
+export async function GET(req: NextRequest) {
+  const incluirZerados = req.nextUrl.searchParams.get('zerados') === '1'
+  const items = await listStockItems({ incluirZerados })
+  return NextResponse.json(items)
+}
+```
+
+`NextRequest` já está importado no topo do arquivo (é usado pelo `POST`).
+
+- [ ] **Step 3: Verificar contra o banco real**
+
+Criar `conferir.mts` na raiz do projeto (temporário):
+
+```typescript
+import { listStockItems } from './src/lib/stock.ts'
+
+const semZerados = await listStockItems()
+const comZerados = await listStockItems({ incluirZerados: true })
+
+console.log('sem zerados:', semZerados.length)
+console.log('com zerados:', comZerados.length)
+console.log('zerados a mais:', comZerados.filter(i => i.quantity === 0).length)
+console.log('')
+for (const i of comZerados.filter(i => i.quantity === 0)) console.log('  0 →', i.name)
+process.exit(0)
+```
+
+Run: `node --env-file=.env.local conferir.mts`
+
+Esperado: `sem zerados` menor que `com zerados`; a lista dos zerados inclui
+`L-Carnitina` (três vezes) e `Magnésio 400 mg`. Se a consulta estourar com erro
+de tipo no `HAVING`, o `::boolean` do Step 1 não foi aplicado.
+
+Apagar o script: `rm conferir.mts`
+
+- [ ] **Step 4: Verificar que nada mais quebrou**
+
+Run: `npx tsc --noEmit && npx jest`
+Expected: nenhum erro novo; as 4 suítes vermelhas continuam sendo só as
+pré-existentes.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/lib/stock.ts src/app/api/estoque/items/route.ts && git commit -m "feat(estoque): lista de itens pode incluir os zerados, sob parametro"
+```
+
+---
+
+## Task 3: Relatório usa o agrupamento
+
+**Files:**
+- Modify: `src/lib/stock-actives.ts`
+- Test: `__tests__/lib/stock-actives.test.ts`
 - Modify: `src/app/estoque/RelatoriosTab.tsx`
 
-- [ ] **Step 1: Trocar a constante pelo import**
+- [ ] **Step 1: Teste do campo que falta**
 
-No topo de `src/app/estoque/RelatoriosTab.tsx`, logo abaixo do `import { useState, ... } from 'react'`:
+O relatório precisa distinguir "zerado e controlado" (aparece) de "zerado e
+qualquer outra coisa" (não aparece). Acrescentar ao describe `'stock-actives — agrupamento'`
+em `__tests__/lib/stock-actives.test.ts`:
+
+```typescript
+  it('marca quais linhas sao de ativo controlado', () => {
+    const linhas = agruparParaReposicao([
+      item(1, 'Curcumina', 0),
+      item(2, 'Selênio', 0),
+    ])
+    const curcumina = linhas.find(l => l.nome === 'Curcumina')
+    const selenio = linhas.find(l => l.nome === 'Selênio')
+    expect(curcumina?.controlado).toBe(true)
+    expect(selenio?.controlado).toBe(false)
+  })
+```
+
+Run: `npx jest __tests__/lib/stock-actives.test.ts`
+Expected: FAIL — `controlado` não existe em `LinhaReposicao`.
+
+- [ ] **Step 2: Acrescentar o campo**
+
+Em `src/lib/stock-actives.ts`, na interface `LinhaReposicao`, logo abaixo de `registros`:
+
+```typescript
+  // Zerado de ativo controlado entra na lista de compra; zerado de qualquer
+  // outro item não, senão o relatório enche de cadastro de teste antigo.
+  controlado: boolean
+```
+
+E no objeto criado dentro de `agruparParaReposicao`, junto de `registros: 1`:
+
+```typescript
+        controlado: ativo !== null,
+```
+
+Run: `npx jest __tests__/lib/stock-actives.test.ts`
+Expected: PASS
+
+- [ ] **Step 3: Import e constante no `RelatoriosTab`**
+
+No topo de `src/app/estoque/RelatoriosTab.tsx`, abaixo do `import { useState, useMemo, useEffect, useCallback } from 'react'`:
 
 ```typescript
 import { agruparParaReposicao, LIMITE_PADRAO, type LinhaReposicao } from '@/lib/stock-actives'
 ```
 
-Substituir o bloco atual (por volta da linha 18):
+Substituir o bloco da linha 18:
 
 ```typescript
 // Mesma régua da aba "Estoque Atual": abaixo de 5 unidades entra na lista de
@@ -417,14 +604,37 @@ por:
 // src/lib/stock-actives.ts. Zerado e negativo continuam vindo primeiro.
 ```
 
-Mantenha `reorderRank` e `reorderLabel` como estão — classificam por quantidade
+`reorderRank` e `reorderLabel` ficam como estão — classificam por quantidade
 absoluta e continuam corretos.
 
-- [ ] **Step 2: Agrupar antes de filtrar**
+- [ ] **Step 4: Buscar a lista que inclui os zerados**
 
-Substituir o bloco `toReorder` (por volta da linha 109):
+Em `src/app/estoque/RelatoriosTab.tsx`, logo depois do `useEffect(() => { fetchActivity() }, [fetchActivity])` (linha 99):
 
 ```typescript
+  // A prop `items` vem da listagem padrão, que esconde saldo zero. Numa lista
+  // de compra o zerado é o que mais importa, então buscamos a lista completa —
+  // só quando o relatório é aberto, e só uma vez. Se a busca falhar ficamos com
+  // a prop: lista sem os zerados é melhor que tela vazia.
+  const [itemsComZerados, setItemsComZerados] = useState<StockItem[] | null>(null)
+  useEffect(() => {
+    if (report !== 'repor' || itemsComZerados) return
+    let cancelado = false
+    fetch('/api/estoque/items?zerados=1')
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((lista: StockItem[]) => { if (!cancelado) setItemsComZerados(lista) })
+      .catch(() => {})
+    return () => { cancelado = true }
+  }, [report, itemsComZerados])
+```
+
+- [ ] **Step 5: Agrupar antes de filtrar**
+
+Substituir o bloco `toReorder` (linha 109):
+
+```typescript
+  // ── Repor estoque ──
+  // Baseado no saldo ATUAL do item, não no período: é uma lista de compra.
   const toReorder = useMemo(() => {
     return items
       .filter(i => i.quantity < LOW_STOCK_THRESHOLD)
@@ -439,20 +649,22 @@ Substituir o bloco `toReorder` (por volta da linha 109):
 por:
 
 ```typescript
-  // Agrupa os lotes por ativo ANTES de filtrar: olhar lote a lote faz o
-  // relatório pedir reposição de algo que existe na prateleira.
+  // ── Repor estoque ──
+  // Baseado no saldo ATUAL do item, não no período: é uma lista de compra.
+  // Agrupa os lotes por ativo ANTES de filtrar — olhar lote a lote fazia o
+  // relatório pedir HMB duas vezes com 21 unidades na prateleira.
   const toReorder = useMemo<LinhaReposicao[]>(() => {
-    return agruparParaReposicao(items)
-      .filter(l => l.quantidade < l.limite)
+    return agruparParaReposicao(itemsComZerados ?? items)
+      .filter(l => l.quantidade < l.limite && (l.quantidade !== 0 || l.controlado))
       .sort((a, b) =>
         reorderRank(a.quantidade) - reorderRank(b.quantidade) ||
         a.quantidade - b.quantidade ||
         a.nome.localeCompare(b.nome)
       )
-  }, [items])
+  }, [items, itemsComZerados])
 ```
 
-- [ ] **Step 3: Ajustar o texto copiável**
+- [ ] **Step 6: Ajustar o texto copiável**
 
 Substituir o bloco `if (report === 'repor')` (por volta da linha 186):
 
@@ -480,20 +692,22 @@ por:
       if (toReorder.length === 0) return `Repor Estoque — ${today}\n\nEstoque em dia. ✅`
       const lines: string[] = [`Repor Estoque — ${today}`, '']
       toReorder.forEach(l => {
-        // Com duas réguas em uso, o número solto não se explica — daí o "/30".
         const meta = [
           l.lot ? `Lote: ${l.lot}` : null,
           l.expiry_date ? `Val: ${l.expiry_date}` : null,
-          l.registros > 1 ? `${l.registros} lotes somados` : null,
+          l.registros > 1 ? `${l.registros} cadastros somados` : null,
         ].filter(Boolean).join(' | ')
-        lines.push(`• ${l.nome} — ${l.quantidade}/${l.limite} ${l.unit} ${reorderLabel(l.quantidade)}${meta ? ` (${meta})` : ''}`)
+        // Com duas réguas em uso, o número solto não se explica — daí o "/30".
+        // A unidade some quando os lotes do ativo discordam dela.
+        const saldo = `${l.quantidade}/${l.limite}${l.unit ? ` ${l.unit}` : ''}`
+        lines.push(`• ${l.nome} — ${saldo} ${reorderLabel(l.quantidade)}${meta ? ` (${meta})` : ''}`)
       })
       lines.push('', `Total: ${toReorder.length} ativo(s) para repor.`)
       return lines.join('\n')
     }
 ```
 
-- [ ] **Step 4: Ajustar o render**
+- [ ] **Step 7: Ajustar o render**
 
 Substituir o bloco `{report === 'repor' && (...)}` (por volta da linha 300):
 
@@ -568,18 +782,18 @@ por:
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-gray-800">{l.nome}</p>
                     <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
-                      {/* Lote e validade só existem quando a linha é de um
-                          registro só — ver agruparParaReposicao. */}
+                      {/* Lote e validade só existem quando a linha veio de um
+                          cadastro só — ver agruparParaReposicao. */}
                       {l.lot && <p className="text-xs text-gray-500">Lote: <span className="font-medium">{l.lot}</span></p>}
                       {l.expiry_date && <p className="text-xs text-gray-500">Val: <span className="font-medium">{l.expiry_date}</span></p>}
                       {l.registros > 1 && (
-                        <p className="text-xs text-gray-500">{l.registros} lotes somados</p>
+                        <p className="text-xs text-gray-500">{l.registros} cadastros somados</p>
                       )}
                     </div>
                   </div>
                   <div className="text-right shrink-0">
                     <p className={`text-xl font-bold ${critical ? 'text-red-500' : 'text-orange-500'}`}>{l.quantidade}</p>
-                    <p className="text-xs text-gray-400">de {l.limite} {l.unit}</p>
+                    <p className="text-xs text-gray-400">de {l.limite}{l.unit ? ` ${l.unit}` : ''}</p>
                     <p className={`text-xs font-semibold mt-0.5 ${critical ? 'text-red-600' : 'text-orange-500'}`}>
                       {reorderLabel(l.quantidade)}
                     </p>
@@ -592,31 +806,41 @@ por:
       )}
 ```
 
-- [ ] **Step 5: Verificar**
+- [ ] **Step 8: Verificar**
 
-Run: `npx tsc --noEmit && npm run build`
-Expected: sem erros novos; build passa.
+Run: `npx jest && npx tsc --noEmit && npm run build`
+Expected: os testes de `stock-actives` verdes, nenhum erro novo de tipo, build passa.
 
-Se sobrou alguma referência a `LOW_STOCK_THRESHOLD`, o `tsc` vai acusar. Procure
-com `grep -n LOW_STOCK_THRESHOLD src/app/estoque/RelatoriosTab.tsx` e troque pelo
-limite da linha (`l.limite`) ou por `LIMITE_PADRAO`, conforme o contexto.
+`grep -n LOW_STOCK_THRESHOLD src/app/estoque/RelatoriosTab.tsx` deve não retornar nada.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add src/app/estoque/RelatoriosTab.tsx && git commit -m "feat(estoque): relatorio de reposicao agrupa lotes por ativo e usa limite por ativo"
+git add src/lib/stock-actives.ts __tests__/lib/stock-actives.test.ts src/app/estoque/RelatoriosTab.tsx && git commit -m "feat(estoque): relatorio de reposicao agrupa por ativo e usa limite por ativo"
 ```
 
 ---
 
 ## Verificação final
 
-- [ ] `npx jest __tests__/lib/stock-actives.test.ts` — todos passando
-- [ ] `npx jest` — as 4 suítes que **já estavam quebradas antes deste trabalho** continuam sendo as únicas vermelhas
-- [ ] `npx tsc --noEmit` — sem erros novos
+- [ ] `npx jest` — as 4 suítes vermelhas continuam sendo só as pré-existentes
+      (`task-definitions`, `task-completions`, `patients`, `PatientCard`)
+- [ ] `npx tsc --noEmit` — nenhum erro novo além dos de `PatientCard.test.tsx`
 - [ ] `npm run build` — passa
-- [ ] `grep -n LOW_STOCK_THRESHOLD src/app/estoque/RelatoriosTab.tsx` — **nenhum resultado**
-- [ ] Com o servidor de pé, em Estoque › Relatórios › Repor Estoque: **HMB aparece uma vez com 21**, não duas vezes com 0
-- [ ] A aba **Estoque Atual continua mostrando os lotes separados**, cada um com seu número — nada ali pode ter mudado
-- [ ] 19 ativos na lista: L-carnitina (0), Magnésio 400 mg (0), Pool de Aminoácidos (2), Sulfato de Magnésio (6), Pill Food (7), Resveratrol (7), Pool Coenzimático (9), Coenzima Q10 (10), Vitamina C 440 mg (13), Vitamina D ADEK (13), L-baiba (13), Pool de Minerais (14), Vitamina C 20% (15), Pool Cognição (16), HMB (21), Curcumina (21), Complexo B sem B1 (25), Metilcobalamina (25), Complexo B com B1 (26)
-- [ ] **Fora da lista:** NAC (43), Vitamina D 600 UI (35), Vitamina D 600 UI + K2 (34)
+- [ ] `grep -n LOW_STOCK_THRESHOLD src/app/estoque/RelatoriosTab.tsx` — nenhum resultado
+- [ ] Com o servidor de pé, em Estoque › Relatórios › Repor Estoque: **HMB aparece
+      uma vez com 21**, não duas vezes com 0
+- [ ] A aba **Estoque Atual continua idêntica** — os lotes separados, cada um com
+      seu número, e nenhum item zerado apareceu lá
+- [ ] Os 19 ativos controlados na lista, com estes saldos (conferidos contra o
+      banco em 18/08/2026 — os números mudam conforme a clínica movimenta):
+      L-carnitina (0), Magnésio 400 mg (0), Pool de Aminoácidos (2), Sulfato de
+      Magnésio (6), Pill Food (7), Resveratrol (7), Pool Coenzimático (9),
+      Coenzima Q10 (10), Vitamina C 440 mg (13), Vitamina D 600 ADEK (13),
+      L-baiba (13), Pool de Minerais (14), Vitamina C 20% (15), Pool Cognição (16),
+      HMB (21), Curcumina (21), Complexo B sem B1 (25), Metilcobalamina (25),
+      Complexo B com B1 (26)
+- [ ] **Fora da lista, por estarem acima de 30:** NAC (43), Vitamina D 600 UI (35),
+      Vitamina D 600 UI + K2 (34)
+- [ ] Nenhum item zerado **fora** dos 22 controlados aparece — em especial os
+      cadastros de teste (`implante teste`, `TESTE`, `TIRZEPARTIDA - TESTE`)
