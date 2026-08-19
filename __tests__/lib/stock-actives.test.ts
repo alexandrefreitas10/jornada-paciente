@@ -39,8 +39,10 @@ describe('stock-actives — catálogo', () => {
   })
 })
 
-describe('stock-actives — reconhecimento de nomes reais do estoque', () => {
-  // Todos estes nomes existem hoje no banco de produção.
+describe('stock-actives — reconhecimento de nomes', () => {
+  // As entradas acima das três últimas existem hoje no banco de produção.
+  // As três últimas são variantes aceitas de propósito, mas que ainda não
+  // existem em nenhum registro real.
   const casos: [string, string][] = [
     ['HMB', 'HMB'],
     ['HIDROXIMETILBUTIRATO 2,5% 2ML', 'HMB'],
@@ -66,6 +68,9 @@ describe('stock-actives — reconhecimento de nomes reais do estoque', () => {
     ['Curcumina', 'Curcumina'],
     ['Pill food', 'Pill Food'],
     ['Resveratrol 100 mg', 'Resveratrol'],
+    ['Pool Cognitivo', 'Pool Cognição'],
+    ['LCarnitina', 'L-carnitina'],
+    ['CoQ10', 'Coenzima Q10'],
   ]
 
   it.each(casos)('%s → %s', (nome, ativoEsperado) => {
@@ -88,6 +93,11 @@ describe('stock-actives — separações que o dono pediu explicitamente', () =>
     expect(acharAtivo('Sulfato de Magnésio 10% (5 mL)')?.nome).toBe('Sulfato de Magnésio')
   })
 
+  it('outro sal de magnesio nao cai em Magnésio 400 mg', () => {
+    expect(acharAtivo('Cloreto de Magnésio 400 mg')).toBeNull()
+    expect(acharAtivo('Magnésio 400mg')?.nome).toBe('Magnésio 400 mg')
+  })
+
   it('PRECEDÊNCIA: as três Vitaminas D 600 não se capturam entre si', () => {
     // O padrão da D600 pura casaria com "+ K2" e com "ADEK" se fosse testado antes.
     expect(acharAtivo('Vitamina D 600 UI')?.nome).toBe('Vitamina D 600 UI')
@@ -103,8 +113,14 @@ describe('stock-actives — o que fica de fora', () => {
     ['Lidocaína'],
     ['Tirzepartida BioMeds'],
     ['Implante Testosterona 200 mg'],
+    ['Polivitamínico ADEK'],
   ])('%s não pertence a nenhum ativo controlado', nome => {
     expect(acharAtivo(nome)).toBeNull()
+  })
+
+  it('nome vazio ou so espaco nao casa com nada', () => {
+    expect(acharAtivo('')).toBeNull()
+    expect(acharAtivo('   ')).toBeNull()
   })
 })
 
@@ -162,5 +178,29 @@ describe('stock-actives — agrupamento', () => {
 
   it('lista vazia devolve lista vazia, não estoura', () => {
     expect(agruparParaReposicao([])).toEqual([])
+  })
+
+  it('unidade some quando os lotes discordam, e sobrevive quando so muda a caixa', () => {
+    const discorda = agruparParaReposicao([
+      { id: 1, name: 'Curcumina', quantity: 3, unit: 'un', lot: null, expiry_date: null },
+      { id: 2, name: 'Curcumina', quantity: 4, unit: 'unidades', lot: null, expiry_date: null },
+    ])
+    expect(discorda[0].unit).toBe('')
+
+    const soCaixa = agruparParaReposicao([
+      { id: 1, name: 'Curcumina', quantity: 3, unit: 'un', lot: null, expiry_date: null },
+      { id: 2, name: 'Curcumina', quantity: 4, unit: 'UN', lot: null, expiry_date: null },
+    ])
+    expect(soCaixa[0].unit).toBe('un')
+  })
+
+  it('soma saldo negativo em vez de ignorar', () => {
+    // Saldo negativo e erro de lancamento, e o relatorio marca "🚨 Saldo
+    // negativo". Somar honestamente e o que mostra o problema.
+    const linhas = agruparParaReposicao([
+      item(1, 'Curcumina', -4),
+      item(2, 'Curcumina', 2),
+    ])
+    expect(linhas[0].quantidade).toBe(-2)
   })
 })

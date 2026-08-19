@@ -17,7 +17,7 @@ export interface AtivoControlado {
 // espaço. É o que faz "POOL COGNICAO - 2ML" e "Pool Cognição 2ml" caírem no
 // mesmo lugar sem precisar de uma entrada para cada variação.
 export function normalizarNome(nome: string): string {
-  return (nome ?? '')
+  return nome
     .normalize('NFD')
     .replace(/\p{M}/gu, '')   // tira os acentos que o NFD separou
     .toLowerCase()
@@ -29,7 +29,7 @@ export function normalizarNome(nome: string): string {
 // fosse testado antes, engoliria "vitamina d 600 ui k2" e "vitamina d 600 adek".
 export const ATIVOS: AtivoControlado[] = [
   { nome: 'Vitamina D 600 UI + K2', limite: LIMITE_CONTROLADO, padroes: [/vitamina d 600 ui k2/] },
-  { nome: 'Vitamina D 600 ADEK', limite: LIMITE_CONTROLADO, padroes: [/vitamina d 600 adek/, /\badek\b/] },
+  { nome: 'Vitamina D 600 ADEK', limite: LIMITE_CONTROLADO, padroes: [/vitamina d 600 adek/] },
   { nome: 'Vitamina D 600 UI', limite: LIMITE_CONTROLADO, padroes: [/vitamina d 600 ui/] },
 
   { nome: 'Vitamina C 440 mg', limite: LIMITE_CONTROLADO, padroes: [/vitamina c 440/] },
@@ -37,7 +37,7 @@ export const ATIVOS: AtivoControlado[] = [
 
   // Sais diferentes, compras diferentes — decisão do dono.
   { nome: 'Sulfato de Magnésio', limite: LIMITE_CONTROLADO, padroes: [/sulfato de magnesio/] },
-  { nome: 'Magnésio 400 mg', limite: LIMITE_CONTROLADO, padroes: [/magnesio 400/] },
+  { nome: 'Magnésio 400 mg', limite: LIMITE_CONTROLADO, padroes: [/^magnesio 400/] },
 
   { nome: 'HMB', limite: LIMITE_CONTROLADO, padroes: [/\bhmb\b/, /hidroximetilbutirato/] },
   { nome: 'NAC', limite: LIMITE_CONTROLADO, padroes: [/\bnac\b/, /acetilcisteina/] },
@@ -79,6 +79,8 @@ export interface LinhaReposicao {
   chave: string
   nome: string
   quantidade: number
+  // Vazia quando a linha juntou lotes com unidades diferentes: nenhuma delas
+  // descreve a soma, então nenhuma é exibida.
   unit: string
   limite: number
   registros: number
@@ -114,6 +116,9 @@ export function agruparParaReposicao(items: ItemParaAgrupar[]): LinhaReposicao[]
     existente.registros += 1
     existente.lot = null
     existente.expiry_date = null
+    // Lotes com unidades diferentes: nenhuma delas descreve a soma, entao nao
+    // exibe nenhuma. Comparacao sem caixa porque "un" e "UN" sao a mesma coisa.
+    if (existente.unit.toLowerCase() !== item.unit.toLowerCase()) existente.unit = ''
   }
 
   return [...porChave.values()]
