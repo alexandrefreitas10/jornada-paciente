@@ -534,53 +534,210 @@ git add src/lib/stock.ts src/app/api/estoque/items/route.ts && git commit -m "fe
 
 ## Task 3: Relatório usa o agrupamento
 
+**Ajustado depois da revisão do Task 2.** Agora que os lotes zerados chegam ao
+relatório, `agruparParaReposicao` precisa parar de tratá-los como cadastro: um
+lote vazio não é um lote que você tem. Sem isso, quase todo ativo perderia o
+Lote e a Validade na tela — Pool Cognição, HMB, Metilcobalamina, Coenzima Q10,
+Curcumina, Complexo B sem B1, Pool Coenzimático, Pool de Minerais, L-baiba e
+Pill Food têm todos exatamente um lote com saldo e um ou mais zerados, e todos
+passariam a exibir "N cadastros somados" no lugar do lote.
+
 **Files:**
+- Modify: `src/lib/stock.ts:51` e `src/app/api/estoque/items/route.ts:8` (dois comentários)
 - Modify: `src/lib/stock-actives.ts`
 - Test: `__tests__/lib/stock-actives.test.ts`
 - Modify: `src/app/estoque/RelatoriosTab.tsx`
 
-- [ ] **Step 1: Teste do campo que falta**
+- [ ] **Step 1: Corrigir dois comentários que o Task 2 deixou desatualizados**
 
-O relatório precisa distinguir "zerado e controlado" (aparece) de "zerado e
-qualquer outra coisa" (não aparece). Acrescentar ao describe `'stock-actives — agrupamento'`
-em `__tests__/lib/stock-actives.test.ts`:
+Em `src/lib/stock.ts`, a linha 51 afirma sem ressalva que a consulta esconde os
+zerados, logo acima da linha que deixou de fazer isso quando o parâmetro vem
+ligado. Trocar:
+
+```sql
+    -- Esconde apenas os zerados (esgotado é normal). Saldo NEGATIVO aparece
+```
+
+por:
+
+```sql
+    -- Esconde os zerados, salvo quando incluirZerados (esgotado é normal).
+    -- Saldo NEGATIVO aparece
+```
+
+Em `src/app/api/estoque/items/route.ts:8`, trocar "é usado só pelo relatório"
+por "existe para o relatório" — a rota não tem como garantir exclusividade, e a
+frase envelhece mal:
 
 ```typescript
+// ?zerados=1 existe para o relatório "Repor Estoque". Sem o parâmetro o
+// comportamento é o de sempre — todas as outras telas continuam sem os zerados.
+```
+
+- [ ] **Step 2: Escrever os testes que falham**
+
+Em `__tests__/lib/stock-actives.test.ts`, no describe `'stock-actives — agrupamento'`,
+**substituir** o teste `'soma os lotes do mesmo ativo numa linha só'`:
+
+```typescript
+  it('soma os lotes do mesmo ativo numa linha só', () => {
+    const linhas = agruparParaReposicao([
+      item(1, 'HMB', 0),
+      item(2, 'HMB', 0),
+      item(3, 'HIDROXIMETILBUTIRATO 2,5% 2ML', 21),
+    ])
+    expect(linhas).toHaveLength(1)
+    expect(linhas[0].nome).toBe('HMB')
+    expect(linhas[0].quantidade).toBe(21)
+    expect(linhas[0].registros).toBe(3)
+    expect(linhas[0].limite).toBe(30)
+  })
+```
+
+por:
+
+```typescript
+  it('soma os lotes do mesmo ativo numa linha só', () => {
+    // Caso real: o relatório pedia HMB duas vezes alegando saldo zero,
+    // com 21 unidades num cadastro escrito por extenso.
+    const linhas = agruparParaReposicao([
+      item(1, 'HMB', 0),
+      item(2, 'HMB', 0),
+      item(3, 'HIDROXIMETILBUTIRATO 2,5% 2ML', 21),
+    ])
+    expect(linhas).toHaveLength(1)
+    expect(linhas[0].nome).toBe('HMB')
+    expect(linhas[0].quantidade).toBe(21)
+    expect(linhas[0].limite).toBe(30)
+    // Os dois cadastros vazios não contam: quem tem saldo é um só.
+    expect(linhas[0].registros).toBe(1)
+  })
+```
+
+E **acrescentar** ao mesmo describe:
+
+```typescript
+  it('lote vazio nao apaga o lote e a validade de quem tem saldo', () => {
+    const linhas = agruparParaReposicao([
+      { id: 1, name: 'POOL COGNICAO - 2ML', quantity: 0, unit: 'un', lot: 'VELHO', expiry_date: '01/2025' },
+      { id: 2, name: 'POOL COGNICAO 2ML', quantity: 16, unit: 'un', lot: 'ATUAL', expiry_date: '09/2027' },
+    ])
+    expect(linhas).toHaveLength(1)
+    expect(linhas[0].quantidade).toBe(16)
+    expect(linhas[0].registros).toBe(1)
+    expect(linhas[0].lot).toBe('ATUAL')
+    expect(linhas[0].expiry_date).toBe('09/2027')
+    expect(linhas[0].unit).toBe('un')
+  })
+
+  it('ativo com todos os lotes zerados vira uma linha de saldo zero', () => {
+    const linhas = agruparParaReposicao([
+      item(1, 'L-Carnitina', 0),
+      item(2, 'L-Carnitina', 0),
+      item(3, 'L-Carnitina', 0),
+    ])
+    expect(linhas).toHaveLength(1)
+    expect(linhas[0].nome).toBe('L-carnitina')
+    expect(linhas[0].quantidade).toBe(0)
+    expect(linhas[0].registros).toBe(0)
+    expect(linhas[0].unit).toBe('un')
+  })
+
   it('marca quais linhas sao de ativo controlado', () => {
     const linhas = agruparParaReposicao([
       item(1, 'Curcumina', 0),
       item(2, 'Selênio', 0),
     ])
-    const curcumina = linhas.find(l => l.nome === 'Curcumina')
-    const selenio = linhas.find(l => l.nome === 'Selênio')
-    expect(curcumina?.controlado).toBe(true)
-    expect(selenio?.controlado).toBe(false)
+    expect(linhas.find(l => l.nome === 'Curcumina')?.controlado).toBe(true)
+    expect(linhas.find(l => l.nome === 'Selênio')?.controlado).toBe(false)
   })
 ```
 
 Run: `npx jest __tests__/lib/stock-actives.test.ts`
-Expected: FAIL — `controlado` não existe em `LinhaReposicao`.
+Expected: FAIL — `controlado` não existe, e os lotes zerados ainda contam como cadastro.
 
-- [ ] **Step 2: Acrescentar o campo**
+- [ ] **Step 3: Reescrever `agruparParaReposicao`**
 
-Em `src/lib/stock-actives.ts`, na interface `LinhaReposicao`, logo abaixo de `registros`:
+Em `src/lib/stock-actives.ts`, na interface `LinhaReposicao`, trocar o campo
+`unit` e o bloco de `registros` por:
 
 ```typescript
+  unit: string
+  limite: number
+  // Cadastros que efetivamente têm saldo. Um lote zerado entra na soma (não
+  // muda nada) mas não conta aqui — senão o relatório diz "3 cadastros somados"
+  // para um ativo que tem um lote só na prateleira e dois cadastros vazios.
+  registros: number
   // Zerado de ativo controlado entra na lista de compra; zerado de qualquer
   // outro item não, senão o relatório enche de cadastro de teste antigo.
   controlado: boolean
 ```
 
-E no objeto criado dentro de `agruparParaReposicao`, junto de `registros: 1`:
+(Mantenha o comentário que já existe sobre `lot`/`expiry_date` logo abaixo, e
+o que explica que `unit` some quando os lotes discordam.)
+
+Substituir o corpo de `agruparParaReposicao` inteiro por:
 
 ```typescript
+export function agruparParaReposicao(items: ItemParaAgrupar[]): LinhaReposicao[] {
+  const porChave = new Map<string, LinhaReposicao>()
+
+  for (const item of items) {
+    const ativo = acharAtivo(item.name)
+    const chave = ativo ? `ativo:${ativo.nome}` : `item:${item.id}`
+
+    let linha = porChave.get(chave)
+    if (!linha) {
+      linha = {
+        chave,
+        nome: ativo ? ativo.nome : item.name.trim(),
+        quantidade: 0,
+        // Semente: vale só enquanto nenhum lote com saldo aparecer, o que é o
+        // caso de um ativo inteiro zerado.
+        unit: item.unit,
+        limite: ativo ? ativo.limite : LIMITE_PADRAO,
+        registros: 0,
         controlado: ativo !== null,
+        lot: null,
+        expiry_date: null,
+      }
+      porChave.set(chave, linha)
+    }
+
+    linha.quantidade += item.quantity
+
+    // Lote vazio não é lote que você tem: não conta como cadastro e não apaga
+    // o lote nem a validade de quem ainda tem saldo.
+    if (item.quantity === 0) continue
+
+    if (linha.registros === 0) {
+      linha.unit = item.unit
+      linha.lot = item.lot
+      linha.expiry_date = item.expiry_date
+    } else {
+      linha.lot = null
+      linha.expiry_date = null
+      // Lotes com unidades diferentes: nenhuma delas descreve a soma, então
+      // não exibe nenhuma. Sem caixa porque "un" e "UN" são a mesma coisa.
+      if (linha.unit.toLowerCase() !== item.unit.toLowerCase()) linha.unit = ''
+    }
+    linha.registros += 1
+  }
+
+  return [...porChave.values()]
+}
 ```
 
 Run: `npx jest __tests__/lib/stock-actives.test.ts`
-Expected: PASS
+Expected: PASS, todos.
 
-- [ ] **Step 3: Import e constante no `RelatoriosTab`**
+- [ ] **Step 4: Commit da lógica**
+
+```bash
+git add src/lib/stock.ts src/app/api/estoque/items/route.ts src/lib/stock-actives.ts __tests__/lib/stock-actives.test.ts && git commit -m "feat(estoque): lote zerado nao conta como cadastro no agrupamento"
+```
+
+- [ ] **Step 5: Import e constante no `RelatoriosTab`**
 
 No topo de `src/app/estoque/RelatoriosTab.tsx`, abaixo do `import { useState, useMemo, useEffect, useCallback } from 'react'`:
 
@@ -607,28 +764,31 @@ por:
 `reorderRank` e `reorderLabel` ficam como estão — classificam por quantidade
 absoluta e continuam corretos.
 
-- [ ] **Step 4: Buscar a lista que inclui os zerados**
+- [ ] **Step 6: Buscar a lista que inclui os zerados**
 
-Em `src/app/estoque/RelatoriosTab.tsx`, logo depois do `useEffect(() => { fetchActivity() }, [fetchActivity])` (linha 99):
+Em `src/app/estoque/RelatoriosTab.tsx`, logo depois do
+`useEffect(() => { fetchActivity() }, [fetchActivity])` (linha 99):
 
 ```typescript
   // A prop `items` vem da listagem padrão, que esconde saldo zero. Numa lista
-  // de compra o zerado é o que mais importa, então buscamos a lista completa —
-  // só quando o relatório é aberto, e só uma vez. Se a busca falhar ficamos com
-  // a prop: lista sem os zerados é melhor que tela vazia.
+  // de compra o zerado é o que mais importa, então buscamos a lista completa.
+  // Refaz a busca quando `items` muda — é o sinal de que o EstoqueClient
+  // recarregou depois de uma movimentação, e a lista de compra não pode ficar
+  // atrasada em relação ao resto da tela. Se a busca falhar ficamos com a prop:
+  // lista sem os zerados é melhor que tela vazia.
   const [itemsComZerados, setItemsComZerados] = useState<StockItem[] | null>(null)
   useEffect(() => {
-    if (report !== 'repor' || itemsComZerados) return
+    if (report !== 'repor') return
     let cancelado = false
     fetch('/api/estoque/items?zerados=1')
       .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((lista: StockItem[]) => { if (!cancelado) setItemsComZerados(lista) })
       .catch(() => {})
     return () => { cancelado = true }
-  }, [report, itemsComZerados])
+  }, [report, items])
 ```
 
-- [ ] **Step 5: Agrupar antes de filtrar**
+- [ ] **Step 7: Agrupar antes de filtrar**
 
 Substituir o bloco `toReorder` (linha 109):
 
@@ -653,6 +813,8 @@ por:
   // Baseado no saldo ATUAL do item, não no período: é uma lista de compra.
   // Agrupa os lotes por ativo ANTES de filtrar — olhar lote a lote fazia o
   // relatório pedir HMB duas vezes com 21 unidades na prateleira.
+  // O zerado só entra se for ativo controlado: os demais cadastros zerados são
+  // cadastro velho e de teste, e só sujariam a lista.
   const toReorder = useMemo<LinhaReposicao[]>(() => {
     return agruparParaReposicao(itemsComZerados ?? items)
       .filter(l => l.quantidade < l.limite && (l.quantidade !== 0 || l.controlado))
@@ -664,7 +826,7 @@ por:
   }, [items, itemsComZerados])
 ```
 
-- [ ] **Step 6: Ajustar o texto copiável**
+- [ ] **Step 8: Ajustar o texto copiável**
 
 Substituir o bloco `if (report === 'repor')` (por volta da linha 186):
 
@@ -707,7 +869,7 @@ por:
     }
 ```
 
-- [ ] **Step 7: Ajustar o render**
+- [ ] **Step 9: Ajustar o render**
 
 Substituir o bloco `{report === 'repor' && (...)}` (por volta da linha 300):
 
@@ -782,8 +944,8 @@ por:
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-gray-800">{l.nome}</p>
                     <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
-                      {/* Lote e validade só existem quando a linha veio de um
-                          cadastro só — ver agruparParaReposicao. */}
+                      {/* Lote e validade só existem quando um cadastro só tem
+                          saldo — ver agruparParaReposicao. */}
                       {l.lot && <p className="text-xs text-gray-500">Lote: <span className="font-medium">{l.lot}</span></p>}
                       {l.expiry_date && <p className="text-xs text-gray-500">Val: <span className="font-medium">{l.expiry_date}</span></p>}
                       {l.registros > 1 && (
@@ -806,17 +968,17 @@ por:
       )}
 ```
 
-- [ ] **Step 8: Verificar**
+- [ ] **Step 10: Verificar**
 
 Run: `npx jest && npx tsc --noEmit && npm run build`
-Expected: os testes de `stock-actives` verdes, nenhum erro novo de tipo, build passa.
+Expected: `stock-actives` verde, nenhum erro novo de tipo, build passa.
 
 `grep -n LOW_STOCK_THRESHOLD src/app/estoque/RelatoriosTab.tsx` deve não retornar nada.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
-git add src/lib/stock-actives.ts __tests__/lib/stock-actives.test.ts src/app/estoque/RelatoriosTab.tsx && git commit -m "feat(estoque): relatorio de reposicao agrupa por ativo e usa limite por ativo"
+git add src/app/estoque/RelatoriosTab.tsx && git commit -m "feat(estoque): relatorio de reposicao agrupa por ativo e usa limite por ativo"
 ```
 
 ---
@@ -830,6 +992,10 @@ git add src/lib/stock-actives.ts __tests__/lib/stock-actives.test.ts src/app/est
 - [ ] `grep -n LOW_STOCK_THRESHOLD src/app/estoque/RelatoriosTab.tsx` — nenhum resultado
 - [ ] Com o servidor de pé, em Estoque › Relatórios › Repor Estoque: **HMB aparece
       uma vez com 21**, não duas vezes com 0
+- [ ] **O Lote e a Validade continuam aparecendo** nos ativos que têm um cadastro
+      com saldo e outros zerados — Pool Cognição, HMB, Metilcobalamina, Coenzima
+      Q10, Complexo B sem B1, Pool de Minerais, L-baiba e Pill Food. Se algum
+      deles mostrar "N cadastros somados" no lugar do lote, o Step 3 não pegou.
 - [ ] A aba **Estoque Atual continua idêntica** — os lotes separados, cada um com
       seu número, e nenhum item zerado apareceu lá
 - [ ] Os 19 ativos controlados na lista, com estes saldos (conferidos contra o
@@ -844,3 +1010,5 @@ git add src/lib/stock-actives.ts __tests__/lib/stock-actives.test.ts src/app/est
       Vitamina D 600 UI + K2 (34)
 - [ ] Nenhum item zerado **fora** dos 22 controlados aparece — em especial os
       cadastros de teste (`implante teste`, `TESTE`, `TIRZEPARTIDA - TESTE`)
+- [ ] Registrar uma saída em outra aba e voltar ao relatório: o número do ativo
+      mexido acompanhou (a busca refaz quando `items` muda)
