@@ -48,7 +48,8 @@ export async function listStockItems(opts?: { incluirZerados?: boolean }): Promi
     FROM stock_items i
     LEFT JOIN stock_movements m ON m.item_id = i.id
     GROUP BY i.id
-    -- Esconde apenas os zerados (esgotado é normal). Saldo NEGATIVO aparece
+    -- Esconde os zerados, salvo quando incluirZerados (esgotado é normal).
+    -- Saldo NEGATIVO aparece
     -- para o operador ver e corrigir, em vez de sumir silenciosamente.
     HAVING ${incluirZerados}::boolean OR COALESCE(
       SUM(CASE WHEN m.type = 'entrada' THEN m.quantity ELSE 0 END) -

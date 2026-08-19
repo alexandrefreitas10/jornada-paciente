@@ -83,7 +83,13 @@ export interface LinhaReposicao {
   // descreve a soma, então nenhuma é exibida.
   unit: string
   limite: number
+  // Cadastros que efetivamente têm saldo. Um lote zerado entra na soma (não
+  // muda nada) mas não conta aqui — senão o relatório diz "3 cadastros somados"
+  // para um ativo que tem um lote só na prateleira e dois cadastros vazios.
   registros: number
+  // Zerado de ativo controlado entra na lista de compra; zerado de qualquer
+  // outro item não, senão o relatório enche de cadastro de teste antigo.
+  controlado: boolean
   // Só fazem sentido quando a linha veio de um registro só: somados vários
   // lotes, exibir o lote de um deles seria informação errada.
   lot: string | null
@@ -96,29 +102,43 @@ export function agruparParaReposicao(items: ItemParaAgrupar[]): LinhaReposicao[]
   for (const item of items) {
     const ativo = acharAtivo(item.name)
     const chave = ativo ? `ativo:${ativo.nome}` : `item:${item.id}`
-    const existente = porChave.get(chave)
 
-    if (!existente) {
-      porChave.set(chave, {
+    let linha = porChave.get(chave)
+    if (!linha) {
+      linha = {
         chave,
         nome: ativo ? ativo.nome : item.name.trim(),
-        quantidade: item.quantity,
+        quantidade: 0,
+        // Semente: vale só enquanto nenhum lote com saldo aparecer, o que é o
+        // caso de um ativo inteiro zerado.
         unit: item.unit,
         limite: ativo ? ativo.limite : LIMITE_PADRAO,
-        registros: 1,
-        lot: item.lot,
-        expiry_date: item.expiry_date,
-      })
-      continue
+        registros: 0,
+        controlado: ativo !== null,
+        lot: null,
+        expiry_date: null,
+      }
+      porChave.set(chave, linha)
     }
 
-    existente.quantidade += item.quantity
-    existente.registros += 1
-    existente.lot = null
-    existente.expiry_date = null
-    // Lotes com unidades diferentes: nenhuma delas descreve a soma, entao nao
-    // exibe nenhuma. Comparacao sem caixa porque "un" e "UN" sao a mesma coisa.
-    if (existente.unit.toLowerCase() !== item.unit.toLowerCase()) existente.unit = ''
+    linha.quantidade += item.quantity
+
+    // Lote vazio não é lote que você tem: não conta como cadastro e não apaga
+    // o lote nem a validade de quem ainda tem saldo.
+    if (item.quantity === 0) continue
+
+    if (linha.registros === 0) {
+      linha.unit = item.unit
+      linha.lot = item.lot
+      linha.expiry_date = item.expiry_date
+    } else {
+      linha.lot = null
+      linha.expiry_date = null
+      // Lotes com unidades diferentes: nenhuma delas descreve a soma, então
+      // não exibe nenhuma. Sem caixa porque "un" e "UN" são a mesma coisa.
+      if (linha.unit.toLowerCase() !== item.unit.toLowerCase()) linha.unit = ''
+    }
+    linha.registros += 1
   }
 
   return [...porChave.values()]

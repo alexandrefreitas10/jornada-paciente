@@ -129,6 +129,8 @@ describe('stock-actives — agrupamento', () => {
     ({ id, name, quantity, unit: 'un', lot: null, expiry_date: null })
 
   it('soma os lotes do mesmo ativo numa linha só', () => {
+    // Caso real: o relatório pedia HMB duas vezes alegando saldo zero,
+    // com 21 unidades num cadastro escrito por extenso.
     const linhas = agruparParaReposicao([
       item(1, 'HMB', 0),
       item(2, 'HMB', 0),
@@ -137,8 +139,44 @@ describe('stock-actives — agrupamento', () => {
     expect(linhas).toHaveLength(1)
     expect(linhas[0].nome).toBe('HMB')
     expect(linhas[0].quantidade).toBe(21)
-    expect(linhas[0].registros).toBe(3)
     expect(linhas[0].limite).toBe(30)
+    // Os dois cadastros vazios não contam: quem tem saldo é um só.
+    expect(linhas[0].registros).toBe(1)
+  })
+
+  it('lote vazio nao apaga o lote e a validade de quem tem saldo', () => {
+    const linhas = agruparParaReposicao([
+      { id: 1, name: 'POOL COGNICAO - 2ML', quantity: 0, unit: 'un', lot: 'VELHO', expiry_date: '01/2025' },
+      { id: 2, name: 'POOL COGNICAO 2ML', quantity: 16, unit: 'un', lot: 'ATUAL', expiry_date: '09/2027' },
+    ])
+    expect(linhas).toHaveLength(1)
+    expect(linhas[0].quantidade).toBe(16)
+    expect(linhas[0].registros).toBe(1)
+    expect(linhas[0].lot).toBe('ATUAL')
+    expect(linhas[0].expiry_date).toBe('09/2027')
+    expect(linhas[0].unit).toBe('un')
+  })
+
+  it('ativo com todos os lotes zerados vira uma linha de saldo zero', () => {
+    const linhas = agruparParaReposicao([
+      item(1, 'L-Carnitina', 0),
+      item(2, 'L-Carnitina', 0),
+      item(3, 'L-Carnitina', 0),
+    ])
+    expect(linhas).toHaveLength(1)
+    expect(linhas[0].nome).toBe('L-carnitina')
+    expect(linhas[0].quantidade).toBe(0)
+    expect(linhas[0].registros).toBe(0)
+    expect(linhas[0].unit).toBe('un')
+  })
+
+  it('marca quais linhas sao de ativo controlado', () => {
+    const linhas = agruparParaReposicao([
+      item(1, 'Curcumina', 0),
+      item(2, 'Selênio', 0),
+    ])
+    expect(linhas.find(l => l.nome === 'Curcumina')?.controlado).toBe(true)
+    expect(linhas.find(l => l.nome === 'Selênio')?.controlado).toBe(false)
   })
 
   it('lote e validade só aparecem quando a linha é de um registro só', () => {
