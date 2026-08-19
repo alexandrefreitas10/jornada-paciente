@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
+import { agruparParaReposicao, LIMITE_PADRAO, type LinhaReposicao } from '@/lib/stock-actives'
 
 interface StockMovement {
   id: number; item_id: number; item_name: string; type: 'entrada' | 'saida'
@@ -15,9 +16,9 @@ interface StockItem {
 
 type ReportType = 'movimentos' | 'repor' | 'top_saidas' | 'por_lote' | 'por_produto' | 'por_paciente' | 'atividade_paciente'
 
-// Mesma régua da aba "Estoque Atual": abaixo de 5 unidades entra na lista de
-// compra. Zerado e negativo são mais urgentes que "Pedir" e vêm primeiro.
-const LOW_STOCK_THRESHOLD = 5
+// A régua deixou de ser única: os ativos de uso contínuo entram na lista abaixo
+// de 30, o resto abaixo de 5 (LIMITE_PADRAO). Quem decide é o catálogo em
+// src/lib/stock-actives.ts. Zerado e negativo continuam vindo primeiro.
 function reorderRank(q: number): number {
   if (q < 0) return 0   // saldo negativo — erro de lançamento, corrigir
   if (q === 0) return 1 // zerado
@@ -98,6 +99,23 @@ export function RelatoriosTab({ movements, items = [] }: { movements: StockMovem
 
   useEffect(() => { fetchActivity() }, [fetchActivity])
 
+  // A prop `items` vem da listagem padrão, que esconde saldo zero. Numa lista
+  // de compra o zerado é o que mais importa, então buscamos a lista completa.
+  // Refaz a busca quando `items` muda — é o sinal de que o EstoqueClient
+  // recarregou depois de uma movimentação, e a lista de compra não pode ficar
+  // atrasada em relação ao resto da tela. Se a busca falhar ficamos com a prop:
+  // lista sem os zerados é melhor que tela vazia.
+  const [itemsComZerados, setItemsComZerados] = useState<StockItem[] | null>(null)
+  useEffect(() => {
+    if (report !== 'repor') return
+    let cancelado = false
+    fetch('/api/estoque/items?zerados=1')
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((lista: StockItem[]) => { if (!cancelado) setItemsComZerados(lista) })
+      .catch(() => {})
+    return () => { cancelado = true }
+  }, [report, items])
+
   const filtered = useMemo(
     () => filterByRange(movements, effectiveStart, effectiveEnd),
     [movements, effectiveStart, effectiveEnd]
@@ -108,15 +126,19 @@ export function RelatoriosTab({ movements, items = [] }: { movements: StockMovem
 
   // ── Repor estoque ──
   // Baseado no saldo ATUAL do item, não no período: é uma lista de compra.
-  const toReorder = useMemo(() => {
-    return items
-      .filter(i => i.quantity < LOW_STOCK_THRESHOLD)
+  // Agrupa os lotes por ativo ANTES de filtrar — olhar lote a lote fazia o
+  // relatório pedir HMB duas vezes com 21 unidades na prateleira.
+  // O zerado só entra se for ativo controlado: os demais cadastros zerados são
+  // cadastro velho e de teste, e só sujariam a lista.
+  const toReorder = useMemo<LinhaReposicao[]>(() => {
+    return agruparParaReposicao(itemsComZerados ?? items)
+      .filter(l => l.quantidade < l.limite && (l.quantidade !== 0 || l.controlado))
       .sort((a, b) =>
-        reorderRank(a.quantity) - reorderRank(b.quantity) ||
-        a.quantity - b.quantity ||
-        a.name.localeCompare(b.name)
+        reorderRank(a.quantidade) - reorderRank(b.quantidade) ||
+        a.quantidade - b.quantidade ||
+        a.nome.localeCompare(b.nome)
       )
-  }, [items])
+  }, [items, itemsComZerados])
 
   // ── Top saídas ──
   const topExits = useMemo(() => {
@@ -186,11 +208,18 @@ export function RelatoriosTab({ movements, items = [] }: { movements: StockMovem
     if (report === 'repor') {
       // Lista de compra: saldo atual, sem período
       const today = new Date().toLocaleDateString('pt-BR')
-      if (toReorder.length === 0) return `Repor Estoque — ${today}\n\nNenhum ativo abaixo de ${LOW_STOCK_THRESHOLD} unidades. Estoque em dia. ✅`
+      if (toReorder.length === 0) return `Repor Estoque — ${today}\n\nEstoque em dia. ✅`
       const lines: string[] = [`Repor Estoque — ${today}`, '']
-      toReorder.forEach(i => {
-        const meta = [i.lot ? `Lote: ${i.lot}` : null, i.expiry_date ? `Val: ${i.expiry_date}` : null].filter(Boolean).join(' | ')
-        lines.push(`• ${i.name} — ${i.quantity} ${i.unit} ${reorderLabel(i.quantity)}${meta ? ` (${meta})` : ''}`)
+      toReorder.forEach(l => {
+        const meta = [
+          l.lot ? `Lote: ${l.lot}` : null,
+          l.expiry_date ? `Val: ${l.expiry_date}` : null,
+          l.registros > 1 ? `${l.registros} cadastros somados` : null,
+        ].filter(Boolean).join(' | ')
+        // Com duas réguas em uso, o número solto não se explica — daí o "/30".
+        // A unidade some quando os lotes do ativo discordam dela.
+        const saldo = `${l.quantidade}/${l.limite}${l.unit ? ` ${l.unit}` : ''}`
+        lines.push(`• ${l.nome} — ${saldo} ${reorderLabel(l.quantidade)}${meta ? ` (${meta})` : ''}`)
       })
       lines.push('', `Total: ${toReorder.length} ativo(s) para repor.`)
       return lines.join('\n')
@@ -302,33 +331,40 @@ export function RelatoriosTab({ movements, items = [] }: { movements: StockMovem
           <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
             <p className="text-2xl mb-1">✅</p>
             <p className="text-sm font-semibold text-green-700">Estoque em dia</p>
-            <p className="text-xs text-green-600 mt-0.5">Nenhum ativo abaixo de {LOW_STOCK_THRESHOLD} unidades.</p>
+            <p className="text-xs text-green-600 mt-0.5">Nenhum ativo abaixo do limite de reposição.</p>
           </div>
         ) : (
           <div className="space-y-3">
             <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-center">
               <p className="text-2xl font-bold text-orange-600">{toReorder.length}</p>
               <p className="text-xs text-orange-600 font-medium mt-0.5">ativo(s) para repor</p>
-              <p className="text-xs text-orange-500">abaixo de {LOW_STOCK_THRESHOLD} unidades</p>
+              <p className="text-xs text-orange-500">
+                controlados abaixo de 30 · demais abaixo de {LIMITE_PADRAO}
+              </p>
             </div>
 
-            {toReorder.map(i => {
-              const critical = i.quantity <= 0
+            {toReorder.map(l => {
+              const critical = l.quantidade <= 0
               return (
-                <div key={i.id}
+                <div key={l.chave}
                   className={`rounded-xl border p-4 shadow-sm flex items-start gap-4 ${critical ? 'bg-red-50 border-red-300' : 'bg-white border-gray-200'}`}>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-800">{i.name}</p>
+                    <p className="font-semibold text-gray-800">{l.nome}</p>
                     <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
-                      {i.lot && <p className="text-xs text-gray-500">Lote: <span className="font-medium">{i.lot}</span></p>}
-                      {i.expiry_date && <p className="text-xs text-gray-500">Val: <span className="font-medium">{i.expiry_date}</span></p>}
+                      {/* Lote e validade só existem quando um cadastro só tem
+                          saldo — ver agruparParaReposicao. */}
+                      {l.lot && <p className="text-xs text-gray-500">Lote: <span className="font-medium">{l.lot}</span></p>}
+                      {l.expiry_date && <p className="text-xs text-gray-500">Val: <span className="font-medium">{l.expiry_date}</span></p>}
+                      {l.registros > 1 && (
+                        <p className="text-xs text-gray-500">{l.registros} cadastros somados</p>
+                      )}
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className={`text-xl font-bold ${critical ? 'text-red-500' : 'text-orange-500'}`}>{i.quantity}</p>
-                    <p className="text-xs text-gray-400">{i.unit}</p>
+                    <p className={`text-xl font-bold ${critical ? 'text-red-500' : 'text-orange-500'}`}>{l.quantidade}</p>
+                    <p className="text-xs text-gray-400">de {l.limite}{l.unit ? ` ${l.unit}` : ''}</p>
                     <p className={`text-xs font-semibold mt-0.5 ${critical ? 'text-red-600' : 'text-orange-500'}`}>
-                      {reorderLabel(i.quantity)}
+                      {reorderLabel(l.quantidade)}
                     </p>
                   </div>
                 </div>
