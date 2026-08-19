@@ -28,8 +28,10 @@ export function normalizarNome(nome: string): string {
 // A ORDEM IMPORTA: o mais específico vem primeiro. Se "vitamina d 600 ui"
 // fosse testado antes, engoliria "vitamina d 600 ui k2" e "vitamina d 600 adek".
 export const ATIVOS: AtivoControlado[] = [
-  { nome: 'Vitamina D 600 UI + K2', limite: LIMITE_CONTROLADO, padroes: [/vitamina d 600 ui k2/] },
-  { nome: 'Vitamina D 600 ADEK', limite: LIMITE_CONTROLADO, padroes: [/vitamina d 600 adek/] },
+  // O ".*" cobre "600 UI + K2", "600 UI com K2" e "600 + K2" — o que importa é
+  // que estes dois sejam testados ANTES do padrão da D600 pura, logo abaixo.
+  { nome: 'Vitamina D 600 UI + K2', limite: LIMITE_CONTROLADO, padroes: [/vitamina d 600.*k2/] },
+  { nome: 'Vitamina D 600 ADEK', limite: LIMITE_CONTROLADO, padroes: [/vitamina d 600.*adek/] },
   { nome: 'Vitamina D 600 UI', limite: LIMITE_CONTROLADO, padroes: [/vitamina d 600 ui/] },
 
   { nome: 'Vitamina C 440 mg', limite: LIMITE_CONTROLADO, padroes: [/vitamina c 440/] },
@@ -142,4 +144,12 @@ export function agruparParaReposicao(items: ItemParaAgrupar[]): LinhaReposicao[]
   }
 
   return [...porChave.values()]
+}
+
+// Regra da lista de compra, num lugar onde dá para testar. O zerado só entra se
+// for ativo do catálogo: os demais cadastros zerados são cadastro velho e de
+// teste, e só sujariam a lista. Saldo negativo entra sempre — é erro de
+// lançamento e o relatório marca como tal.
+export function precisaRepor(l: LinhaReposicao): boolean {
+  return l.quantidade < l.limite && (l.quantidade !== 0 || l.controlado)
 }

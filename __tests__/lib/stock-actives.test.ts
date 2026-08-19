@@ -1,7 +1,8 @@
 // __tests__/lib/stock-actives.test.ts
 import {
   ATIVOS, LIMITE_PADRAO, LIMITE_CONTROLADO,
-  normalizarNome, acharAtivo, agruparParaReposicao,
+  normalizarNome, acharAtivo, agruparParaReposicao, precisaRepor,
+  type LinhaReposicao,
 } from '@/lib/stock-actives'
 
 describe('stock-actives — normalização', () => {
@@ -71,6 +72,8 @@ describe('stock-actives — reconhecimento de nomes', () => {
     ['Pool Cognitivo', 'Pool Cognição'],
     ['LCarnitina', 'L-carnitina'],
     ['CoQ10', 'Coenzima Q10'],
+    ['Vitamina D 600 UI + ADEK', 'Vitamina D 600 ADEK'],
+    ['Vitamina D 600 UI com K2', 'Vitamina D 600 UI + K2'],
   ]
 
   it.each(casos)('%s → %s', (nome, ativoEsperado) => {
@@ -240,5 +243,26 @@ describe('stock-actives — agrupamento', () => {
       item(2, 'Curcumina', 2),
     ])
     expect(linhas[0].quantidade).toBe(-2)
+  })
+})
+
+describe('stock-actives — precisaRepor', () => {
+  const linha = (quantidade: number, limite: number, controlado: boolean): LinhaReposicao =>
+    ({ chave: 'x', nome: 'x', quantidade, unit: 'un', limite, registros: 1, controlado, lot: null, expiry_date: null })
+
+  it('entra abaixo do limite e fica de fora no limite exato', () => {
+    expect(precisaRepor(linha(29, 30, true))).toBe(true)
+    expect(precisaRepor(linha(30, 30, true))).toBe(false)
+    expect(precisaRepor(linha(4, 5, false))).toBe(true)
+    expect(precisaRepor(linha(5, 5, false))).toBe(false)
+  })
+
+  it('zerado so entra se for ativo do catalogo', () => {
+    expect(precisaRepor(linha(0, 30, true))).toBe(true)
+    expect(precisaRepor(linha(0, 5, false))).toBe(false)
+  })
+
+  it('saldo negativo entra mesmo fora do catalogo', () => {
+    expect(precisaRepor(linha(-2, 5, false))).toBe(true)
   })
 })
