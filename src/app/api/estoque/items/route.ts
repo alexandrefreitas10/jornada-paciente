@@ -5,8 +5,11 @@ import { canEstoqueSession } from '@/lib/authz'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
-  const items = await listStockItems()
+// ?zerados=1 existe para o relatório "Repor Estoque". Sem o parâmetro o
+// comportamento é o de sempre — todas as outras telas continuam sem os zerados.
+export async function GET(req: NextRequest) {
+  const incluirZerados = req.nextUrl.searchParams.get('zerados') === '1'
+  const items = await listStockItems({ incluirZerados })
   return NextResponse.json(items)
 }
 

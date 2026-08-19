@@ -29,8 +29,12 @@ export interface StockMovement {
   measurement_id: number | null
 }
 
-export async function listStockItems(): Promise<StockItem[]> {
+// incluirZerados: a aba Estoque Atual esconde saldo zero de propósito
+// ("esgotado é normal" — ver o HAVING abaixo). A lista de compra do relatório
+// precisa do contrário: o que zerou é o que mais importa comprar.
+export async function listStockItems(opts?: { incluirZerados?: boolean }): Promise<StockItem[]> {
   await initSchema()
+  const incluirZerados = opts?.incluirZerados ?? false
   const rows = await sql<StockItem[]>`
     SELECT
       i.*,
@@ -44,9 +48,10 @@ export async function listStockItems(): Promise<StockItem[]> {
     FROM stock_items i
     LEFT JOIN stock_movements m ON m.item_id = i.id
     GROUP BY i.id
-    -- Esconde apenas os zerados (esgotado é normal). Saldo NEGATIVO aparece
+    -- Esconde os zerados, salvo quando incluirZerados (esgotado é normal).
+    -- Saldo NEGATIVO aparece
     -- para o operador ver e corrigir, em vez de sumir silenciosamente.
-    HAVING COALESCE(
+    HAVING ${incluirZerados}::boolean OR COALESCE(
       SUM(CASE WHEN m.type = 'entrada' THEN m.quantity ELSE 0 END) -
       SUM(CASE WHEN m.type = 'saida'   THEN m.quantity ELSE 0 END),
       0
