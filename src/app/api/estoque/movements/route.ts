@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { listMovements, createMovement, InsufficientStockError } from '@/lib/stock'
 import { auth } from '@/auth'
 import { canEstoqueSession } from '@/lib/authz'
+import { resolverPacienteId } from '@/lib/patient-link'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
   try {
     const movement = await createMovement({
       item_id: Number(item_id), type, quantity: Number(quantity),
-      lot, expiry_date, patient_id: patient_id ? Number(patient_id) : null,
+      lot, expiry_date, patient_id: await resolverPacienteId(patient_id, patient_name),
       patient_name, observation, nf_s3_key, created_by: createdBy,
       measurement_id: measurement_id ? Number(measurement_id) : null,
       idempotency_key: idempotency_key ?? null,
