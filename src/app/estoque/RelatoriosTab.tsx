@@ -18,12 +18,7 @@ type ReportType = 'movimentos' | 'repor' | 'top_saidas' | 'por_lote' | 'por_prod
 
 // A régua deixou de ser única: os ativos de uso contínuo entram na lista abaixo
 // de 30, o resto abaixo de 5 (LIMITE_PADRAO). Quem decide é o catálogo em
-// src/lib/stock-actives.ts. Zerado e negativo continuam vindo primeiro.
-function reorderRank(q: number): number {
-  if (q < 0) return 0   // saldo negativo — erro de lançamento, corrigir
-  if (q === 0) return 1 // zerado
-  return 2              // abaixo do limite da linha → "Pedir"
-}
+// src/lib/stock-actives.ts.
 function reorderLabel(q: number): string {
   if (q < 0) return '🚨 Saldo negativo'
   if (q === 0) return '🚨 Zerado'
@@ -133,11 +128,11 @@ export function RelatoriosTab({ movements, items = [] }: { movements: StockMovem
   const toReorder = useMemo<LinhaReposicao[]>(() => {
     return agruparParaReposicao(itemsComZerados ?? items)
       .filter(precisaRepor)
-      .sort((a, b) =>
-        reorderRank(a.quantidade) - reorderRank(b.quantidade) ||
-        a.quantidade - b.quantidade ||
-        a.nome.localeCompare(b.nome)
-      )
+      // Ordem alfabética: a lista é lida de pé na frente da prateleira, e
+      // achar o nome importa mais do que ver o mais urgente primeiro — a
+      // urgência continua marcada em cada linha ("🚨 Zerado", "⚠️ Pedir").
+      // localeCompare com 'pt-BR' para "Ácido" não cair depois de "Zinco".
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
   }, [items, itemsComZerados])
 
   // ── Top saídas ──
