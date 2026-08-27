@@ -117,8 +117,17 @@ describe('stock-actives — o que fica de fora', () => {
     ['Tirzepartida BioMeds'],
     ['Implante Testosterona 200 mg'],
     ['Polivitamínico ADEK'],
+    // Blend com aminoácidos — o dono confirmou que é outro produto. Somar com
+    // o HMB puro esconderia a falta dele atrás do estoque do blend.
+    ['BCAA + HMB 5ML'],
   ])('%s não pertence a nenhum ativo controlado', nome => {
     expect(acharAtivo(nome)).toBeNull()
+  })
+
+  it('o HMB puro continua sendo reconhecido nas duas grafias', () => {
+    // A âncora do padrão fecha o blend sem fechar o produto de verdade.
+    expect(acharAtivo('HMB')?.nome).toBe('HMB')
+    expect(acharAtivo('HIDROXIMETILBUTIRATO 2,5% 2ML')?.nome).toBe('HMB')
   })
 
   it('nome vazio ou so espaco nao casa com nada', () => {

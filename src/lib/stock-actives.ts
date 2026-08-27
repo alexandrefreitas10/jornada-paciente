@@ -41,7 +41,9 @@ export const ATIVOS: AtivoControlado[] = [
   { nome: 'Sulfato de Magnésio', limite: LIMITE_CONTROLADO, padroes: [/sulfato de magnesio/] },
   { nome: 'Magnésio 400 mg', limite: LIMITE_CONTROLADO, padroes: [/^magnesio 400/] },
 
-  { nome: 'HMB', limite: LIMITE_CONTROLADO, padroes: [/\bhmb\b/, /hidroximetilbutirato/] },
+  // Ancorado no início para não engolir blend: "BCAA + HMB" é outro produto,
+  // e somar os dois esconderia a falta do HMB puro atrás do estoque do blend.
+  { nome: 'HMB', limite: LIMITE_CONTROLADO, padroes: [/^hmb\b/, /^hidroximetilbutirato/] },
   { nome: 'NAC', limite: LIMITE_CONTROLADO, padroes: [/\bnac\b/, /acetilcisteina/] },
   { nome: 'L-carnitina', limite: LIMITE_CONTROLADO, padroes: [/\bl carnitina\b/, /\blcarnitina\b/] },
   { nome: 'L-baiba', limite: LIMITE_CONTROLADO, padroes: [/baiba/] },
