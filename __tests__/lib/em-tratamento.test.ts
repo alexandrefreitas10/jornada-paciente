@@ -72,6 +72,15 @@ describe('classificar', () => {
     const t = saida('2026-09-10T12:00:00Z')
     expect(classificar(t, new Date(t), AGORA)).toBeNull()
   })
+
+  it('folha no mesmo dia, ANTES da aplicação, continua em tratamento', () => {
+    expect(classificar(saida('2026-09-10T18:00:00Z'), saida('2026-09-10T12:00:00Z'), AGORA))
+      .toEqual({ etiqueta: 'verde', diasSemVir: 7 })
+  })
+
+  it('aplicação no futuro (relógio adiantado) não gera dias negativos', () => {
+    expect(classificar(saida('2026-09-18T12:00:00Z'), null, AGORA)).toEqual({ etiqueta: 'verde', diasSemVir: 0 })
+  })
 })
 
 describe('primeiroNome', () => {
@@ -84,6 +93,11 @@ describe('primeiroNome', () => {
   it('nome vazio vira vazio', () => {
     expect(primeiroNome('')).toBe('')
     expect(primeiroNome('   ')).toBe('')
+  })
+
+  it('capitaliza depois de hífen e apóstrofo em nomes compostos', () => {
+    expect(primeiroNome('MARIA-CLARA SOUZA')).toBe('Maria-Clara')
+    expect(primeiroNome("D'ÁVILA")).toBe("D'Ávila")
   })
 })
 
@@ -103,6 +117,11 @@ describe('mensagens', () => {
 
   it('não deixa sobrar {nome} no texto', () => {
     for (const e of ETIQUETAS) expect(mensagemPara(e, 'Ana')).not.toContain('{nome}')
+  })
+
+  it('nome vazio: remove a saudação com vírgula, sem sobrar {nome}', () => {
+    expect(mensagemPara('verde', '')).toMatch(/^Oi! Tudo bem?/)
+    for (const e of ETIQUETAS) expect(mensagemPara(e, '')).not.toContain('{nome}')
   })
 })
 

@@ -77,21 +77,24 @@ export function classificar(
   if (!ultimaSaida) return null
   if (ultimaFolha && ultimaFolha.getTime() >= ultimaSaida.getTime()) return null
 
-  const diasSemVir = diasEntre(ultimaSaida, agora)
+  const diasSemVir = Math.max(0, diasEntre(ultimaSaida, agora))
   const etiqueta: Etiqueta =
     diasSemVir <= DIAS_VERDE ? 'verde' : diasSemVir <= DIAS_AMARELA ? 'amarela' : 'vermelha'
   return { etiqueta, diasSemVir }
 }
 
-/** "ANA CAROLINE" → "Ana". */
+/** "ANA CAROLINE" → "Ana"; "MARIA-CLARA" → "Maria-Clara"; "D'ÁVILA" → "D'Ávila". */
 export function primeiroNome(nome: string): string {
   const primeiro = nome.trim().split(/\s+/)[0] ?? ''
   if (!primeiro) return ''
-  return primeiro.charAt(0).toLocaleUpperCase('pt-BR') + primeiro.slice(1).toLocaleLowerCase('pt-BR')
+  const minusculo = primeiro.toLocaleLowerCase('pt-BR')
+  return minusculo.replace(/(^|[-'’])(\p{L})/gu, (_, sep: string, letra: string) => sep + letra.toLocaleUpperCase('pt-BR'))
 }
 
 export function mensagemPara(etiqueta: Etiqueta, nomeCompleto: string): string {
-  return MENSAGENS[etiqueta].replace('{nome}', primeiroNome(nomeCompleto))
+  const nome = primeiroNome(nomeCompleto)
+  const modelo = MENSAGENS[etiqueta]
+  return nome ? modelo.replace('{nome}', () => nome) : modelo.replace(', {nome}!', '!')
 }
 
 /**
