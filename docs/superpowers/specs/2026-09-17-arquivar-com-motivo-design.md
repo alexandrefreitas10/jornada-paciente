@@ -28,9 +28,11 @@
 
 ### 1. Mensagem recolhida
 
-Em cada card da aba Em tratamento, a mensagem aparece **recolhida em 2 linhas**,
+Em cada card da aba Em tratamento, a mensagem longa aparece **recolhida em 3 linhas**
+(3, e não 2: a 2ª linha da mensagem "Em dia" é em branco),
 com o botão **"▼ Ver mensagem completa"**; aberta, o botão vira **"▲ Recolher"**.
-Cada card abre e fecha sozinho. **Copiar mensagem** copia sempre o texto inteiro.
+Cada card abre e fecha sozinho. Mensagem curta (até 3 linhas e 180 caracteres)
+não tem o botão. **Copiar mensagem** copia sempre o texto inteiro.
 
 ### 2. Mover para Pacientes Antigos (aba Em tratamento)
 
@@ -107,8 +109,13 @@ Quem pode arquivar e reativar: qualquer pessoa da equipe logada, como hoje.
   automática. O SQL de `listarEmTratamento` aplica a mesma regra; um teste fixa
   os mesmos casos nos dois lados (nome com "IMPLANTE" em qualquer caixa,
   observação exata `Implante hormonal`, nulos).
+
+### Regras puras de arquivamento — `src/lib/arquivo-paciente.ts` (novo)
+
 - `validarMotivo(texto)` → `string | null` (texto limpo, ou `null` se inválido).
   Usada pela API e pelos dois formulários.
+- `idPacienteValido(valor)` → `number | null` (inteiro de 1 até o máximo do
+  INTEGER do Postgres).
 
 ### Banco — `src/lib/patient-archive.ts` (novo, só servidor)
 
@@ -119,7 +126,8 @@ Quem pode arquivar e reativar: qualquer pessoa da equipe logada, como hoje.
 - `archivePatient`/`unarchivePatient` em `src/lib/patients.ts` deixam de ser
   usados pelas rotas e são removidos, se nada mais os chamar.
 - `listArchivedPatients` passa a trazer, do último evento `arquivado`,
-  `archive_reason`, `archived_by` (campos opcionais em `PatientListItem`).
+  `archive_reason`, `archived_by` e `archive_event_at`, num tipo novo
+  `ArchivedPatientItem` que estende `PatientListItem`.
 
 ### Reativação automática — `createMovement` em `src/lib/stock.ts`
 
@@ -149,14 +157,14 @@ reativação (a transação é a mesma, então só falha junto se o banco falhar
 
 - `src/app/relatorios/EmTratamento.tsx`: mensagem recolhida; botão e formulário
   de arquivamento nos cards 🟡/🔴; remove o card da lista ao arquivar.
-- `src/components/ArchivePatientButton.tsx`: janela com Observações. O botão fica
-  dentro de um `<Link>` do card, então a janela é renderizada fora dele
-  (`createPortal`) para que cliques e digitação não abram o paciente.
+- `src/components/ArchivePatientButton.tsx`: janela com Observações. O botão já
+  fica fora do `<Link>` do card (`PatientCard.tsx`), então a janela é um overlay
+  comum; mesmo assim ela interrompe a propagação de cliques por segurança.
 - `src/components/ArchivedPatientsList.tsx`: linha 📝 com motivo, quem e quando.
 
 ### Testes
 
-- Puros: `ehSaidaDeImplante`, `validarMotivo`.
+- Puros: `ehSaidaDeImplante`, `validarMotivo`, `idPacienteValido`.
 - Componentes: EmTratamento (recolher/expandir; botão só em 🟡/🔴; Confirmar
   desabilitado sem motivo; card some ao arquivar; erro fica no card);
   ArchivePatientButton (janela, motivo obrigatório, não navega ao digitar);
