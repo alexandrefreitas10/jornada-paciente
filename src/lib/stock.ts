@@ -1,6 +1,7 @@
 import sql, { initSchema } from './db'
 import { logAudit } from './audit'
 import { ehSaidaDeImplante } from './em-tratamento'
+import { logSystemError } from './system-errors'
 
 export interface StockItem {
   id: number
@@ -265,22 +266,33 @@ export async function createMovement(data: {
     // para a saída e a reativação acontecerem juntas.
     let reativado = false
     if (data.type === 'saida' && data.patient_id) {
-      const [item] = await tx<{ name: string }[]>`
-        SELECT name FROM stock_items WHERE id = ${itemId}
-      `
-      if (!ehSaidaDeImplante(item?.name, data.observation)) {
-        const [paciente] = await tx<{ id: number }[]>`
-          UPDATE patients SET archived_at = NULL
-          WHERE id = ${data.patient_id} AND archived_at IS NOT NULL AND deleted_at IS NULL
-          RETURNING id
-        `
-        if (paciente) {
-          await tx`
-            INSERT INTO patient_archive_events (patient_id, action, source, created_by)
-            VALUES (${data.patient_id}, 'reativado', 'nova_aplicacao', ${data.created_by ?? null})
+      const patientId = data.patient_id
+      try {
+        reativado = await tx.savepoint(async (sp) => {
+          const [item] = await sp<{ name: string }[]>`
+            SELECT name FROM stock_items WHERE id = ${itemId}
           `
-          reativado = true
-        }
+          if (ehSaidaDeImplante(item?.name, data.observation)) return false
+          const [paciente] = await sp<{ id: number }[]>`
+            UPDATE patients SET archived_at = NULL
+            WHERE id = ${patientId} AND archived_at IS NOT NULL AND deleted_at IS NULL
+            RETURNING id
+          `
+          if (!paciente) return false
+          await sp`
+            INSERT INTO patient_archive_events (patient_id, action, source, created_by)
+            VALUES (${patientId}, 'reativado', 'nova_aplicacao', ${data.created_by ?? null})
+          `
+          return true
+        })
+      } catch (err) {
+        // A saída nunca falha por causa da reativação: só o savepoint volta
+        // atrás, a saída é gravada e o paciente continua arquivado.
+        void logSystemError('reativacao_automatica', 'falha ao reativar paciente na saída', {
+          patientId,
+          itemId,
+          erro: err instanceof Error ? err.message : String(err),
+        })
       }
     }
 
