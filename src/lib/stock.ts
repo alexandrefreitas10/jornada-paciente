@@ -106,23 +106,35 @@ function normalizeMovement(m: StockMovement): StockMovement {
   return { ...m, quantity: Number(m.quantity) }
 }
 
+// A aba Evolução grava a saída da Tirzepatida só com o id do paciente, sem o
+// nome. Quem agrupava pelo nome gravado (o relatório Por Paciente) jogava essas
+// saídas em "Sem paciente", embora estivessem no card do paciente. Quando o
+// nome não foi gravado, vale o do cadastro.
+type LinhaComCadastro = StockMovement & { nome_cadastro: string | null }
+
+function comNomeDoCadastro({ nome_cadastro, ...m }: LinhaComCadastro): StockMovement {
+  return normalizeMovement({ ...m, patient_name: m.patient_name ?? nome_cadastro })
+}
+
 export async function listMovements(type?: 'entrada' | 'saida'): Promise<StockMovement[]> {
   await initSchema()
   const rows = type
-    ? await sql<StockMovement[]>`
-        SELECT m.*, i.name AS item_name
+    ? await sql<LinhaComCadastro[]>`
+        SELECT m.*, i.name AS item_name, p.name AS nome_cadastro
         FROM stock_movements m
         JOIN stock_items i ON i.id = m.item_id
+        LEFT JOIN patients p ON p.id = m.patient_id
         WHERE m.type = ${type}
         ORDER BY m.created_at DESC
       `
-    : await sql<StockMovement[]>`
-        SELECT m.*, i.name AS item_name
+    : await sql<LinhaComCadastro[]>`
+        SELECT m.*, i.name AS item_name, p.name AS nome_cadastro
         FROM stock_movements m
         JOIN stock_items i ON i.id = m.item_id
+        LEFT JOIN patients p ON p.id = m.patient_id
         ORDER BY m.created_at DESC
       `
-  return rows.map(normalizeMovement)
+  return rows.map(comNomeDoCadastro)
 }
 
 export async function listMovementsByPatient(patientId: number): Promise<StockMovement[]> {
