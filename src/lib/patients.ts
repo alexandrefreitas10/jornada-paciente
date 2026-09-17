@@ -70,16 +70,6 @@ export async function listArchivedPatients(): Promise<ArchivedPatientItem[]> {
   return rows
 }
 
-export async function archivePatient(id: number): Promise<void> {
-  await initSchema()
-  await sql`UPDATE patients SET archived_at = NOW() WHERE id = ${id}`
-}
-
-export async function unarchivePatient(id: number): Promise<void> {
-  await initSchema()
-  await sql`UPDATE patients SET archived_at = NULL WHERE id = ${id}`
-}
-
 export async function listDeletedPatients(): Promise<PatientListItem[]> {
   await initSchema()
   const rows = await sql<PatientListItem[]>`
