@@ -45,9 +45,11 @@ Consequências:
 
 Ficam de fora:
 
-- saídas de **implante hormonal** (`observation = 'Implante hormonal'`, gravada pela
-  tela de Implantes). O implante é semestral e tem módulo próprio; sem essa
-  exclusão, esses pacientes cairiam em "não veio" toda semana.
+- saídas de **implante** — observação `Implante hormonal` (gravada pela tela de
+  Implantes) **ou** item cujo nome contém "implante" (cobre a saída lançada pela
+  tela de estoque, que não grava essa observação). O implante é semestral e tem
+  módulo próprio; sem essa exclusão, esses pacientes cairiam em "não veio" toda
+  semana.
 - pacientes **arquivados** ou **excluídos**.
 
 ### Situação de cada paciente (etiqueta)
