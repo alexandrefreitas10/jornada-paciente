@@ -135,3 +135,22 @@ export function listarSubAba(lista: PacienteEmTratamento[], subAba: SubAba): Pac
   const base = subAba === 'nao_veio' ? lista.filter(p => p.etiqueta !== 'verde') : [...lista]
   return base.sort((a, b) => b.diasSemVir - a.diasSemVir || porNome(a, b))
 }
+
+/**
+ * Implante é semestral e tem módulo próprio: não conta como aplicação do
+ * tratamento semanal. Espelha o filtro SQL de listarEmTratamento.
+ */
+export function ehSaidaDeImplante(
+  nomeItem: string | null | undefined,
+  observacao: string | null | undefined,
+): boolean {
+  return (observacao ?? '') === 'Implante hormonal' || /implante/i.test(nomeItem ?? '')
+}
+
+export const LINHAS_RESUMO = 3
+const CARACTERES_RESUMO = 180
+
+/** Mensagem longa aparece recolhida no card, com botão para abrir. */
+export function mensagemLonga(texto: string): boolean {
+  return texto.split('\n').length > LINHAS_RESUMO || texto.length > CARACTERES_RESUMO
+}

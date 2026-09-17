@@ -509,6 +509,23 @@ async function runMigrations() {
       UNIQUE (patient_id, week_start)
     )
   `).catch(() => {})
+
+  // Histórico de arquivamento/reativação de pacientes, com o motivo de quem
+  // parou o tratamento. Um registro por evento, para o motivo antigo não se
+  // perder quando o paciente vai e volta.
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS patient_archive_events (
+      id SERIAL PRIMARY KEY,
+      patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      action TEXT NOT NULL CHECK (action IN ('arquivado', 'reativado')),
+      reason TEXT,
+      source TEXT NOT NULL CHECK (source IN ('em_tratamento', 'card_paciente', 'pacientes_antigos', 'nova_aplicacao')),
+      created_by TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS patient_archive_events_patient_idx
+      ON patient_archive_events (patient_id, created_at DESC);
+  `).catch(() => {})
 }
 
 export default sql

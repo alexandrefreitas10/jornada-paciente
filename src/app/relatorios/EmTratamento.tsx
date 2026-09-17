@@ -1,11 +1,12 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
-  listarSubAba, mensagemPara, DIAS_VERDE, DIAS_AMARELA,
+  listarSubAba, mensagemPara, mensagemLonga, DIAS_VERDE, DIAS_AMARELA,
   type Etiqueta, type PacienteEmTratamento, type SubAba,
 } from '@/lib/em-tratamento'
+import { validarMotivo, MOTIVO_MAX } from '@/lib/arquivo-paciente'
 
 const SUB_ABAS: { key: SubAba; label: string }[] = [
   { key: 'todos', label: 'Todos' },
@@ -25,6 +26,61 @@ const dia = (iso: string) =>
 const momento = (iso: string) =>
   new Date(iso).toLocaleString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: FUSO })
 
+/**
+ * `mensagemLonga` (regra de linhas/caracteres) é só uma estimativa: numa tela
+ * larga, ~190-206 caracteres cabem em 2 linhas, então a seta apareceria sem
+ * ter nada escondido. Por isso medimos o `<p>` de verdade e só recolhemos
+ * (e mostramos a seta) quando o texto realmente não cabe nas 3 linhas.
+ */
+function MensagemRecolhivel({ id, texto }: { id: string; texto: string }) {
+  const longa = mensagemLonga(texto)
+  const [aberta, setAberta] = useState(false)
+  const [cabe, setCabe] = useState(false)
+  const ref = useRef<HTMLParagraphElement>(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el || !longa || typeof ResizeObserver === 'undefined') return
+    const medir = () => {
+      // Sem layout (ex.: jsdom nos testes) clientHeight é 0: fica a estimativa.
+      // Aberta não mede: sem o recorte, o texto sempre "cabe".
+      if (aberta || el.clientHeight === 0) return
+      setCabe(el.scrollHeight <= el.clientHeight + 1)
+    }
+    medir()
+    const observador = new ResizeObserver(medir)
+    observador.observe(el)
+    return () => observador.disconnect()
+  }, [longa, aberta, texto])
+
+  const recolhivel = longa && !cabe
+
+  return (
+    <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
+      <p
+        ref={ref}
+        id={id}
+        className={`text-sm text-gray-700 select-text whitespace-pre-line ${
+          recolhivel && !aberta ? 'line-clamp-3' : ''
+        }`}
+      >
+        {texto}
+      </p>
+      {recolhivel && (
+        <button
+          type="button"
+          onClick={() => setAberta(atual => !atual)}
+          aria-expanded={aberta}
+          aria-controls={id}
+          className="mt-1 text-xs font-medium text-violet-700 hover:text-violet-900"
+        >
+          {aberta ? '▲ Recolher' : '▼ Ver mensagem completa'}
+        </button>
+      )}
+    </div>
+  )
+}
+
 export function EmTratamento() {
   const [lista, setLista] = useState<PacienteEmTratamento[] | null>(null)
   const [erro, setErro] = useState<string | null>(null)
@@ -32,6 +88,9 @@ export function EmTratamento() {
   const [copiado, setCopiado] = useState<number | null>(null)
   const [salvando, setSalvando] = useState<number | null>(null)
   const [aviso, setAviso] = useState<{ id: number; texto: string } | null>(null)
+  const [arquivando, setArquivando] = useState<number | null>(null)
+  const [motivo, setMotivo] = useState('')
+  const [salvandoArquivo, setSalvandoArquivo] = useState(false)
 
   const carregar = useCallback(async () => {
     setErro(null)
@@ -79,6 +138,39 @@ export function EmTratamento() {
     }
   }
 
+  function abrirArquivamento(id: number) {
+    setAviso(null)
+    setMotivo('')
+    setArquivando(id)
+  }
+
+  function cancelarArquivamento() {
+    setArquivando(null)
+    setMotivo('')
+  }
+
+  async function arquivar(p: PacienteEmTratamento) {
+    const texto = validarMotivo(motivo)
+    if (!texto) return
+    setSalvandoArquivo(true)
+    setAviso(null)
+    try {
+      const res = await fetch(`/api/patients/${p.patientId}/archive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ motivo: texto, origem: 'em_tratamento' }),
+      })
+      if (!res.ok) throw new Error(String(res.status))
+      setLista(atual => atual && atual.filter(x => x.patientId !== p.patientId))
+      setArquivando(null)
+      setMotivo('')
+    } catch {
+      setAviso({ id: p.patientId, texto: 'Não foi possível mover para Pacientes Antigos. Tente de novo.' })
+    } finally {
+      setSalvandoArquivo(false)
+    }
+  }
+
   if (!lista) {
     return (
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 text-center text-sm text-gray-500">
@@ -118,7 +210,6 @@ export function EmTratamento() {
         <p className="text-sm font-medium text-gray-700">
           {enviadas} de {visiveis.length} mensagens enviadas nesta semana
         </p>
-        {erro && <p className="text-sm text-red-600">{erro}</p>}
       </div>
 
       {visiveis.length === 0 ? (
@@ -142,9 +233,7 @@ export function EmTratamento() {
                 </span>
               </div>
 
-              <p className="text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-lg p-3 select-text whitespace-pre-line">
-                {mensagemPara(p.etiqueta, p.nome)}
-              </p>
+              <MensagemRecolhivel id={`mensagem-${p.patientId}`} texto={mensagemPara(p.etiqueta, p.nome)} />
 
               <div className="flex flex-wrap items-center gap-2">
                 <button
@@ -170,6 +259,16 @@ export function EmTratamento() {
                     ? (<><span aria-hidden="true">↩</span> Desfazer</>)
                     : (<><span aria-hidden="true">✓</span> Marcar como enviada</>)}
                 </button>
+                {p.etiqueta !== 'verde' && arquivando !== p.patientId && (
+                  <button
+                    type="button"
+                    onClick={() => abrirArquivamento(p.patientId)}
+                    disabled={salvandoArquivo}
+                    className="px-3 py-1.5 rounded-lg text-sm font-medium border border-amber-300 text-amber-800 bg-amber-50 hover:bg-amber-100 disabled:opacity-50"
+                  >
+                    <span aria-hidden="true">📦</span> Mover para Pacientes Antigos
+                  </button>
+                )}
                 {p.enviada && (
                   <span className="text-xs text-green-700">
                     ✓ Enviada por {p.enviada.sentBy ?? '—'} · {momento(p.enviada.sentAt)}
@@ -178,6 +277,40 @@ export function EmTratamento() {
                   </span>
                 )}
               </div>
+              {arquivando === p.patientId && (
+                <div className="border border-amber-200 bg-amber-50 rounded-lg p-3 space-y-2">
+                  <label htmlFor={`motivo-${p.patientId}`} className="block text-xs font-medium text-amber-900">
+                    Observações — por que o paciente parou?
+                  </label>
+                  <textarea
+                    id={`motivo-${p.patientId}`}
+                    value={motivo}
+                    onChange={e => setMotivo(e.target.value)}
+                    rows={3}
+                    maxLength={MOTIVO_MAX}
+                    autoFocus
+                    className="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <button
+                      type="button"
+                      onClick={cancelarArquivamento}
+                      disabled={salvandoArquivo}
+                      className="px-3 py-1.5 rounded-lg text-sm text-gray-600 hover:bg-white disabled:opacity-50"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => arquivar(p)}
+                      disabled={salvandoArquivo || !validarMotivo(motivo)}
+                      className="px-3 py-1.5 rounded-lg text-sm font-medium bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
+                    >
+                      {salvandoArquivo ? 'Movendo...' : 'Confirmar'}
+                    </button>
+                  </div>
+                </div>
+              )}
               {aviso?.id === p.patientId && (
                 <p role="alert" className="text-xs text-red-600">{aviso.texto}</p>
               )}

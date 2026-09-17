@@ -14,6 +14,7 @@ let fetchMock: jest.Mock
 
 beforeEach(() => {
   fetchMock = jest.fn(async (url: string, init?: RequestInit) => {
+    if (url.includes('/archive')) return { ok: true, status: 200, json: async () => ({ ok: true }) }
     if (init?.method === 'POST') {
       return { ok: true, status: 201, json: async () => ({ template: 'amarela', sentBy: 'Carlos', sentAt: '2026-09-17T17:32:00.000Z' }) }
     }
@@ -150,5 +151,126 @@ describe('EmTratamento', () => {
     render(<EmTratamento />)
     await waitFor(() => expect(cards()).toHaveLength(3))
     expect(cards()[0]).toHaveTextContent('(modelo faltou)')
+  })
+
+  it('a mensagem longa começa recolhida e abre pela seta', async () => {
+    render(<EmTratamento />)
+    await waitFor(() => expect(cards()).toHaveLength(3))
+    const bruno = cards()[2]
+    const mensagem = within(bruno).getByText(/Vamos ao seu acompanhamento semanal/)
+    expect(mensagem).toHaveClass('line-clamp-3')
+
+    const seta = within(bruno).getByRole('button', { name: /Ver mensagem completa/ })
+    expect(seta).toHaveAttribute('aria-expanded', 'false')
+    await userEvent.click(seta)
+
+    expect(mensagem).not.toHaveClass('line-clamp-3')
+    const recolher = within(bruno).getByRole('button', { name: /Recolher/ })
+    expect(recolher).toHaveAttribute('aria-expanded', 'true')
+    // Abrir um card não abre os outros.
+    expect(within(cards()[0]).getByRole('button', { name: /Ver mensagem completa/ })).toBeInTheDocument()
+  })
+
+  it('a seta não aparece quando o texto cabe de verdade (medido, não estimado)', async () => {
+    class ResizeObserverStub {
+      observe() {}
+      disconnect() {}
+    }
+    const originalRO = (global as unknown as { ResizeObserver?: unknown }).ResizeObserver
+    ;(global as unknown as { ResizeObserver: unknown }).ResizeObserver = ResizeObserverStub
+    const clientHeightDesc = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight')
+    const scrollHeightDesc = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollHeight')
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, get: () => 60 })
+    Object.defineProperty(HTMLElement.prototype, 'scrollHeight', { configurable: true, get: () => 60 })
+    try {
+      render(<EmTratamento />)
+      await waitFor(() => expect(cards()).toHaveLength(3))
+      const bruno = cards()[2]
+      const mensagem = within(bruno).getByText(/Vamos ao seu acompanhamento semanal/)
+      await waitFor(() => expect(mensagem).not.toHaveClass('line-clamp-3'))
+      expect(within(bruno).queryByRole('button', { name: /Ver mensagem completa/ })).not.toBeInTheDocument()
+    } finally {
+      if (clientHeightDesc) Object.defineProperty(HTMLElement.prototype, 'clientHeight', clientHeightDesc)
+      else delete (HTMLElement.prototype as { clientHeight?: unknown }).clientHeight
+      if (scrollHeightDesc) Object.defineProperty(HTMLElement.prototype, 'scrollHeight', scrollHeightDesc)
+      else delete (HTMLElement.prototype as { scrollHeight?: unknown }).scrollHeight
+      if (originalRO === undefined) delete (global as unknown as { ResizeObserver?: unknown }).ResizeObserver
+      else (global as unknown as { ResizeObserver: unknown }).ResizeObserver = originalRO
+    }
+  })
+
+  it('copiar leva o texto inteiro mesmo com a mensagem recolhida', async () => {
+    const writeText = jest.fn().mockResolvedValue(undefined)
+    Object.assign(navigator, { clipboard: { writeText } })
+    render(<EmTratamento />)
+    await waitFor(() => expect(cards()).toHaveLength(3))
+    await userEvent.click(within(cards()[2]).getByRole('button', { name: /Copiar mensagem/ }))
+    expect(writeText.mock.calls[0][0]).toContain('4 = Todos os dias')
+  })
+
+  it('só os cards 🟡 e 🔴 têm o botão de mover para Pacientes Antigos', async () => {
+    render(<EmTratamento />)
+    await waitFor(() => expect(cards()).toHaveLength(3))
+    const [ana, carla, bruno] = cards()
+    expect(within(ana).getByRole('button', { name: /Mover para Pacientes Antigos/ })).toBeInTheDocument()
+    expect(within(carla).getByRole('button', { name: /Mover para Pacientes Antigos/ })).toBeInTheDocument()
+    expect(within(bruno).queryByRole('button', { name: /Mover para Pacientes Antigos/ })).not.toBeInTheDocument()
+  })
+
+  it('Confirmar só libera com um motivo de pelo menos 3 caracteres', async () => {
+    render(<EmTratamento />)
+    await waitFor(() => expect(cards()).toHaveLength(3))
+    await userEvent.click(within(cards()[0]).getByRole('button', { name: /Mover para Pacientes Antigos/ }))
+    const confirmar = within(cards()[0]).getByRole('button', { name: 'Confirmar' })
+    expect(confirmar).toBeDisabled()
+    const campo = within(cards()[0]).getByLabelText(/Observações/)
+    await userEvent.type(campo, '  a ')
+    expect(confirmar).toBeDisabled()
+    await userEvent.type(campo, 'bc')
+    expect(confirmar).toBeEnabled()
+  })
+
+  it('arquivar tira o card da lista e atualiza as contagens', async () => {
+    render(<EmTratamento />)
+    await waitFor(() => expect(cards()).toHaveLength(3))
+    await userEvent.click(within(cards()[0]).getByRole('button', { name: /Mover para Pacientes Antigos/ }))
+    await userEvent.type(within(cards()[0]).getByLabelText(/Observações/), '  Parou por custo ')
+    await userEvent.click(within(cards()[0]).getByRole('button', { name: 'Confirmar' }))
+
+    await waitFor(() => expect(cards()).toHaveLength(2))
+    expect(nomes()).toEqual(['Carla Dias', 'BRUNO LIMA'])
+    expect(screen.getByRole('button', { name: 'Todos (2)' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Não veio (1)' })).toBeInTheDocument()
+    expect(screen.getByText('0 de 2 mensagens enviadas nesta semana')).toBeInTheDocument()
+
+    const chamada = fetchMock.mock.calls.find(c => String(c[0]).includes('/archive'))
+    expect(chamada[0]).toBe('/api/patients/3/archive')
+    expect(chamada[1].method).toBe('POST')
+    expect(JSON.parse(String(chamada[1].body))).toEqual({ motivo: 'Parou por custo', origem: 'em_tratamento' })
+  })
+
+  it('se arquivar falha, o card fica e o aviso aparece nele', async () => {
+    fetchMock.mockImplementation(async (url: string) =>
+      url.includes('/archive')
+        ? { ok: false, status: 500, json: async () => ({}) }
+        : { ok: true, status: 200, json: async () => LISTA })
+    render(<EmTratamento />)
+    await waitFor(() => expect(cards()).toHaveLength(3))
+    await userEvent.click(within(cards()[0]).getByRole('button', { name: /Mover para Pacientes Antigos/ }))
+    await userEvent.type(within(cards()[0]).getByLabelText(/Observações/), 'Parou por custo')
+    await userEvent.click(within(cards()[0]).getByRole('button', { name: 'Confirmar' }))
+
+    expect(await within(cards()[0]).findByRole('alert')).toHaveTextContent('Não foi possível mover para Pacientes Antigos')
+    expect(cards()).toHaveLength(3)
+    expect(within(cards()[0]).getByLabelText(/Observações/)).toHaveValue('Parou por custo')
+  })
+
+  it('Cancelar fecha o formulário sem chamar o servidor', async () => {
+    render(<EmTratamento />)
+    await waitFor(() => expect(cards()).toHaveLength(3))
+    await userEvent.click(within(cards()[0]).getByRole('button', { name: /Mover para Pacientes Antigos/ }))
+    await userEvent.click(within(cards()[0]).getByRole('button', { name: 'Cancelar' }))
+    expect(within(cards()[0]).queryByLabelText(/Observações/)).not.toBeInTheDocument()
+    expect(fetchMock.mock.calls.some(c => String(c[0]).includes('/archive'))).toBe(false)
   })
 })

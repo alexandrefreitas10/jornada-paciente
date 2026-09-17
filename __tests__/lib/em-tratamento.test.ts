@@ -3,6 +3,7 @@ import {
   ETIQUETAS, MENSAGENS,
   dataBrasilia, diasEntre, inicioDaSemanaBrasilia,
   classificar, primeiroNome, mensagemPara, listarSubAba,
+  ehSaidaDeImplante, mensagemLonga,
   type PacienteEmTratamento,
 } from '@/lib/em-tratamento'
 
@@ -162,5 +163,55 @@ describe('listarSubAba', () => {
     const antes = lista.map(x => x.patientId)
     listarSubAba(lista, 'todos')
     expect(lista.map(x => x.patientId)).toEqual(antes)
+  })
+})
+
+describe('ehSaidaDeImplante', () => {
+  // Espelha o SQL de listarEmTratamento:
+  //   COALESCE(m.observation, '') <> 'Implante hormonal' AND i.name NOT ILIKE '%implante%'
+  it('reconhece implante pelo nome do item, em qualquer caixa', () => {
+    expect(ehSaidaDeImplante('IMPLANTE - NADH 300 MG', null)).toBe(true)
+    expect(ehSaidaDeImplante('Implante Testosterona 100 mg', '')).toBe(true)
+  })
+
+  it('reconhece implante pela observação exata da tela de Implantes', () => {
+    expect(ehSaidaDeImplante('Tirzepartida BioMeds', 'Implante hormonal')).toBe(true)
+  })
+
+  it('observação diferente da exata não conta (o SQL compara exato)', () => {
+    expect(ehSaidaDeImplante('Tirzepartida BioMeds', 'implante hormonal')).toBe(false)
+  })
+
+  it('observação com espaços nas pontas não conta (o SQL compara exato)', () => {
+    expect(ehSaidaDeImplante('Tirzepartida BioMeds', ' Implante hormonal ')).toBe(false)
+  })
+
+  it('o nome bate em qualquer posição, incluindo o plural', () => {
+    expect(ehSaidaDeImplante('Kit Implantes', null)).toBe(true)
+  })
+
+  it('o resto não é implante', () => {
+    expect(ehSaidaDeImplante('Tirzepartida BioMeds', 'Tirzepartida 5mg')).toBe(false)
+    expect(ehSaidaDeImplante('Curcumina', null)).toBe(false)
+    expect(ehSaidaDeImplante(null, null)).toBe(false)
+    expect(ehSaidaDeImplante(undefined, undefined)).toBe(false)
+  })
+})
+
+describe('mensagemLonga', () => {
+  // Retrato dos textos atuais, não uma regra: se o dono encurtar um texto, ajuste aqui.
+  it('as três mensagens atuais são longas', () => {
+    for (const e of ETIQUETAS) expect(mensagemLonga(mensagemPara(e, 'Ana'))).toBe(true)
+  })
+
+  it('até 3 linhas e 180 caracteres é curta', () => {
+    expect(mensagemLonga('Oi, Ana!')).toBe(false)
+    expect(mensagemLonga('a\nb\nc')).toBe(false)
+    expect(mensagemLonga('x'.repeat(180))).toBe(false)
+  })
+
+  it('mais de 3 linhas ou mais de 180 caracteres é longa', () => {
+    expect(mensagemLonga('a\nb\nc\nd')).toBe(true)
+    expect(mensagemLonga('x'.repeat(181))).toBe(true)
   })
 })
