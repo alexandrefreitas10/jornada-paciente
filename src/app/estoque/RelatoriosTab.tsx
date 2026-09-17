@@ -2,6 +2,8 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { agruparParaReposicao, precisaRepor, LIMITE_PADRAO, LIMITE_CONTROLADO, type LinhaReposicao } from '@/lib/stock-actives'
+// Ignora acento, caixa e pontuação — "tirzepartida" acha "TIRZEPARTIDA".
+import { normalizarNomePessoa as normalizarBusca } from '@/lib/patient-match'
 
 interface StockMovement {
   id: number; item_id: number; item_name: string; type: 'entrada' | 'saida'
@@ -77,6 +79,15 @@ export function RelatoriosTab({ movements, items = [] }: { movements: StockMovem
   const [specificDate, setSpecificDate] = useState(today())
   const [useSpecific, setUseSpecific] = useState(false)
   const [copied, setCopied] = useState(false)
+  // Vale para todos os relatórios e sobrevive à troca entre eles: buscar
+  // "tirzepartida" e ir pulando de relatório é o uso esperado.
+  const [busca, setBusca] = useState('')
+  const termo = normalizarBusca(busca)
+  const casa = useCallback(
+    (...textos: (string | null | undefined)[]) =>
+      !termo || textos.some(t => t && normalizarBusca(t).includes(termo)),
+    [termo]
+  )
 
   const effectiveStart = useSpecific ? specificDate : dateStart
   const effectiveEnd = useSpecific ? specificDate : dateEnd
@@ -120,6 +131,10 @@ export function RelatoriosTab({ movements, items = [] }: { movements: StockMovem
 
   const entries = filtered.filter(m => m.type === 'entrada')
   const exits = filtered.filter(m => m.type === 'saida')
+  // Só "Entradas e Saídas" filtra linha a linha. Os relatórios agrupados
+  // filtram o GRUPO, para os totais de cada um continuarem verdadeiros.
+  const entriesVisiveis = entries.filter(m => casa(m.item_name, m.lot))
+  const exitsVisiveis = exits.filter(m => casa(m.item_name, m.patient_name, m.lot))
 
   // ── Repor estoque ──
   // Baseado no saldo ATUAL do item, não no período: é uma lista de compra.
@@ -134,16 +149,23 @@ export function RelatoriosTab({ movements, items = [] }: { movements: StockMovem
       // localeCompare com 'pt-BR' para "Ácido" não cair depois de "Zinco".
       .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
   }, [items, itemsComZerados])
+  // Separado de toReorder: lista vazia por causa da busca não é "estoque em dia".
+  const toReorderVisivel = toReorder.filter(l => casa(l.nome))
 
   // ── Top saídas ──
+  // A posição é calculada antes da busca: achar a Tirzepatida não pode
+  // promovê-la a "1º lugar".
   const topExits = useMemo(() => {
     const acc: Record<string, { name: string; qty: number }> = {}
     exits.forEach(m => {
       if (!acc[m.item_name]) acc[m.item_name] = { name: m.item_name, qty: 0 }
       acc[m.item_name].qty += m.quantity
     })
-    return Object.values(acc).sort((a, b) => b.qty - a.qty)
-  }, [exits])
+    return Object.values(acc)
+      .sort((a, b) => b.qty - a.qty)
+      .map((x, i) => ({ ...x, posicao: i + 1 }))
+      .filter(x => casa(x.name))
+  }, [exits, casa])
 
   // ── Por lote ──
   const byLot = useMemo(() => {
@@ -155,8 +177,10 @@ export function RelatoriosTab({ movements, items = [] }: { movements: StockMovem
       else acc[key].saidas += m.quantity
       acc[key].movs.push(m)
     })
-    return Object.values(acc).sort((a, b) => a.item.localeCompare(b.item))
-  }, [filtered])
+    return Object.values(acc)
+      .filter(x => casa(x.item, x.lot))
+      .sort((a, b) => a.item.localeCompare(b.item))
+  }, [filtered, casa])
 
   // ── Por produto ──
   const byProduct = useMemo(() => {
@@ -167,8 +191,10 @@ export function RelatoriosTab({ movements, items = [] }: { movements: StockMovem
       else acc[m.item_name].saidas += m.quantity
       acc[m.item_name].movs.push(m)
     })
-    return Object.values(acc).sort((a, b) => a.name.localeCompare(b.name))
-  }, [filtered])
+    return Object.values(acc)
+      .filter(x => casa(x.name))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [filtered, casa])
 
   // ── Por paciente ──
   const byPatient = useMemo(() => {
@@ -179,8 +205,23 @@ export function RelatoriosTab({ movements, items = [] }: { movements: StockMovem
       acc[patient].total += m.quantity
       acc[patient].movs.push(m)
     })
-    return Object.values(acc).sort((a, b) => b.total - a.total)
-  }, [exits])
+    return Object.values(acc)
+      .filter(x => casa(x.name))
+      .sort((a, b) => b.total - a.total)
+  }, [exits, casa])
+
+  const activityVisivel = activityData.filter(p => casa(p.patient_name))
+
+  const placeholderBusca: Record<ReportType, string> = {
+    movimentos: 'Buscar produto, paciente ou lote',
+    repor: 'Buscar produto',
+    top_saidas: 'Buscar produto',
+    por_lote: 'Buscar produto ou lote',
+    por_produto: 'Buscar produto',
+    por_paciente: 'Buscar paciente',
+    atividade_paciente: 'Buscar paciente',
+  }
+  const nadaEncontrado = `Nada encontrado para "${busca.trim()}".`
 
   // ── Period label ──
   function periodLabel() {
@@ -190,8 +231,18 @@ export function RelatoriosTab({ movements, items = [] }: { movements: StockMovem
 
   // ── Copy as text ──
   function buildCopyText(): string {
+    const texto = montarTextoRelatorio()
+    // Copiado com busca ativa, a lista é parcial — quem recebe precisa saber.
+    if (!termo || !texto) return texto
+    const [titulo, ...resto] = texto.split('\n')
+    return [titulo, `Filtro: "${busca.trim()}"`, ...resto].join('\n')
+  }
+
+  function montarTextoRelatorio(): string {
     const period = periodLabel()
     if (report === 'movimentos') {
+      const entries = entriesVisiveis
+      const exits = exitsVisiveis
       const lines: string[] = [`Relatório de Movimentações — ${period}`, '']
       lines.push(`ENTRADAS (${entries.length} movimentos, ${entries.reduce((s, m) => s + m.quantity, 0)} unidades)`)
       entries.forEach(m => lines.push(`  • ${m.item_name} | +${m.quantity}${m.lot ? ` | Lote: ${m.lot}` : ''} | ${formatDateTime(m.created_at)}${m.created_by ? ` | ${m.created_by}` : ''}`))
@@ -205,7 +256,7 @@ export function RelatoriosTab({ movements, items = [] }: { movements: StockMovem
       const today = new Date().toLocaleDateString('pt-BR')
       if (toReorder.length === 0) return `Repor Estoque — ${today}\n\nEstoque em dia. ✅`
       const lines: string[] = [`Repor Estoque — ${today}`, '']
-      toReorder.forEach(l => {
+      toReorderVisivel.forEach(l => {
         const meta = [
           l.lot ? `Lote: ${l.lot}` : null,
           l.expiry_date ? `Val: ${l.expiry_date}` : null,
@@ -216,12 +267,12 @@ export function RelatoriosTab({ movements, items = [] }: { movements: StockMovem
         const saldo = `${l.quantidade}/${l.limite}${l.unit ? ` ${l.unit}` : ''}`
         lines.push(`• ${l.nome} — ${saldo} ${reorderLabel(l.quantidade)}${meta ? ` (${meta})` : ''}`)
       })
-      lines.push('', `Total: ${toReorder.length} ativo(s) para repor.`)
+      lines.push('', `Total: ${toReorderVisivel.length} ativo(s) para repor.`)
       return lines.join('\n')
     }
     if (report === 'top_saidas') {
       const lines: string[] = [`Top Saídas — ${period}`, '']
-      topExits.forEach((x, i) => lines.push(`${i + 1}. ${x.name} — ${x.qty} unidades`))
+      topExits.forEach(x => lines.push(`${x.posicao}. ${x.name} — ${x.qty} unidades`))
       return lines.join('\n')
     }
     if (report === 'por_lote') {
@@ -312,10 +363,32 @@ export function RelatoriosTab({ movements, items = [] }: { movements: StockMovem
       </div>
       )}
 
-      {/* Copy button */}
-      <div className="flex justify-end">
+      {/* Busca + copiar */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[220px]">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+            </svg>
+          </span>
+          <input
+            type="search"
+            value={busca}
+            onChange={e => setBusca(e.target.value)}
+            placeholder={placeholderBusca[report]}
+            aria-label={placeholderBusca[report]}
+            autoComplete="off"
+            className="w-full pl-9 pr-9 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 [&::-webkit-search-cancel-button]:hidden"
+          />
+          {busca && (
+            <button type="button" onClick={() => setBusca('')} aria-label="Limpar busca"
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-gray-600 text-lg leading-none">
+              ×
+            </button>
+          )}
+        </div>
         <button onClick={copy}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${copied ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ml-auto ${copied ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
           {copied ? '✅ Copiado!' : '📋 Copiar relatório'}
         </button>
       </div>
@@ -339,14 +412,17 @@ export function RelatoriosTab({ movements, items = [] }: { movements: StockMovem
               </div>
             )}
             <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-center">
-              <p className="text-2xl font-bold text-orange-600">{toReorder.length}</p>
+              <p className="text-2xl font-bold text-orange-600">
+                {termo ? `${toReorderVisivel.length} de ${toReorder.length}` : toReorder.length}
+              </p>
               <p className="text-xs text-orange-600 font-medium mt-0.5">ativo(s) para repor</p>
               <p className="text-xs text-orange-500">
                 uso contínuo abaixo de {LIMITE_CONTROLADO} · demais abaixo de {LIMITE_PADRAO}
               </p>
             </div>
 
-            {toReorder.map(l => {
+            {termo && toReorderVisivel.length === 0 && <EmptyState msg={nadaEncontrado} />}
+            {toReorderVisivel.map(l => {
               const critical = l.quantidade <= 0
               return (
                 <div key={l.chave}
@@ -383,14 +459,14 @@ export function RelatoriosTab({ movements, items = [] }: { movements: StockMovem
           {/* Summary cards */}
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
-              <p className="text-2xl font-bold text-green-700">+{entries.reduce((s, m) => s + m.quantity, 0)}</p>
+              <p className="text-2xl font-bold text-green-700">+{entriesVisiveis.reduce((s, m) => s + m.quantity, 0)}</p>
               <p className="text-xs text-green-600 font-medium mt-0.5">unidades entraram</p>
-              <p className="text-xs text-green-500">{entries.length} movimentos</p>
+              <p className="text-xs text-green-500">{entriesVisiveis.length} movimentos</p>
             </div>
             <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
-              <p className="text-2xl font-bold text-red-600">-{exits.reduce((s, m) => s + m.quantity, 0)}</p>
+              <p className="text-2xl font-bold text-red-600">-{exitsVisiveis.reduce((s, m) => s + m.quantity, 0)}</p>
               <p className="text-xs text-red-500 font-medium mt-0.5">unidades saíram</p>
-              <p className="text-xs text-red-400">{exits.length} movimentos</p>
+              <p className="text-xs text-red-400">{exitsVisiveis.length} movimentos</p>
             </div>
           </div>
 
@@ -415,11 +491,13 @@ export function RelatoriosTab({ movements, items = [] }: { movements: StockMovem
 
           {filtered.length === 0 ? (
             <EmptyState />
+          ) : movFilter === 'all' && termo && entriesVisiveis.length + exitsVisiveis.length === 0 ? (
+            <EmptyState msg={nadaEncontrado} />
           ) : (
             <>
-              {(movFilter === 'all' || movFilter === 'entrada') && entries.length > 0 && (
-                <Section title="Entradas" count={entries.length}>
-                  {entries.map(m => (
+              {(movFilter === 'all' || movFilter === 'entrada') && entriesVisiveis.length > 0 && (
+                <Section title="Entradas" count={entriesVisiveis.length}>
+                  {entriesVisiveis.map(m => (
                     <Row key={m.id}
                       icon="📥"
                       main={m.item_name}
@@ -432,9 +510,9 @@ export function RelatoriosTab({ movements, items = [] }: { movements: StockMovem
                   ))}
                 </Section>
               )}
-              {(movFilter === 'all' || movFilter === 'saida') && exits.length > 0 && (
-                <Section title="Saídas" count={exits.length}>
-                  {exits.map(m => (
+              {(movFilter === 'all' || movFilter === 'saida') && exitsVisiveis.length > 0 && (
+                <Section title="Saídas" count={exitsVisiveis.length}>
+                  {exitsVisiveis.map(m => (
                     <Row key={m.id}
                       icon="📤"
                       main={m.item_name}
@@ -447,8 +525,8 @@ export function RelatoriosTab({ movements, items = [] }: { movements: StockMovem
                   ))}
                 </Section>
               )}
-              {movFilter === 'entrada' && entries.length === 0 && <EmptyState />}
-              {movFilter === 'saida' && exits.length === 0 && <EmptyState />}
+              {movFilter === 'entrada' && entriesVisiveis.length === 0 && <EmptyState msg={termo ? nadaEncontrado : undefined} />}
+              {movFilter === 'saida' && exitsVisiveis.length === 0 && <EmptyState msg={termo ? nadaEncontrado : undefined} />}
             </>
           )}
         </div>
@@ -457,12 +535,12 @@ export function RelatoriosTab({ movements, items = [] }: { movements: StockMovem
       {/* ── TOP SAÍDAS ── */}
       {report === 'top_saidas' && (
         <div>
-          {topExits.length === 0 ? <EmptyState /> : (
+          {topExits.length === 0 ? <EmptyState msg={termo ? nadaEncontrado : undefined} /> : (
             <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-              {topExits.map((x, i) => (
+              {topExits.map(x => (
                 <div key={x.name} className="flex items-center gap-3 px-4 py-3 border-b border-gray-50 last:border-0">
-                  <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${i === 0 ? 'bg-yellow-400 text-yellow-900' : i === 1 ? 'bg-gray-300 text-gray-700' : i === 2 ? 'bg-amber-600 text-white' : 'bg-gray-100 text-gray-500'}`}>
-                    {i + 1}
+                  <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${x.posicao === 1 ? 'bg-yellow-400 text-yellow-900' : x.posicao === 2 ? 'bg-gray-300 text-gray-700' : x.posicao === 3 ? 'bg-amber-600 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                    {x.posicao}
                   </span>
                   <p className="flex-1 text-sm font-medium text-gray-800">{x.name}</p>
                   <span className="text-sm font-bold text-red-600">-{x.qty}</span>
@@ -477,7 +555,7 @@ export function RelatoriosTab({ movements, items = [] }: { movements: StockMovem
       {/* ── POR LOTE ── */}
       {report === 'por_lote' && (
         <div className="space-y-3">
-          {byLot.length === 0 ? <EmptyState /> : byLot.map(x => (
+          {byLot.length === 0 ? <EmptyState msg={termo ? nadaEncontrado : undefined} /> : byLot.map(x => (
             <div key={`${x.item}||${x.lot}`} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
               <div className="flex items-start justify-between gap-3 mb-2">
                 <div>
@@ -507,7 +585,7 @@ export function RelatoriosTab({ movements, items = [] }: { movements: StockMovem
       {/* ── POR PRODUTO ── */}
       {report === 'por_produto' && (
         <div className="space-y-3">
-          {byProduct.length === 0 ? <EmptyState /> : byProduct.map(x => (
+          {byProduct.length === 0 ? <EmptyState msg={termo ? nadaEncontrado : undefined} /> : byProduct.map(x => (
             <div key={x.name} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
               <div className="flex items-start justify-between gap-3 mb-2">
                 <p className="text-sm font-semibold text-gray-800">{x.name}</p>
@@ -537,9 +615,9 @@ export function RelatoriosTab({ movements, items = [] }: { movements: StockMovem
         <div className="space-y-3">
           {activityLoading ? (
             <div className="text-center py-10 text-gray-400 text-sm">Carregando...</div>
-          ) : activityData.length === 0 ? (
-            <EmptyState msg="Nenhuma atividade encontrada no período." />
-          ) : activityData.map(p => {
+          ) : activityVisivel.length === 0 ? (
+            <EmptyState msg={termo && activityData.length > 0 ? nadaEncontrado : 'Nenhuma atividade encontrada no período.'} />
+          ) : activityVisivel.map(p => {
             const isOpen = expandedPatient === p.patient_id
 
             function copyPatient() {
@@ -612,7 +690,7 @@ export function RelatoriosTab({ movements, items = [] }: { movements: StockMovem
       {/* ── POR PACIENTE ── */}
       {report === 'por_paciente' && (
         <div className="space-y-3">
-          {byPatient.length === 0 ? <EmptyState msg="Nenhuma saída para pacientes no período." /> : byPatient.map(x => (
+          {byPatient.length === 0 ? <EmptyState msg={termo ? nadaEncontrado : 'Nenhuma saída para pacientes no período.'} /> : byPatient.map(x => (
             <div key={x.name} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
               <div className="flex items-center gap-3 mb-2">
                 <span className="text-xl">👤</span>
