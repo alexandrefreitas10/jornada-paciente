@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { PatientListItem } from '@/lib/patients'
+import type { ArchivedPatientItem } from '@/lib/patients'
 
 const AVATAR_COLORS = [
   'bg-violet-500', 'bg-blue-500', 'bg-emerald-500',
@@ -14,8 +14,20 @@ function avatarColor(name: string): string {
   return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]
 }
 
+// O banco devolve Date; em teste chega texto ISO. new Date aceita os dois.
+const dataCurta = (valor: Date | string) =>
+  new Date(valor).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+
+function linhaMotivo(p: ArchivedPatientItem): string | null {
+  if (!p.archive_reason) return null
+  const quemQuando = [p.archived_by, p.archive_event_at && dataCurta(p.archive_event_at)]
+    .filter(Boolean)
+    .join(', ')
+  return `📝 ${p.archive_reason}${quemQuando ? ` — ${quemQuando}` : ''}`
+}
+
 interface Props {
-  patients: PatientListItem[]
+  patients: ArchivedPatientItem[]
 }
 
 export function ArchivedPatientsList({ patients: initial }: Props) {
@@ -24,7 +36,7 @@ export function ArchivedPatientsList({ patients: initial }: Props) {
   const [search, setSearch] = useState('')
   const router = useRouter()
 
-  async function handleUnarchive(p: PatientListItem) {
+  async function handleUnarchive(p: ArchivedPatientItem) {
     if (!confirm(`Reativar "${p.name}"?\n\nEle voltará para a página principal com todos os dados.`)) return
     setUnarchiving(p.id)
     await fetch(`/api/patients/${p.id}/unarchive`, { method: 'POST' })
@@ -61,6 +73,9 @@ export function ArchivedPatientsList({ patients: initial }: Props) {
                   {p.duration && ` · ${p.duration} sem.`}
                   {p.created_by && ` · ${p.created_by}`}
                 </p>
+                {linhaMotivo(p) && (
+                  <p className="text-xs text-amber-800 mt-1 break-words">{linhaMotivo(p)}</p>
+                )}
               </div>
             </Link>
             <button
