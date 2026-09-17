@@ -99,6 +99,13 @@ describe('EmTratamento', () => {
     await waitFor(() => expect(within(cards()[1]).queryByText(/Enviada por/)).not.toBeInTheDocument())
   })
 
+  it('a mensagem no card mantém as quebras de linha', async () => {
+    render(<EmTratamento />)
+    await waitFor(() => expect(cards()).toHaveLength(3))
+    const mensagem = within(cards()[2]).getByText(/Vamos ao seu acompanhamento semanal/)
+    expect(mensagem).toHaveClass('whitespace-pre-line')
+  })
+
   it('avisa quando a lista não carrega', async () => {
     fetchMock.mockImplementationOnce(async () => ({ ok: false, status: 500, json: async () => ({}) }))
     render(<EmTratamento />)

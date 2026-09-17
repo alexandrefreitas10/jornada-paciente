@@ -142,7 +142,7 @@ export function EmTratamento() {
                 </span>
               </div>
 
-              <p className="text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-lg p-3 select-text">
+              <p className="text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-lg p-3 select-text whitespace-pre-line">
                 {mensagemPara(p.etiqueta, p.nome)}
               </p>
 
