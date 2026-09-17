@@ -17,7 +17,7 @@ export interface PatientListItem extends PatientRow {
 export interface ArchivedPatientItem extends PatientListItem {
   archive_reason: string | null
   archived_by: string | null
-  archive_event_at: string | null
+  archive_event_at: Date | string | null
 }
 
 export interface PatientDetail extends PatientRow {
@@ -60,7 +60,7 @@ export async function listArchivedPatients(): Promise<ArchivedPatientItem[]> {
       SELECT e.reason, e.created_by, e.created_at
       FROM patient_archive_events e
       WHERE e.patient_id = p.id AND e.action = 'arquivado'
-      ORDER BY e.created_at DESC
+      ORDER BY e.created_at DESC, e.id DESC
       LIMIT 1
     ) ev ON true
     WHERE p.deleted_at IS NULL AND p.archived_at IS NOT NULL
