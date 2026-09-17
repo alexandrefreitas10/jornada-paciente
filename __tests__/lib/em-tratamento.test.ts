@@ -115,13 +115,25 @@ describe('mensagens', () => {
     expect(mensagemPara('vermelha', 'Maria')).toContain('Sentimos sua falta')
   })
 
+  it('Em dia é o acompanhamento semanal, em várias linhas, com as 4 perguntas', () => {
+    const texto = mensagemPara('verde', 'MARIA SOUZA')
+    expect(texto.startsWith('Oi, Maria! Vamos ao seu acompanhamento semanal')).toBe(true)
+    expect(texto.split('\n').length).toBeGreaterThan(10)
+    for (const p of ['1️⃣', '2️⃣', '3️⃣', '4️⃣']) expect(texto).toContain(p)
+    expect(texto).toContain('efeito colateral')
+    expect(texto).not.toContain('cotaleral')
+    expect(texto.endsWith('jornada de transformação 😍')).toBe(true)
+  })
+
   it('não deixa sobrar {nome} no texto', () => {
     for (const e of ETIQUETAS) expect(mensagemPara(e, 'Ana')).not.toContain('{nome}')
   })
 
   it('nome vazio: remove a saudação com vírgula, sem sobrar {nome}', () => {
-    expect(mensagemPara('verde', '')).toMatch(/^Oi! Tudo bem?/)
-    for (const e of ETIQUETAS) expect(mensagemPara(e, '')).not.toContain('{nome}')
+    for (const e of ETIQUETAS) {
+      expect(mensagemPara(e, '')).toMatch(/^Oi! /)
+      expect(mensagemPara(e, '')).not.toContain('{nome}')
+    }
   })
 })
 

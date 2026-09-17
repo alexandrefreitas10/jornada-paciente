@@ -27,9 +27,34 @@ export interface PacienteEmTratamento {
 
 // Os textos ainda vão ser revistos pelo dono — mudar um texto é só aqui.
 export const MENSAGENS: Record<Etiqueta, string> = {
-  verde:
-    'Oi, {nome}! Tudo bem? 😊 Como você passou depois das suas aplicações? ' +
-    'Está se sentindo bem? Qualquer dúvida, estamos por aqui.',
+  // Texto do dono (17/09). As quebras de linha vão para o WhatsApp como estão.
+  verde: [
+    'Oi, {nome}! Vamos ao seu acompanhamento semanal',
+    '',
+    '1️⃣ Como você ficou se sentindo após sua aplicação?',
+    '1 = Me senti bem',
+    '2 = Não vi diferença',
+    '3 = Tive algum efeito colateral',
+    '(Se for o 3, descreva o que sentiu)',
+    '',
+    '2️⃣ Como foi sua fome nessa última semana?',
+    '1 = Pouca',
+    '2 = Média',
+    '3 = Muita',
+    '',
+    '3️⃣ Como foi sua alimentação na última semana?',
+    '1 = Segui direitinho',
+    '2 = Tive algumas dificuldades',
+    '3 = Saí bastante do planejado',
+    '',
+    '4️⃣ Como foram as atividades físicas na última semana?',
+    '1 = Não fiz nada',
+    '2 = Treinei 1-3x',
+    '3 = Treinei 3-5x',
+    '4 = Todos os dias',
+    '',
+    'Obrigado! Essas informações nos ajudam a ajustar sua prescrição e garantir o melhor resultado na sua jornada de transformação 😍',
+  ].join('\n'),
   amarela:
     'Oi, {nome}! Tudo bem? Percebemos que você não veio nesta semana. ' +
     'É muito importante manter suas aplicações semanais para o tratamento ' +
