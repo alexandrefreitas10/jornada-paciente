@@ -171,6 +171,34 @@ describe('EmTratamento', () => {
     expect(within(cards()[0]).getByRole('button', { name: /Ver mensagem completa/ })).toBeInTheDocument()
   })
 
+  it('a seta não aparece quando o texto cabe de verdade (medido, não estimado)', async () => {
+    class ResizeObserverStub {
+      observe() {}
+      disconnect() {}
+    }
+    const originalRO = (global as unknown as { ResizeObserver?: unknown }).ResizeObserver
+    ;(global as unknown as { ResizeObserver: unknown }).ResizeObserver = ResizeObserverStub
+    const clientHeightDesc = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight')
+    const scrollHeightDesc = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollHeight')
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, get: () => 60 })
+    Object.defineProperty(HTMLElement.prototype, 'scrollHeight', { configurable: true, get: () => 60 })
+    try {
+      render(<EmTratamento />)
+      await waitFor(() => expect(cards()).toHaveLength(3))
+      const bruno = cards()[2]
+      const mensagem = within(bruno).getByText(/Vamos ao seu acompanhamento semanal/)
+      await waitFor(() => expect(mensagem).not.toHaveClass('line-clamp-3'))
+      expect(within(bruno).queryByRole('button', { name: /Ver mensagem completa/ })).not.toBeInTheDocument()
+    } finally {
+      if (clientHeightDesc) Object.defineProperty(HTMLElement.prototype, 'clientHeight', clientHeightDesc)
+      else delete (HTMLElement.prototype as { clientHeight?: unknown }).clientHeight
+      if (scrollHeightDesc) Object.defineProperty(HTMLElement.prototype, 'scrollHeight', scrollHeightDesc)
+      else delete (HTMLElement.prototype as { scrollHeight?: unknown }).scrollHeight
+      if (originalRO === undefined) delete (global as unknown as { ResizeObserver?: unknown }).ResizeObserver
+      else (global as unknown as { ResizeObserver: unknown }).ResizeObserver = originalRO
+    }
+  })
+
   it('copiar leva o texto inteiro mesmo com a mensagem recolhida', async () => {
     const writeText = jest.fn().mockResolvedValue(undefined)
     Object.assign(navigator, { clipboard: { writeText } })

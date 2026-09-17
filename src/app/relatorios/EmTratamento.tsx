@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   listarSubAba, mensagemPara, mensagemLonga, DIAS_VERDE, DIAS_AMARELA,
@@ -26,6 +26,61 @@ const dia = (iso: string) =>
 const momento = (iso: string) =>
   new Date(iso).toLocaleString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: FUSO })
 
+/**
+ * `mensagemLonga` (regra de linhas/caracteres) é só uma estimativa: numa tela
+ * larga, ~190-206 caracteres cabem em 2 linhas, então a seta apareceria sem
+ * ter nada escondido. Por isso medimos o `<p>` de verdade e só recolhemos
+ * (e mostramos a seta) quando o texto realmente não cabe nas 3 linhas.
+ */
+function MensagemRecolhivel({ id, texto }: { id: string; texto: string }) {
+  const longa = mensagemLonga(texto)
+  const [aberta, setAberta] = useState(false)
+  const [cabe, setCabe] = useState(false)
+  const ref = useRef<HTMLParagraphElement>(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el || !longa || typeof ResizeObserver === 'undefined') return
+    const medir = () => {
+      // Sem layout (ex.: jsdom nos testes) clientHeight é 0: fica a estimativa.
+      // Aberta não mede: sem o recorte, o texto sempre "cabe".
+      if (aberta || el.clientHeight === 0) return
+      setCabe(el.scrollHeight <= el.clientHeight + 1)
+    }
+    medir()
+    const observador = new ResizeObserver(medir)
+    observador.observe(el)
+    return () => observador.disconnect()
+  }, [longa, aberta, texto])
+
+  const recolhivel = longa && !cabe
+
+  return (
+    <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
+      <p
+        ref={ref}
+        id={id}
+        className={`text-sm text-gray-700 select-text whitespace-pre-line ${
+          recolhivel && !aberta ? 'line-clamp-3' : ''
+        }`}
+      >
+        {texto}
+      </p>
+      {recolhivel && (
+        <button
+          type="button"
+          onClick={() => setAberta(atual => !atual)}
+          aria-expanded={aberta}
+          aria-controls={id}
+          className="mt-1 text-xs font-medium text-violet-700 hover:text-violet-900"
+        >
+          {aberta ? '▲ Recolher' : '▼ Ver mensagem completa'}
+        </button>
+      )}
+    </div>
+  )
+}
+
 export function EmTratamento() {
   const [lista, setLista] = useState<PacienteEmTratamento[] | null>(null)
   const [erro, setErro] = useState<string | null>(null)
@@ -33,7 +88,6 @@ export function EmTratamento() {
   const [copiado, setCopiado] = useState<number | null>(null)
   const [salvando, setSalvando] = useState<number | null>(null)
   const [aviso, setAviso] = useState<{ id: number; texto: string } | null>(null)
-  const [abertas, setAbertas] = useState<Set<number>>(() => new Set())
   const [arquivando, setArquivando] = useState<number | null>(null)
   const [motivo, setMotivo] = useState('')
   const [salvandoArquivo, setSalvandoArquivo] = useState(false)
@@ -82,15 +136,6 @@ export function EmTratamento() {
     } finally {
       setSalvando(null)
     }
-  }
-
-  function alternarMensagem(id: number) {
-    setAbertas(atual => {
-      const nova = new Set(atual)
-      if (nova.has(id)) nova.delete(id)
-      else nova.add(id)
-      return nova
-    })
   }
 
   function abrirArquivamento(id: number) {
@@ -188,34 +233,7 @@ export function EmTratamento() {
                 </span>
               </div>
 
-              {(() => {
-                const texto = mensagemPara(p.etiqueta, p.nome)
-                const longa = mensagemLonga(texto)
-                const aberta = abertas.has(p.patientId)
-                return (
-                  <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
-                    <p
-                      id={`mensagem-${p.patientId}`}
-                      className={`text-sm text-gray-700 select-text whitespace-pre-line ${
-                        longa && !aberta ? 'line-clamp-3' : ''
-                      }`}
-                    >
-                      {texto}
-                    </p>
-                    {longa && (
-                      <button
-                        type="button"
-                        onClick={() => alternarMensagem(p.patientId)}
-                        aria-expanded={aberta}
-                        aria-controls={`mensagem-${p.patientId}`}
-                        className="mt-1 text-xs font-medium text-violet-700 hover:text-violet-900"
-                      >
-                        {aberta ? '▲ Recolher' : '▼ Ver mensagem completa'}
-                      </button>
-                    )}
-                  </div>
-                )
-              })()}
+              <MensagemRecolhivel id={`mensagem-${p.patientId}`} texto={mensagemPara(p.etiqueta, p.nome)} />
 
               <div className="flex flex-wrap items-center gap-2">
                 <button
