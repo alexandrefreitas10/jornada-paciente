@@ -6,9 +6,12 @@ import { marcarEnviada, desmarcarEnviada } from '@/lib/em-tratamento-db'
 
 export const dynamic = 'force-dynamic'
 
+const MAIOR_INTEIRO_PG = 2147483647
+
 function idValido(valor: unknown): number | null {
+  if (typeof valor !== 'number' && typeof valor !== 'string') return null
   const n = Number(valor)
-  return Number.isInteger(n) && n > 0 ? n : null
+  return Number.isInteger(n) && n > 0 && n <= MAIOR_INTEIRO_PG ? n : null
 }
 
 function ehEtiqueta(valor: unknown): valor is Etiqueta {
@@ -49,13 +52,15 @@ export async function DELETE(req: NextRequest) {
   if (!patientId) return NextResponse.json({ error: 'patient_id é obrigatório' }, { status: 400 })
 
   const userName = session.user.name ?? 'desconhecido'
-  await desmarcarEnviada(patientId)
-  await logAudit({
-    userName,
-    action: 'mensagem_tratamento_desfeita',
-    entityType: 'treatment_message',
-    entityId: patientId,
-    patientId,
-  })
+  const removida = await desmarcarEnviada(patientId)
+  if (removida) {
+    await logAudit({
+      userName,
+      action: 'mensagem_tratamento_desfeita',
+      entityType: 'treatment_message',
+      entityId: patientId,
+      patientId,
+    })
+  }
   return new NextResponse(null, { status: 204 })
 }

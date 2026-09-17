@@ -96,11 +96,12 @@ export async function marcarEnviada(
   }
 }
 
-export async function desmarcarEnviada(patientId: number, agora = new Date()): Promise<void> {
+export async function desmarcarEnviada(patientId: number, agora = new Date()): Promise<boolean> {
   await initSchema()
   const semana = inicioDaSemanaBrasilia(agora)
-  await sql`
+  const resultado = await sql`
     DELETE FROM treatment_messages
     WHERE patient_id = ${patientId} AND week_start = ${semana}::date
   `
+  return resultado.count > 0
 }
