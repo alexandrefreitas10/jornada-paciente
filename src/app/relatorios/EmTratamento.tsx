@@ -31,6 +31,7 @@ export function EmTratamento() {
   const [subAba, setSubAba] = useState<SubAba>('todos')
   const [copiado, setCopiado] = useState<number | null>(null)
   const [salvando, setSalvando] = useState<number | null>(null)
+  const [aviso, setAviso] = useState<{ id: number; texto: string } | null>(null)
 
   const carregar = useCallback(async () => {
     setErro(null)
@@ -46,14 +47,20 @@ export function EmTratamento() {
   useEffect(() => { carregar() }, [carregar])
 
   async function copiar(p: PacienteEmTratamento) {
-    await navigator.clipboard.writeText(mensagemPara(p.etiqueta, p.nome))
+    setAviso(null)
+    try {
+      await navigator.clipboard.writeText(mensagemPara(p.etiqueta, p.nome))
+    } catch {
+      setAviso({ id: p.patientId, texto: 'Não deu para copiar. Selecione o texto acima e copie manualmente.' })
+      return
+    }
     setCopiado(p.patientId)
     setTimeout(() => setCopiado(atual => (atual === p.patientId ? null : atual)), 2000)
   }
 
   async function alternarEnviada(p: PacienteEmTratamento) {
     setSalvando(p.patientId)
-    setErro(null)
+    setAviso(null)
     try {
       const res = p.enviada
         ? await fetch(`/api/reports/em-tratamento/enviada?patient_id=${p.patientId}`, { method: 'DELETE' })
@@ -66,7 +73,7 @@ export function EmTratamento() {
       const enviada = p.enviada ? null : await res.json()
       setLista(atual => atual && atual.map(x => (x.patientId === p.patientId ? { ...x, enviada } : x)))
     } catch {
-      setErro('Não foi possível salvar a marcação. Tente de novo.')
+      setAviso({ id: p.patientId, texto: 'Não foi possível salvar a marcação. Tente de novo.' })
     } finally {
       setSalvando(null)
     }
@@ -96,6 +103,7 @@ export function EmTratamento() {
             <button
               key={s.key}
               onClick={() => setSubAba(s.key)}
+              aria-pressed={subAba === s.key}
               className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
                 subAba === s.key ? 'bg-violet-600 text-white' : 'text-gray-600 hover:bg-gray-50 border border-gray-200'
               }`}
@@ -121,7 +129,7 @@ export function EmTratamento() {
             <li key={p.patientId} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <Link href={`/pacientes/${p.patientId}`} className="font-semibold text-gray-800 hover:text-violet-700">
+                  <Link href={`/pacientes/${p.patientId}`} className="font-semibold text-gray-800 hover:text-violet-700 break-words">
                     {p.nome}
                   </Link>
                   <p className="text-xs text-gray-500 mt-0.5">
@@ -134,7 +142,7 @@ export function EmTratamento() {
                 </span>
               </div>
 
-              <p className="text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-lg p-3">
+              <p className="text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-lg p-3 select-text">
                 {mensagemPara(p.etiqueta, p.nome)}
               </p>
 
@@ -145,18 +153,22 @@ export function EmTratamento() {
                     copiado === p.patientId ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
-                  {copiado === p.patientId ? '✅ Copiada!' : '📋 Copiar mensagem'}
+                  {copiado === p.patientId
+                    ? (<><span aria-hidden="true">✅</span> Copiada!</>)
+                    : (<><span aria-hidden="true">📋</span> Copiar mensagem</>)}
                 </button>
                 <button
                   onClick={() => alternarEnviada(p)}
-                  disabled={salvando === p.patientId}
+                  disabled={salvando !== null}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors disabled:opacity-50 ${
                     p.enviada
                       ? 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
                       : 'bg-violet-600 text-white border-violet-600 hover:bg-violet-700'
                   }`}
                 >
-                  {p.enviada ? '↩ Desfazer' : '✓ Marcar como enviada'}
+                  {p.enviada
+                    ? (<><span aria-hidden="true">↩</span> Desfazer</>)
+                    : (<><span aria-hidden="true">✓</span> Marcar como enviada</>)}
                 </button>
                 {p.enviada && (
                   <span className="text-xs text-green-700">
@@ -166,6 +178,9 @@ export function EmTratamento() {
                   </span>
                 )}
               </div>
+              {aviso?.id === p.patientId && (
+                <p role="alert" className="text-xs text-red-600">{aviso.texto}</p>
+              )}
             </li>
           ))}
         </ul>

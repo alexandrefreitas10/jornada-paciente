@@ -112,4 +112,36 @@ describe('EmTratamento', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Não veio (0)' }))
     expect(screen.getByText('Ninguém nesta lista.')).toBeInTheDocument()
   })
+
+  it('não marca quando o POST falha', async () => {
+    fetchMock.mockImplementation(async (_u: string, init?: RequestInit) =>
+      init?.method === 'POST' ? { ok: false, status: 500, json: async () => ({}) }
+                              : { ok: true, status: 200, json: async () => LISTA })
+    render(<EmTratamento />)
+    await waitFor(() => expect(cards()).toHaveLength(3))
+    await userEvent.click(within(cards()[1]).getByRole('button', { name: /Marcar como enviada/ }))
+    expect(await within(cards()[1]).findByRole('alert')).toHaveTextContent('Não foi possível salvar a marcação')
+    expect(screen.getByText('0 de 3 mensagens enviadas nesta semana')).toBeInTheDocument()
+    expect(within(cards()[1]).queryByText(/Enviada por/)).not.toBeInTheDocument()
+  })
+
+  it('avisa quando copiar falha e não mostra Copiada', async () => {
+    const writeText = jest.fn().mockRejectedValue(new Error('denied'))
+    Object.assign(navigator, { clipboard: { writeText } })
+    render(<EmTratamento />)
+    await waitFor(() => expect(cards()).toHaveLength(3))
+    await userEvent.click(within(cards()[2]).getByRole('button', { name: /Copiar mensagem/ }))
+    expect(await within(cards()[2]).findByRole('alert')).toHaveTextContent('Não deu para copiar')
+    expect(within(cards()[2]).queryByRole('button', { name: /Copiada/ })).not.toBeInTheDocument()
+  })
+
+  it('mostra o modelo enviado quando é diferente da etiqueta atual', async () => {
+    const comModeloDiferente = LISTA.map(p => p.patientId === 3
+      ? { ...p, enviada: { template: 'amarela' as const, sentBy: 'Carlos', sentAt: '2026-09-17T17:32:00.000Z' } }
+      : p)
+    fetchMock.mockImplementationOnce(async () => ({ ok: true, status: 200, json: async () => comModeloDiferente }))
+    render(<EmTratamento />)
+    await waitFor(() => expect(cards()).toHaveLength(3))
+    expect(cards()[0]).toHaveTextContent('(modelo faltou)')
+  })
 })
