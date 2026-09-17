@@ -32,7 +32,7 @@ describe('idPacienteValido', () => {
   })
 
   it('recusa zero, negativo, fração, texto e vazio', () => {
-    for (const v of ['0', '-1', '1.5', 'abc', '', ' ', 0, -3, 2.5]) {
+    for (const v of ['0', '-1', '1.5', 'abc', '', ' ', 0, -3, 2.5, '1e3', '0x10', ' 12 ', '1.0', '+5']) {
       expect(idPacienteValido(v)).toBeNull()
     }
   })

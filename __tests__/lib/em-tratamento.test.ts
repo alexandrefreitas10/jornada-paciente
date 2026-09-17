@@ -182,6 +182,14 @@ describe('ehSaidaDeImplante', () => {
     expect(ehSaidaDeImplante('Tirzepartida BioMeds', 'implante hormonal')).toBe(false)
   })
 
+  it('observação com espaços nas pontas não conta (o SQL compara exato)', () => {
+    expect(ehSaidaDeImplante('Tirzepartida BioMeds', ' Implante hormonal ')).toBe(false)
+  })
+
+  it('o nome bate em qualquer posição, incluindo o plural', () => {
+    expect(ehSaidaDeImplante('Kit Implantes', null)).toBe(true)
+  })
+
   it('o resto não é implante', () => {
     expect(ehSaidaDeImplante('Tirzepartida BioMeds', 'Tirzepartida 5mg')).toBe(false)
     expect(ehSaidaDeImplante('Curcumina', null)).toBe(false)
@@ -191,6 +199,7 @@ describe('ehSaidaDeImplante', () => {
 })
 
 describe('mensagemLonga', () => {
+  // Retrato dos textos atuais, não uma regra: se o dono encurtar um texto, ajuste aqui.
   it('as três mensagens atuais são longas', () => {
     for (const e of ETIQUETAS) expect(mensagemLonga(mensagemPara(e, 'Ana'))).toBe(true)
   })

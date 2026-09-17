@@ -16,6 +16,7 @@ export function validarMotivo(valor: unknown): string | null {
 export function idPacienteValido(valor: unknown): number | null {
   if (typeof valor !== 'number' && typeof valor !== 'string') return null
   if (typeof valor === 'string' && valor.trim() === '') return null
+  if (typeof valor === 'string' && !/^\d+$/.test(valor)) return null
   const n = Number(valor)
   return Number.isInteger(n) && n > 0 && n <= MAIOR_INTEIRO_PG ? n : null
 }
