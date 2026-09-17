@@ -131,17 +131,18 @@ de edição (fora do escopo, a pedido).
 
 ### `src/lib/em-tratamento.ts` — regras puras (sem banco)
 
-- `inicioDoDiaBrasilia(agora)` e `inicioDaSemanaBrasilia(agora)` (segunda-feira).
-- `classificar({ ultimaSaida, ultimaFolha }, agora)` → `null` (fora do
+- `dataBrasilia(instante)`, `diasEntre(anterior, agora)` e
+  `inicioDaSemanaBrasilia(agora)` (segunda-feira).
+- `classificar(ultimaSaida, ultimaFolha, agora)` → `null` (fora do
   tratamento) ou `{ etiqueta: 'verde' | 'amarela' | 'vermelha', diasSemVir }`.
 - `primeiroNome(nome)`.
 - `mensagemPara(etiqueta, nome)`.
-- `ordenar(lista, subAba)`.
+- `listarSubAba(lista, subAba)`.
 
 Todos testados em `__tests__/lib/em-tratamento.test.ts`, incluindo as fronteiras
-(exatamente 7, 8, 28 e 29 dias), a virada de dia em Brasília às 21h de UTC, folha
-no mesmo dia da última aplicação (antes e depois dela) e o paciente que voltou
-depois da folha.
+(exatamente 7, 8, 28 e 29 dias), a virada de dia em Brasília (meia-noite de
+Brasília = 03h UTC), folha no mesmo dia da última aplicação (antes e depois
+dela) e o paciente que voltou depois da folha.
 
 ### Banco
 
