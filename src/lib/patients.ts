@@ -14,6 +14,12 @@ export interface PatientListItem extends PatientRow {
   completed_count: number
 }
 
+export interface ArchivedPatientItem extends PatientListItem {
+  archive_reason: string | null
+  archived_by: string | null
+  archive_event_at: string | null
+}
+
 export interface PatientDetail extends PatientRow {
   completed_task_keys: string[]
 }
@@ -39,14 +45,26 @@ export async function listPatients(): Promise<PatientListItem[]> {
   return rows
 }
 
-export async function listArchivedPatients(): Promise<PatientListItem[]> {
+export async function listArchivedPatients(): Promise<ArchivedPatientItem[]> {
   await initSchema()
-  const rows = await sql<PatientListItem[]>`
-    SELECT p.*, COUNT(tc.id)::int as completed_count
+  // O motivo vem do último arquivamento registrado. Quem foi arquivado antes
+  // do histórico existir fica com os três campos nulos.
+  const rows = await sql<ArchivedPatientItem[]>`
+    SELECT p.*, COUNT(tc.id)::int as completed_count,
+           ev.reason AS archive_reason,
+           ev.created_by AS archived_by,
+           ev.created_at AS archive_event_at
     FROM patients p
     LEFT JOIN task_completions tc ON tc.patient_id = p.id
+    LEFT JOIN LATERAL (
+      SELECT e.reason, e.created_by, e.created_at
+      FROM patient_archive_events e
+      WHERE e.patient_id = p.id AND e.action = 'arquivado'
+      ORDER BY e.created_at DESC
+      LIMIT 1
+    ) ev ON true
     WHERE p.deleted_at IS NULL AND p.archived_at IS NOT NULL
-    GROUP BY p.id
+    GROUP BY p.id, ev.reason, ev.created_by, ev.created_at
     ORDER BY p.archived_at DESC
   `
   return rows
