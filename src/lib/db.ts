@@ -503,7 +503,7 @@ async function runMigrations() {
       id SERIAL PRIMARY KEY,
       patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
       week_start DATE NOT NULL,
-      template TEXT NOT NULL,
+      template TEXT NOT NULL CHECK (template IN ('verde', 'amarela', 'vermelha')),
       sent_by TEXT,
       sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE (patient_id, week_start)
