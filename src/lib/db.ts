@@ -495,6 +495,20 @@ async function runMigrations() {
   // nasce sem e-mail. O índice UNIQUE continua valendo: Postgres aceita
   // vários NULL num índice único.
   await sql.unsafe(`ALTER TABLE patient_users ALTER COLUMN email DROP NOT NULL`).catch(() => {})
+
+  // Relatórios › Em tratamento: marcação de "mensagem enviada", uma por
+  // paciente por semana (segunda-feira em Brasília).
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS treatment_messages (
+      id SERIAL PRIMARY KEY,
+      patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      week_start DATE NOT NULL,
+      template TEXT NOT NULL,
+      sent_by TEXT,
+      sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (patient_id, week_start)
+    )
+  `).catch(() => {})
 }
 
 export default sql
