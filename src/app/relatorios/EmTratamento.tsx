@@ -193,10 +193,10 @@ export function EmTratamento() {
                 const longa = mensagemLonga(texto)
                 const aberta = abertas.has(p.patientId)
                 return (
-                  <div>
+                  <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
                     <p
                       id={`mensagem-${p.patientId}`}
-                      className={`text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-lg p-3 select-text whitespace-pre-line ${
+                      className={`text-sm text-gray-700 select-text whitespace-pre-line ${
                         longa && !aberta ? 'line-clamp-3' : ''
                       }`}
                     >

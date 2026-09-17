@@ -213,6 +213,7 @@ describe('EmTratamento', () => {
     expect(nomes()).toEqual(['Carla Dias', 'BRUNO LIMA'])
     expect(screen.getByRole('button', { name: 'Todos (2)' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Não veio (1)' })).toBeInTheDocument()
+    expect(screen.getByText('0 de 2 mensagens enviadas nesta semana')).toBeInTheDocument()
 
     const chamada = fetchMock.mock.calls.find(c => String(c[0]).includes('/archive'))
     expect(chamada[0]).toBe('/api/patients/3/archive')
@@ -233,6 +234,7 @@ describe('EmTratamento', () => {
 
     expect(await within(cards()[0]).findByRole('alert')).toHaveTextContent('Não foi possível mover para Pacientes Antigos')
     expect(cards()).toHaveLength(3)
+    expect(within(cards()[0]).getByLabelText(/Observações/)).toHaveValue('Parou por custo')
   })
 
   it('Cancelar fecha o formulário sem chamar o servidor', async () => {
