@@ -2,8 +2,9 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { RelatorioUltimaSemana } from '@/components/RelatorioUltimaSemana'
+import { EmTratamento } from './EmTratamento'
 
-type Tab = 'cards' | 'itens' | 'semana' | 'inativos' | 'concluidos' | 'fotos' | 'resumo_paciente' | 'termos'
+type Tab = 'cards' | 'itens' | 'semana' | 'inativos' | 'concluidos' | 'fotos' | 'resumo_paciente' | 'termos' | 'em_tratamento'
 
 interface PatientOption { id: number; name: string }
 
@@ -1041,6 +1042,7 @@ export function RelatoriosClient({ patients }: { patients: PatientOption[] }) {
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'resumo_paciente', label: '🗒️ Resumo do Paciente' },
+    { key: 'em_tratamento', label: '💊 Em tratamento' },
     { key: 'termos', label: '📝 Termos' },
     { key: 'cards', label: 'Cards criados' },
     { key: 'itens', label: 'Itens enviados' },
@@ -1072,6 +1074,7 @@ export function RelatoriosClient({ patients }: { patients: PatientOption[] }) {
       </div>
 
       {tab === 'resumo_paciente' && <ResumoPaciente />}
+      {tab === 'em_tratamento' && <EmTratamento />}
       {tab === 'termos' && <TermosRelatorio />}
       {tab === 'cards' && <CardsCreated />}
       {tab === 'itens' && <ItensSent patients={patients} />}
