@@ -1199,8 +1199,9 @@ import type { ArchivedPatientItem } from '@/lib/patients'
 
 ```typescript
 
-const dataCurta = (iso: string) =>
-  new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+// O banco devolve Date; em teste chega texto ISO. new Date aceita os dois.
+const dataCurta = (valor: Date | string) =>
+  new Date(valor).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
 
 function linhaMotivo(p: ArchivedPatientItem): string | null {
   if (!p.archive_reason) return null
