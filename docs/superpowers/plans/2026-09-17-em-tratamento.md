@@ -927,7 +927,7 @@ export function EmTratamento() {
                   <span className="text-xs text-green-700">
                     ✓ Enviada por {p.enviada.sentBy ?? '—'} · {momento(p.enviada.sentAt)}
                     {p.enviada.template !== p.etiqueta &&
-                      ` (modelo ${ETIQUETA[p.enviada.template].nome.toLowerCase()})`}
+                      ` (modelo ${ETIQUETA[p.enviada.template]?.nome.toLowerCase() ?? p.enviada.template})`}
                   </span>
                 )}
               </div>
