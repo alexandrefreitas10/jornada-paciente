@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { validarMotivo, MOTIVO_MAX } from '@/lib/arquivo-paciente'
 
@@ -14,6 +14,7 @@ export function ArchivePatientButton({ patientId, patientName }: Props) {
   const [motivo, setMotivo] = useState('')
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  const pressionouFora = useRef(false)
   const router = useRouter()
 
   function abrir(e: React.MouseEvent) {
@@ -66,7 +67,8 @@ export function ArchivePatientButton({ patientId, patientName }: Props) {
         // em volta: nenhum clique aqui pode propagar.
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
-          onClick={e => { e.stopPropagation(); fechar() }}
+          onMouseDown={e => { pressionouFora.current = e.target === e.currentTarget }}
+          onClick={e => { e.stopPropagation(); if (pressionouFora.current && e.target === e.currentTarget) fechar(); pressionouFora.current = false }}
         >
           <div
             role="dialog"
@@ -74,6 +76,7 @@ export function ArchivePatientButton({ patientId, patientName }: Props) {
             aria-labelledby={`arquivar-titulo-${patientId}`}
             className="w-full max-w-md bg-white rounded-2xl shadow-xl p-5 space-y-3"
             onClick={e => e.stopPropagation()}
+            onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); fechar() } }}
           >
             <h2 id={`arquivar-titulo-${patientId}`} className="text-base font-semibold text-gray-900">
               Mover {patientName} para Pacientes Antigos?

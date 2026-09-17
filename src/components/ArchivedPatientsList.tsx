@@ -39,10 +39,20 @@ export function ArchivedPatientsList({ patients: initial }: Props) {
   async function handleUnarchive(p: ArchivedPatientItem) {
     if (!confirm(`Reativar "${p.name}"?\n\nEle voltará para a página principal com todos os dados.`)) return
     setUnarchiving(p.id)
-    await fetch(`/api/patients/${p.id}/unarchive`, { method: 'POST' })
-    setPatients(prev => prev.filter(x => x.id !== p.id))
-    setUnarchiving(null)
-    router.refresh()
+    try {
+      const res = await fetch(`/api/patients/${p.id}/unarchive`, { method: 'POST' })
+      // 404 = já não estava arquivado: tirar da lista está certo.
+      if (!res.ok && res.status !== 404) {
+        alert('Não foi possível reativar. Tente de novo.')
+        return
+      }
+      setPatients(prev => prev.filter(x => x.id !== p.id))
+      router.refresh()
+    } catch {
+      alert('Não foi possível reativar. Tente de novo.')
+    } finally {
+      setUnarchiving(null)
+    }
   }
 
   const filtered = patients.filter(p => p.name.toLowerCase().includes(search.toLowerCase()))

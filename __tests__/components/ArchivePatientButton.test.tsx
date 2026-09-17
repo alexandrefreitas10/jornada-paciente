@@ -1,5 +1,5 @@
 // __tests__/components/ArchivePatientButton.test.tsx
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ArchivePatientButton } from '@/components/ArchivePatientButton'
 
@@ -69,5 +69,34 @@ describe('ArchivePatientButton', () => {
     await userEvent.click(screen.getByLabelText(/Observações/))
     expect(screen.getByRole('dialog')).toBeInTheDocument()
     expect(aoClicarFora).not.toHaveBeenCalled()
+  })
+
+  it('mousedown no textarea e click no fundo (seleção de texto) não fecha', async () => {
+    render(<ArchivePatientButton patientId={3} patientName="Ana Souza" />)
+    await abrir()
+    const textarea = screen.getByLabelText(/Observações/)
+    const backdrop = screen.getByRole('dialog').parentElement!
+    fireEvent.mouseDown(textarea)
+    fireEvent.click(backdrop)
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
+  it('mousedown e click no fundo fecham a janela', async () => {
+    render(<ArchivePatientButton patientId={3} patientName="Ana Souza" />)
+    await abrir()
+    const backdrop = screen.getByRole('dialog').parentElement!
+    fireEvent.mouseDown(backdrop)
+    fireEvent.click(backdrop)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('Escape fecha a janela', async () => {
+    render(<ArchivePatientButton patientId={3} patientName="Ana Souza" />)
+    await abrir()
+    const textarea = screen.getByLabelText(/Observações/)
+    await userEvent.type(textarea, 'abc{Escape}')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
