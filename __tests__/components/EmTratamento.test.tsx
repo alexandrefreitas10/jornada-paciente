@@ -345,4 +345,53 @@ describe('EmTratamento', () => {
     expect(within(cards()[1]).getByRole('combobox', { name: 'Intervalo de aplicação' })).toHaveValue('7')
     expect(screen.getByRole('button', { name: 'Não veio (2)' })).toBeInTheDocument()
   })
+
+  it('a marcação de enviada no meio do caminho não é desfeita quando o intervalo falha', async () => {
+    let liberar!: (v: unknown) => void
+    fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'PATCH') return new Promise(r => { liberar = r })
+      if (init?.method === 'POST') {
+        return { ok: true, status: 201, json: async () => ({ template: 'amarela', sentBy: 'Carlos', sentAt: '2026-09-17T17:32:00.000Z' }) }
+      }
+      return { ok: true, status: 200, json: async () => LISTA }
+    })
+    render(<EmTratamento />)
+    await waitFor(() => expect(cards()).toHaveLength(3))
+    const carla = cards()[1]
+
+    await userEvent.selectOptions(within(carla).getByRole('combobox', { name: 'Intervalo de aplicação' }), '15')
+    await userEvent.click(within(carla).getByRole('button', { name: /Marcar como enviada/ }))
+    expect(await within(carla).findByText(/Enviada por Carlos/)).toBeInTheDocument()
+
+    liberar({ ok: false, status: 500, json: async () => ({}) })
+
+    expect(await within(carla).findByRole('alert')).toHaveTextContent('Não foi possível salvar o intervalo')
+    expect(within(carla).getByText(/Enviada por Carlos/)).toBeInTheDocument()
+    expect(within(carla).getByRole('combobox', { name: 'Intervalo de aplicação' })).toHaveValue('7')
+  })
+
+  it('salvar o intervalo em dois cards ao mesmo tempo não libera um pelo outro', async () => {
+    const liberar: Record<number, (v: unknown) => void> = {}
+    fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'PATCH') {
+        const { patient_id } = JSON.parse(String(init.body))
+        return new Promise(r => { liberar[patient_id] = r })
+      }
+      return { ok: true, status: 200, json: async () => LISTA }
+    })
+    render(<EmTratamento />)
+    await waitFor(() => expect(cards()).toHaveLength(3))
+    const ana = cards()[0]
+    const carla = cards()[1]
+
+    await userEvent.selectOptions(within(ana).getByRole('combobox', { name: 'Intervalo de aplicação' }), '14')
+    await userEvent.selectOptions(within(carla).getByRole('combobox', { name: 'Intervalo de aplicação' }), '15')
+
+    liberar[2]({ ok: true, status: 200, json: async () => ({ intervalo: 15 }) })
+    await waitFor(() => expect(within(carla).getByRole('combobox', { name: 'Intervalo de aplicação' })).toBeEnabled())
+    expect(within(ana).getByRole('combobox', { name: 'Intervalo de aplicação' })).toBeDisabled()
+
+    liberar[3]({ ok: true, status: 200, json: async () => ({ intervalo: 14 }) })
+    await waitFor(() => expect(within(ana).getByRole('combobox', { name: 'Intervalo de aplicação' })).toBeEnabled())
+  })
 })

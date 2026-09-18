@@ -93,7 +93,7 @@ export function EmTratamento() {
   const [arquivando, setArquivando] = useState<number | null>(null)
   const [motivo, setMotivo] = useState('')
   const [salvandoArquivo, setSalvandoArquivo] = useState(false)
-  const [salvandoIntervalo, setSalvandoIntervalo] = useState<number | null>(null)
+  const [salvandoIntervalo, setSalvandoIntervalo] = useState<Set<number>>(() => new Set())
 
   const carregar = useCallback(async () => {
     setErro(null)
@@ -155,7 +155,7 @@ export function EmTratamento() {
       ? { ...p, intervalo: novo, etiqueta: situacao.etiqueta, diasSemVir: situacao.diasSemVir, diasAguardando: situacao.diasAguardando ?? null }
       : { ...p, intervalo: novo }
     setAviso(null)
-    setSalvandoIntervalo(p.patientId)
+    setSalvandoIntervalo(atual => new Set(atual).add(p.patientId))
     setLista(atual => atual && atual.map(x => (x.patientId === p.patientId ? atualizado : x)))
     try {
       const res = await fetch('/api/reports/em-tratamento/intervalo', {
@@ -165,10 +165,19 @@ export function EmTratamento() {
       })
       if (!res.ok) throw new Error(String(res.status))
     } catch {
-      setLista(atual => atual && atual.map(x => (x.patientId === p.patientId ? anterior : x)))
+      // Só desfaz os campos derivados do intervalo, aplicados ao estado ATUAL
+      // do card — uma ação concluída no meio do caminho (ex.: marcar como
+      // enviada) não pode ser desfeita por esta falha.
+      setLista(atual => atual && atual.map(x => (x.patientId === p.patientId
+        ? { ...x, intervalo: anterior.intervalo, etiqueta: anterior.etiqueta, diasSemVir: anterior.diasSemVir, diasAguardando: anterior.diasAguardando }
+        : x)))
       setAviso({ id: p.patientId, texto: 'Não foi possível salvar o intervalo. Tente de novo.' })
     } finally {
-      setSalvandoIntervalo(null)
+      setSalvandoIntervalo(atual => {
+        const s = new Set(atual)
+        s.delete(p.patientId)
+        return s
+      })
     }
   }
 
@@ -271,7 +280,7 @@ export function EmTratamento() {
                       aria-label="Intervalo de aplicação"
                       value={p.intervalo}
                       onChange={e => alterarIntervalo(p, Number(e.target.value))}
-                      disabled={salvandoIntervalo === p.patientId}
+                      disabled={salvandoIntervalo.has(p.patientId)}
                       className="border border-gray-300 rounded-md px-1.5 py-0.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:opacity-50"
                     >
                       {!(INTERVALOS as readonly number[]).includes(p.intervalo) && (
