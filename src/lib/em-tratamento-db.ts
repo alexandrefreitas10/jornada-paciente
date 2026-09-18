@@ -1,12 +1,13 @@
 import sql, { initSchema } from '@/lib/db'
 import {
-  classificar, inicioDaSemanaBrasilia, INTERVALO_PADRAO,
-  type Etiqueta, type MarcacaoEnviada, type PacienteEmTratamento,
+  classificar, inicioDaSemanaBrasilia,
+  type Etiqueta, type Intervalo, type MarcacaoEnviada, type PacienteEmTratamento,
 } from './em-tratamento'
 
 interface Linha {
   patient_id: number
   name: string
+  intervalo: number
   ultima_saida: Date | string
   ultima_folha: Date | string | null
   template: Etiqueta | null
@@ -40,7 +41,8 @@ export async function listarEmTratamento(agora = new Date()): Promise<PacienteEm
       WHERE file_type = 'prescription' AND deleted_at IS NULL
       GROUP BY patient_id
     )
-    SELECT p.id AS patient_id, p.name, s.ultima_saida, f.ultima_folha,
+    SELECT p.id AS patient_id, p.name, p.application_interval_days AS intervalo,
+           s.ultima_saida, f.ultima_folha,
            t.template, t.sent_by, t.sent_at
     FROM saidas s
     JOIN patients p
@@ -56,6 +58,7 @@ export async function listarEmTratamento(agora = new Date()): Promise<PacienteEm
       new Date(l.ultima_saida),
       l.ultima_folha ? new Date(l.ultima_folha) : null,
       agora,
+      l.intervalo,
     )
     if (!situacao) continue
     lista.push({
@@ -63,7 +66,7 @@ export async function listarEmTratamento(agora = new Date()): Promise<PacienteEm
       nome: l.name,
       ultimaAplicacao: iso(l.ultima_saida),
       ultimaFolha: l.ultima_folha ? iso(l.ultima_folha) : null,
-      intervalo: INTERVALO_PADRAO,
+      intervalo: l.intervalo,
       etiqueta: situacao.etiqueta,
       diasSemVir: situacao.diasSemVir,
       diasAguardando: situacao.diasAguardando ?? null,
@@ -108,4 +111,24 @@ export async function desmarcarEnviada(patientId: number, agora = new Date()): P
     WHERE patient_id = ${patientId} AND week_start = ${semana}::date
   `
   return resultado.count > 0
+}
+
+/**
+ * Grava o intervalo de aplicação e devolve o anterior (para a auditoria), ou
+ * `null` quando o paciente não existe ou foi excluído.
+ */
+export async function definirIntervalo(patientId: number, intervalo: Intervalo): Promise<number | null> {
+  await initSchema()
+  const [r] = await sql<{ anterior: number }[]>`
+    WITH a AS (
+      SELECT application_interval_days AS anterior
+      FROM patients
+      WHERE id = ${patientId} AND deleted_at IS NULL
+      FOR UPDATE
+    )
+    UPDATE patients SET application_interval_days = ${intervalo}
+    WHERE id = ${patientId} AND deleted_at IS NULL
+    RETURNING (SELECT anterior FROM a) AS anterior
+  `
+  return r ? r.anterior : null
 }
