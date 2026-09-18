@@ -1,7 +1,7 @@
 # Em tratamento: intervalo por paciente + "Aguardando nova prescrição"
 
 **Data:** 2026-09-18
-**Status:** aguardando revisão do dono
+**Status:** aprovada pelo dono (18/09); implementada
 
 ## Problema
 
