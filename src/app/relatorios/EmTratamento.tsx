@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
-  listarSubAba, mensagemPara, mensagemLonga, DIAS_VERDE, DIAS_AMARELA,
+  listarSubAba, mensagemPara, mensagemLonga, classificar, INTERVALOS,
   type Etiqueta, type PacienteEmTratamento, type SubAba,
 } from '@/lib/em-tratamento'
 import { validarMotivo, MOTIVO_MAX } from '@/lib/arquivo-paciente'
@@ -12,12 +12,14 @@ const SUB_ABAS: { key: SubAba; label: string }[] = [
   { key: 'todos', label: 'Todos' },
   { key: 'nao_veio', label: 'Não veio' },
   { key: 'veio', label: 'Veio' },
+  { key: 'aguardando', label: 'Aguardando nova prescrição' },
 ]
 
 const ETIQUETA: Record<Etiqueta, { icone: string; nome: string; classe: string }> = {
   verde: { icone: '🟢', nome: 'Em dia', classe: 'bg-green-50 text-green-800 border-green-300' },
   amarela: { icone: '🟡', nome: 'Faltou', classe: 'bg-yellow-50 text-yellow-800 border-yellow-300' },
   vermelha: { icone: '🔴', nome: 'Crítico', classe: 'bg-red-50 text-red-700 border-red-300' },
+  aguardando: { icone: '🔵', nome: 'Aguardando', classe: 'bg-blue-50 text-blue-800 border-blue-300' },
 }
 
 const FUSO = 'America/Sao_Paulo'
@@ -91,6 +93,7 @@ export function EmTratamento() {
   const [arquivando, setArquivando] = useState<number | null>(null)
   const [motivo, setMotivo] = useState('')
   const [salvandoArquivo, setSalvandoArquivo] = useState(false)
+  const [salvandoIntervalo, setSalvandoIntervalo] = useState<Set<number>>(() => new Set())
 
   const carregar = useCallback(async () => {
     setErro(null)
@@ -138,6 +141,46 @@ export function EmTratamento() {
     }
   }
 
+  async function alterarIntervalo(p: PacienteEmTratamento, novo: number) {
+    if (novo === p.intervalo) return
+    const anterior = p
+    // Otimista: a etiqueta muda na hora; volta se o servidor recusar.
+    const situacao = classificar(
+      new Date(p.ultimaAplicacao),
+      p.ultimaFolha ? new Date(p.ultimaFolha) : null,
+      new Date(),
+      novo,
+    )
+    const atualizado: PacienteEmTratamento = situacao
+      ? { ...p, intervalo: novo, etiqueta: situacao.etiqueta, diasSemVir: situacao.diasSemVir, diasAguardando: situacao.diasAguardando ?? null }
+      : { ...p, intervalo: novo }
+    setAviso(null)
+    setSalvandoIntervalo(atual => new Set(atual).add(p.patientId))
+    setLista(atual => atual && atual.map(x => (x.patientId === p.patientId ? atualizado : x)))
+    try {
+      const res = await fetch('/api/reports/em-tratamento/intervalo', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patient_id: p.patientId, intervalo: novo }),
+      })
+      if (!res.ok) throw new Error(String(res.status))
+    } catch {
+      // Só desfaz os campos derivados do intervalo, aplicados ao estado ATUAL
+      // do card — uma ação concluída no meio do caminho (ex.: marcar como
+      // enviada) não pode ser desfeita por esta falha.
+      setLista(atual => atual && atual.map(x => (x.patientId === p.patientId
+        ? { ...x, intervalo: anterior.intervalo, etiqueta: anterior.etiqueta, diasSemVir: anterior.diasSemVir, diasAguardando: anterior.diasAguardando }
+        : x)))
+      setAviso({ id: p.patientId, texto: 'Não foi possível salvar o intervalo. Tente de novo.' })
+    } finally {
+      setSalvandoIntervalo(atual => {
+        const s = new Set(atual)
+        s.delete(p.patientId)
+        return s
+      })
+    }
+  }
+
   function abrirArquivamento(id: number) {
     setAviso(null)
     setMotivo('')
@@ -182,9 +225,10 @@ export function EmTratamento() {
   const visiveis = listarSubAba(lista, subAba)
   const enviadas = visiveis.filter(p => p.enviada).length
   const contagem: Record<SubAba, number> = {
-    todos: lista.length,
-    nao_veio: lista.filter(p => p.etiqueta !== 'verde').length,
+    todos: lista.filter(p => p.etiqueta !== 'aguardando').length,
+    nao_veio: lista.filter(p => p.etiqueta === 'amarela' || p.etiqueta === 'vermelha').length,
     veio: lista.filter(p => p.etiqueta === 'verde').length,
+    aguardando: lista.filter(p => p.etiqueta === 'aguardando').length,
   }
 
   return (
@@ -205,7 +249,7 @@ export function EmTratamento() {
           ))}
         </div>
         <p className="text-xs text-gray-500">
-          🟢 veio nos últimos {DIAS_VERDE} dias · 🟡 {DIAS_VERDE + 1} a {DIAS_AMARELA} dias sem vir · 🔴 mais de {DIAS_AMARELA} dias
+          🟢 dentro do intervalo · 🟡 passou do intervalo · 🔴 mais de 28 dias (ou 2 intervalos, para quem aplica a cada 15+ dias) · 🔵 prescrição finalizada
         </p>
         <p className="text-sm font-medium text-gray-700">
           {enviadas} de {visiveis.length} mensagens enviadas nesta semana
@@ -224,9 +268,29 @@ export function EmTratamento() {
                     {p.nome}
                   </Link>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    Última aplicação: {dia(p.ultimaAplicacao)}
-                    {p.etiqueta !== 'verde' && ` · há ${p.diasSemVir} dias sem vir`}
+                    {p.etiqueta === 'aguardando' && p.ultimaFolha
+                      ? `Prescrição finalizada em ${dia(p.ultimaFolha)} · há ${p.diasAguardando ?? 0} dias · última aplicação: ${dia(p.ultimaAplicacao)}`
+                      : `Última aplicação: ${dia(p.ultimaAplicacao)}${
+                          p.etiqueta === 'amarela' || p.etiqueta === 'vermelha' ? ` · há ${p.diasSemVir} dias sem vir` : ''
+                        }`}
                   </p>
+                  <label className="mt-1 inline-flex items-center gap-1 text-xs text-gray-500">
+                    Aplicação a cada
+                    <select
+                      aria-label="Intervalo de aplicação"
+                      value={p.intervalo}
+                      onChange={e => alterarIntervalo(p, Number(e.target.value))}
+                      disabled={salvandoIntervalo.has(p.patientId)}
+                      className="border border-gray-300 rounded-md px-1.5 py-0.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:opacity-50"
+                    >
+                      {!(INTERVALOS as readonly number[]).includes(p.intervalo) && (
+                        <option value={p.intervalo}>{p.intervalo} dias</option>
+                      )}
+                      {INTERVALOS.map(n => (
+                        <option key={n} value={n}>{n} dias</option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
                 <span className={`shrink-0 text-xs font-semibold px-2 py-1 rounded-full border ${ETIQUETA[p.etiqueta].classe}`}>
                   {ETIQUETA[p.etiqueta].icone} {ETIQUETA[p.etiqueta].nome}

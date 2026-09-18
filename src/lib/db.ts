@@ -503,7 +503,7 @@ async function runMigrations() {
       id SERIAL PRIMARY KEY,
       patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
       week_start DATE NOT NULL,
-      template TEXT NOT NULL CHECK (template IN ('verde', 'amarela', 'vermelha')),
+      template TEXT NOT NULL CHECK (template IN ('verde', 'amarela', 'vermelha', 'aguardando')),
       sent_by TEXT,
       sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE (patient_id, week_start)
@@ -525,6 +525,29 @@ async function runMigrations() {
     );
     CREATE INDEX IF NOT EXISTS patient_archive_events_patient_idx
       ON patient_archive_events (patient_id, created_at DESC);
+  `).catch(() => {})
+
+  // Em tratamento: intervalo de aplicação de cada paciente (padrão semanal).
+  await sql.unsafe(`
+    ALTER TABLE patients ADD COLUMN IF NOT EXISTS application_interval_days INTEGER NOT NULL DEFAULT 7
+  `).catch(() => {})
+
+  // Modelo de mensagem "aguardando nova prescrição". Só troca a trava se ela
+  // ainda não conhece 'aguardando', para não refazer a cada subida.
+  await sql.unsafe(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'treatment_messages_template_check'
+          AND conrelid = 'treatment_messages'::regclass
+          AND pg_get_constraintdef(oid) LIKE '%aguardando%'
+      ) THEN
+        ALTER TABLE treatment_messages DROP CONSTRAINT IF EXISTS treatment_messages_template_check;
+        ALTER TABLE treatment_messages ADD CONSTRAINT treatment_messages_template_check
+          CHECK (template IN ('verde', 'amarela', 'vermelha', 'aguardando'));
+      END IF;
+    END $$;
   `).catch(() => {})
 }
 

@@ -5,15 +5,19 @@ import { EmTratamento } from '@/app/relatorios/EmTratamento'
 import type { PacienteEmTratamento } from '@/lib/em-tratamento'
 
 const LISTA: PacienteEmTratamento[] = [
-  { patientId: 1, nome: 'BRUNO LIMA', etiqueta: 'verde', diasSemVir: 2, ultimaAplicacao: '2026-09-15T12:00:00.000Z', enviada: null },
-  { patientId: 2, nome: 'Carla Dias', etiqueta: 'amarela', diasSemVir: 10, ultimaAplicacao: '2026-09-07T12:00:00.000Z', enviada: null },
-  { patientId: 3, nome: 'Ana Souza', etiqueta: 'vermelha', diasSemVir: 40, ultimaAplicacao: '2026-08-08T12:00:00.000Z', enviada: null },
+  { patientId: 1, nome: 'BRUNO LIMA', etiqueta: 'verde', diasSemVir: 2, ultimaAplicacao: '2026-09-15T12:00:00.000Z', ultimaFolha: null, intervalo: 7, diasAguardando: null, enviada: null },
+  { patientId: 2, nome: 'Carla Dias', etiqueta: 'amarela', diasSemVir: 10, ultimaAplicacao: '2026-09-07T12:00:00.000Z', ultimaFolha: null, intervalo: 7, diasAguardando: null, enviada: null },
+  { patientId: 3, nome: 'Ana Souza', etiqueta: 'vermelha', diasSemVir: 40, ultimaAplicacao: '2026-08-08T12:00:00.000Z', ultimaFolha: null, intervalo: 7, diasAguardando: null, enviada: null },
+  { patientId: 4, nome: 'Davi Rocha', etiqueta: 'aguardando', diasSemVir: 12, ultimaAplicacao: '2026-09-05T12:00:00.000Z', ultimaFolha: '2026-09-12T12:00:00.000Z', intervalo: 7, diasAguardando: 5, enviada: null },
 ]
 
 let fetchMock: jest.Mock
 
 beforeEach(() => {
   fetchMock = jest.fn(async (url: string, init?: RequestInit) => {
+    if (init?.method === 'PATCH') {
+      return { ok: true, status: 200, json: async () => ({ intervalo: JSON.parse(String(init.body)).intervalo }) }
+    }
     if (url.includes('/archive')) return { ok: true, status: 200, json: async () => ({ ok: true }) }
     if (init?.method === 'POST') {
       return { ok: true, status: 201, json: async () => ({ template: 'amarela', sentBy: 'Carlos', sentAt: '2026-09-17T17:32:00.000Z' }) }
@@ -272,5 +276,122 @@ describe('EmTratamento', () => {
     await userEvent.click(within(cards()[0]).getByRole('button', { name: 'Cancelar' }))
     expect(within(cards()[0]).queryByLabelText(/Observações/)).not.toBeInTheDocument()
     expect(fetchMock.mock.calls.some(c => String(c[0]).includes('/archive'))).toBe(false)
+  })
+
+  it('a 4ª sub-aba mostra só quem aguarda nova prescrição', async () => {
+    render(<EmTratamento />)
+    await waitFor(() => expect(cards()).toHaveLength(3))
+    expect(nomes()).not.toContain('Davi Rocha')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Aguardando nova prescrição (1)' }))
+    expect(nomes()).toEqual(['Davi Rocha'])
+    const davi = cards()[0]
+    expect(davi).toHaveTextContent('🔵 Aguardando')
+    expect(davi).toHaveTextContent(/Prescrição finalizada em .* · há 5 dias/)
+    expect(davi).not.toHaveTextContent('dias sem vir')
+    expect(davi).toHaveTextContent('Oi, Davi! Tudo bem? 😊 Sua prescrição chegou ao fim')
+    expect(within(davi).getByRole('button', { name: /Mover para Pacientes Antigos/ })).toBeInTheDocument()
+  })
+
+  it('marcar como enviada no 🔵 usa o modelo aguardando', async () => {
+    render(<EmTratamento />)
+    await waitFor(() => expect(cards()).toHaveLength(3))
+    await userEvent.click(screen.getByRole('button', { name: 'Aguardando nova prescrição (1)' }))
+    await userEvent.click(within(cards()[0]).getByRole('button', { name: /Marcar como enviada/ }))
+    const post = fetchMock.mock.calls.find(c => c[1]?.method === 'POST')
+    expect(JSON.parse(String(post[1].body))).toEqual({ patient_id: 4, template: 'aguardando' })
+  })
+
+  it('a legenda explica a regra por intervalo', async () => {
+    render(<EmTratamento />)
+    await waitFor(() => expect(cards()).toHaveLength(3))
+    expect(screen.getByText(/dentro do intervalo/)).toHaveTextContent(
+      '🟢 dentro do intervalo · 🟡 passou do intervalo · 🔴 mais de 28 dias (ou 2 intervalos, para quem aplica a cada 15+ dias) · 🔵 prescrição finalizada'
+    )
+  })
+
+  it('mudar o intervalo salva, e quem estava em dia pelo intervalo novo vai para Veio', async () => {
+    // Datas relativas a agora: a etiqueta é recalculada na hora da troca.
+    const dezDiasAtras = new Date(Date.now() - 10 * 86400000).toISOString()
+    const lista = LISTA.map(p => (p.patientId === 2 ? { ...p, ultimaAplicacao: dezDiasAtras, diasSemVir: 10 } : p))
+    fetchMock.mockImplementationOnce(async () => ({ ok: true, status: 200, json: async () => lista }))
+    render(<EmTratamento />)
+    await waitFor(() => expect(cards()).toHaveLength(3))
+    expect(screen.getByRole('button', { name: 'Veio (1)' })).toBeInTheDocument()
+
+    const carla = cards()[1]
+    const seletor = within(carla).getByRole('combobox', { name: 'Intervalo de aplicação' })
+    expect(seletor).toHaveValue('7')
+    await userEvent.selectOptions(seletor, '15')
+
+    const patch = fetchMock.mock.calls.find(c => c[1]?.method === 'PATCH')
+    expect(patch[0]).toBe('/api/reports/em-tratamento/intervalo')
+    expect(JSON.parse(String(patch[1].body))).toEqual({ patient_id: 2, intervalo: 15 })
+    expect(await screen.findByRole('button', { name: 'Veio (2)' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Não veio (1)' })).toBeInTheDocument()
+    expect(within(cards()[1]).getByRole('combobox', { name: 'Intervalo de aplicação' })).toHaveValue('15')
+  })
+
+  it('se salvar o intervalo falha, volta ao valor anterior e avisa no card', async () => {
+    fetchMock.mockImplementation(async (_u: string, init?: RequestInit) =>
+      init?.method === 'PATCH'
+        ? { ok: false, status: 500, json: async () => ({}) }
+        : { ok: true, status: 200, json: async () => LISTA })
+    render(<EmTratamento />)
+    await waitFor(() => expect(cards()).toHaveLength(3))
+    await userEvent.selectOptions(within(cards()[1]).getByRole('combobox', { name: 'Intervalo de aplicação' }), '15')
+
+    expect(await within(cards()[1]).findByRole('alert')).toHaveTextContent('Não foi possível salvar o intervalo')
+    expect(within(cards()[1]).getByRole('combobox', { name: 'Intervalo de aplicação' })).toHaveValue('7')
+    expect(screen.getByRole('button', { name: 'Não veio (2)' })).toBeInTheDocument()
+  })
+
+  it('a marcação de enviada no meio do caminho não é desfeita quando o intervalo falha', async () => {
+    let liberar!: (v: unknown) => void
+    fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'PATCH') return new Promise(r => { liberar = r })
+      if (init?.method === 'POST') {
+        return { ok: true, status: 201, json: async () => ({ template: 'amarela', sentBy: 'Carlos', sentAt: '2026-09-17T17:32:00.000Z' }) }
+      }
+      return { ok: true, status: 200, json: async () => LISTA }
+    })
+    render(<EmTratamento />)
+    await waitFor(() => expect(cards()).toHaveLength(3))
+    const carla = cards()[1]
+
+    await userEvent.selectOptions(within(carla).getByRole('combobox', { name: 'Intervalo de aplicação' }), '15')
+    await userEvent.click(within(carla).getByRole('button', { name: /Marcar como enviada/ }))
+    expect(await within(carla).findByText(/Enviada por Carlos/)).toBeInTheDocument()
+
+    liberar({ ok: false, status: 500, json: async () => ({}) })
+
+    expect(await within(carla).findByRole('alert')).toHaveTextContent('Não foi possível salvar o intervalo')
+    expect(within(carla).getByText(/Enviada por Carlos/)).toBeInTheDocument()
+    expect(within(carla).getByRole('combobox', { name: 'Intervalo de aplicação' })).toHaveValue('7')
+  })
+
+  it('salvar o intervalo em dois cards ao mesmo tempo não libera um pelo outro', async () => {
+    const liberar: Record<number, (v: unknown) => void> = {}
+    fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'PATCH') {
+        const { patient_id } = JSON.parse(String(init.body))
+        return new Promise(r => { liberar[patient_id] = r })
+      }
+      return { ok: true, status: 200, json: async () => LISTA }
+    })
+    render(<EmTratamento />)
+    await waitFor(() => expect(cards()).toHaveLength(3))
+    const ana = cards()[0]
+    const carla = cards()[1]
+
+    await userEvent.selectOptions(within(ana).getByRole('combobox', { name: 'Intervalo de aplicação' }), '14')
+    await userEvent.selectOptions(within(carla).getByRole('combobox', { name: 'Intervalo de aplicação' }), '15')
+
+    liberar[2]({ ok: true, status: 200, json: async () => ({ intervalo: 15 }) })
+    await waitFor(() => expect(within(carla).getByRole('combobox', { name: 'Intervalo de aplicação' })).toBeEnabled())
+    expect(within(ana).getByRole('combobox', { name: 'Intervalo de aplicação' })).toBeDisabled()
+
+    liberar[3]({ ok: true, status: 200, json: async () => ({ intervalo: 14 }) })
+    await waitFor(() => expect(within(ana).getByRole('combobox', { name: 'Intervalo de aplicação' })).toBeEnabled())
   })
 })
