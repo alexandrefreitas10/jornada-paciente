@@ -7,7 +7,6 @@ export type Etiqueta = (typeof ETIQUETAS)[number]
 
 export type SubAba = 'todos' | 'nao_veio' | 'veio' | 'aguardando'
 
-export const DIAS_VERDE = 7    // veio nos últimos 7 dias
 export const DIAS_AMARELA = 28 // limite crítico padrão (intervalos abaixo de 15 dias)
 
 // Intervalo de aplicação de cada paciente, escolhido pela equipe no card.
