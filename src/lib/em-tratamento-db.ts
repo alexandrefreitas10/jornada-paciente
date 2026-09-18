@@ -119,16 +119,20 @@ export async function desmarcarEnviada(patientId: number, agora = new Date()): P
  */
 export async function definirIntervalo(patientId: number, intervalo: Intervalo): Promise<number | null> {
   await initSchema()
-  const [r] = await sql<{ anterior: number }[]>`
-    WITH a AS (
+  // Lê e trava a linha, depois atualiza: dois passos na mesma transação, sem
+  // depender de em que momento o Postgres avalia subconsultas do RETURNING.
+  return sql.begin(async (tx) => {
+    const [atual] = await tx<{ anterior: number }[]>`
       SELECT application_interval_days AS anterior
       FROM patients
       WHERE id = ${patientId} AND deleted_at IS NULL
       FOR UPDATE
-    )
-    UPDATE patients SET application_interval_days = ${intervalo}
-    WHERE id = ${patientId} AND deleted_at IS NULL
-    RETURNING (SELECT anterior FROM a) AS anterior
-  `
-  return r ? r.anterior : null
+    `
+    if (!atual) return null
+    await tx`
+      UPDATE patients SET application_interval_days = ${intervalo}
+      WHERE id = ${patientId}
+    `
+    return atual.anterior
+  })
 }

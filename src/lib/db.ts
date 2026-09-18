@@ -540,6 +540,7 @@ async function runMigrations() {
       IF NOT EXISTS (
         SELECT 1 FROM pg_constraint
         WHERE conname = 'treatment_messages_template_check'
+          AND conrelid = 'treatment_messages'::regclass
           AND pg_get_constraintdef(oid) LIKE '%aguardando%'
       ) THEN
         ALTER TABLE treatment_messages DROP CONSTRAINT IF EXISTS treatment_messages_template_check;
