@@ -100,12 +100,12 @@ Com N = 7 o comportamento é idêntico ao de hoje.
 - `INTERVALOS = [7, 10, 14, 15, 21, 28] as const`, `INTERVALO_PADRAO = 7`,
   `ehIntervaloValido(valor): valor is Intervalo`.
 - `limiteCritico(intervalo)` → `intervalo >= 15 ? 2 * intervalo : 28`.
-- `classificar(ultimaSaida, ultimaFolha, intervalo, agora)` → `null` sem
+- `classificar(ultimaSaida, ultimaFolha, agora, intervalo = 7)` → `null` sem
   aplicação; senão `{ etiqueta, diasSemVir, diasAguardando }`:
   - folha ≥ última aplicação → `'aguardando'`, `diasAguardando` = dias desde a
     folha;
   - caso contrário 🟢/🟡/🔴 pelo intervalo, `diasAguardando = null`.
-- `PacienteEmTratamento` ganha `intervalo: number`, `folhaFinalizada: string | null`,
+- `PacienteEmTratamento` ganha `intervalo: number`, `ultimaFolha: string | null`,
   `diasAguardando: number | null`.
 - `SubAba` ganha `'aguardando'`; `listarSubAba`: `todos`/`nao_veio`/`veio`
   ignoram 🔵; `aguardando` só 🔵, ordenado por `diasAguardando` desc, depois nome.
