@@ -2,13 +2,31 @@
 // sem React — para as fronteiras (7, 8, 28, 29 dias; virada de dia em
 // Brasília) serem testadas sem depender de relógio nem de dados.
 
-export const ETIQUETAS = ['verde', 'amarela', 'vermelha'] as const
+export const ETIQUETAS = ['verde', 'amarela', 'vermelha', 'aguardando'] as const
 export type Etiqueta = (typeof ETIQUETAS)[number]
 
-export type SubAba = 'todos' | 'nao_veio' | 'veio'
+export type SubAba = 'todos' | 'nao_veio' | 'veio' | 'aguardando'
 
 export const DIAS_VERDE = 7    // veio nos últimos 7 dias
-export const DIAS_AMARELA = 28 // acima disso, crítico
+export const DIAS_AMARELA = 28 // limite crítico padrão (intervalos abaixo de 15 dias)
+
+// Intervalo de aplicação de cada paciente, escolhido pela equipe no card.
+// Lista fechada aqui (e não numa trava do banco) para mudar sem migração.
+export const INTERVALOS = [7, 10, 14, 15, 21, 28] as const
+export type Intervalo = (typeof INTERVALOS)[number]
+export const INTERVALO_PADRAO: Intervalo = 7
+
+export function ehIntervaloValido(valor: unknown): valor is Intervalo {
+  return typeof valor === 'number' && (INTERVALOS as readonly number[]).includes(valor)
+}
+
+/**
+ * Até quantos dias sem vir ainda é 🟡. Quem aplica a cada 15 dias ou mais só
+ * vira crítico depois de perder 2 aplicações; os demais, depois de 28 dias.
+ */
+export function limiteCritico(intervalo: number): number {
+  return intervalo >= 15 ? 2 * intervalo : DIAS_AMARELA
+}
 
 export interface MarcacaoEnviada {
   template: Etiqueta
@@ -20,8 +38,11 @@ export interface PacienteEmTratamento {
   patientId: number
   nome: string
   ultimaAplicacao: string // ISO
+  ultimaFolha: string | null // ISO da última folha finalizada, se houver
+  intervalo: number
   etiqueta: Etiqueta
   diasSemVir: number
+  diasAguardando: number | null // só quando etiqueta = 'aguardando'
   enviada: MarcacaoEnviada | null
 }
 
@@ -63,6 +84,11 @@ export const MENSAGENS: Record<Etiqueta, string> = {
     'Oi, {nome}! Tudo bem? Sentimos sua falta — já faz algumas semanas que ' +
     'você não vem às suas aplicações. Para o tratamento dar resultado, é muito ' +
     'importante retomar. Podemos agendar seu horário para esta semana?',
+  // Texto aprovado pelo dono (18/09).
+  aguardando:
+    'Oi, {nome}! Tudo bem? 😊 Sua prescrição chegou ao fim — parabéns por concluir ' +
+    'essa etapa! Para seguirmos com o seu acompanhamento, vamos agendar sua consulta ' +
+    'de reavaliação? Qual o melhor dia para você?',
 }
 
 // Brasília é UTC-3 fixo desde 2019 (sem horário de verão). O banco guarda em
@@ -90,21 +116,27 @@ export function inicioDaSemanaBrasilia(agora: Date): string {
 }
 
 /**
- * `null` quando o paciente não está em tratamento: nunca teve aplicação, ou a
- * folha de prescrição finalizada veio depois da última aplicação. Uma
- * aplicação depois da folha é um novo ciclo e o traz de volta.
+ * `null` só quando o paciente nunca teve aplicação. Folha de prescrição
+ * finalizada depois da última aplicação = terminou a prescrição e aguarda a
+ * próxima (`aguardando`); uma aplicação depois da folha é um novo ciclo. Os
+ * demais são classificados pelo intervalo de aplicação do próprio paciente.
  */
 export function classificar(
   ultimaSaida: Date | null,
   ultimaFolha: Date | null,
   agora: Date,
-): { etiqueta: Etiqueta; diasSemVir: number } | null {
+  intervalo: number = INTERVALO_PADRAO,
+): { etiqueta: Etiqueta; diasSemVir: number; diasAguardando?: number } | null {
   if (!ultimaSaida) return null
-  if (ultimaFolha && ultimaFolha.getTime() >= ultimaSaida.getTime()) return null
-
   const diasSemVir = Math.max(0, diasEntre(ultimaSaida, agora))
+
+  if (ultimaFolha && ultimaFolha.getTime() >= ultimaSaida.getTime()) {
+    return { etiqueta: 'aguardando', diasSemVir, diasAguardando: Math.max(0, diasEntre(ultimaFolha, agora)) }
+  }
+
+  const n = intervalo > 0 ? intervalo : INTERVALO_PADRAO
   const etiqueta: Etiqueta =
-    diasSemVir <= DIAS_VERDE ? 'verde' : diasSemVir <= DIAS_AMARELA ? 'amarela' : 'vermelha'
+    diasSemVir <= n ? 'verde' : diasSemVir <= limiteCritico(n) ? 'amarela' : 'vermelha'
   return { etiqueta, diasSemVir }
 }
 
@@ -123,16 +155,23 @@ export function mensagemPara(etiqueta: Etiqueta, nomeCompleto: string): string {
 }
 
 /**
- * "Veio" em ordem de nome. "Não veio" e "Todos" por urgência: quem está há
- * mais dias sem vir primeiro — os críticos precisam aparecer antes.
+ * "Todos", "Não veio" e "Veio" são só quem está em tratamento (🟢🟡🔴).
+ * "Veio" em ordem de nome; "Não veio" e "Todos" por urgência. "Aguardando"
+ * mostra quem espera a próxima prescrição, há mais tempo primeiro.
  */
 export function listarSubAba(lista: PacienteEmTratamento[], subAba: SubAba): PacienteEmTratamento[] {
   const porNome = (a: PacienteEmTratamento, b: PacienteEmTratamento) => a.nome.localeCompare(b.nome, 'pt-BR')
 
-  if (subAba === 'veio') {
-    return lista.filter(p => p.etiqueta === 'verde').sort(porNome)
+  if (subAba === 'aguardando') {
+    return lista
+      .filter(p => p.etiqueta === 'aguardando')
+      .sort((a, b) => (b.diasAguardando ?? 0) - (a.diasAguardando ?? 0) || porNome(a, b))
   }
-  const base = subAba === 'nao_veio' ? lista.filter(p => p.etiqueta !== 'verde') : [...lista]
+  const emTratamento = lista.filter(p => p.etiqueta !== 'aguardando')
+  if (subAba === 'veio') {
+    return emTratamento.filter(p => p.etiqueta === 'verde').sort(porNome)
+  }
+  const base = subAba === 'nao_veio' ? emTratamento.filter(p => p.etiqueta !== 'verde') : emTratamento
   return base.sort((a, b) => b.diasSemVir - a.diasSemVir || porNome(a, b))
 }
 

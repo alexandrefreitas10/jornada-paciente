@@ -18,6 +18,7 @@ const ETIQUETA: Record<Etiqueta, { icone: string; nome: string; classe: string }
   verde: { icone: '🟢', nome: 'Em dia', classe: 'bg-green-50 text-green-800 border-green-300' },
   amarela: { icone: '🟡', nome: 'Faltou', classe: 'bg-yellow-50 text-yellow-800 border-yellow-300' },
   vermelha: { icone: '🔴', nome: 'Crítico', classe: 'bg-red-50 text-red-700 border-red-300' },
+  aguardando: { icone: '🔵', nome: 'Aguardando', classe: 'bg-blue-50 text-blue-800 border-blue-300' },
 }
 
 const FUSO = 'America/Sao_Paulo'
@@ -182,9 +183,10 @@ export function EmTratamento() {
   const visiveis = listarSubAba(lista, subAba)
   const enviadas = visiveis.filter(p => p.enviada).length
   const contagem: Record<SubAba, number> = {
-    todos: lista.length,
-    nao_veio: lista.filter(p => p.etiqueta !== 'verde').length,
+    todos: lista.filter(p => p.etiqueta !== 'aguardando').length,
+    nao_veio: lista.filter(p => p.etiqueta === 'amarela' || p.etiqueta === 'vermelha').length,
     veio: lista.filter(p => p.etiqueta === 'verde').length,
+    aguardando: lista.filter(p => p.etiqueta === 'aguardando').length,
   }
 
   return (

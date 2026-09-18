@@ -1,6 +1,6 @@
 import sql, { initSchema } from '@/lib/db'
 import {
-  classificar, inicioDaSemanaBrasilia,
+  classificar, inicioDaSemanaBrasilia, INTERVALO_PADRAO,
   type Etiqueta, type MarcacaoEnviada, type PacienteEmTratamento,
 } from './em-tratamento'
 
@@ -62,7 +62,11 @@ export async function listarEmTratamento(agora = new Date()): Promise<PacienteEm
       patientId: l.patient_id,
       nome: l.name,
       ultimaAplicacao: iso(l.ultima_saida),
-      ...situacao,
+      ultimaFolha: l.ultima_folha ? iso(l.ultima_folha) : null,
+      intervalo: INTERVALO_PADRAO,
+      etiqueta: situacao.etiqueta,
+      diasSemVir: situacao.diasSemVir,
+      diasAguardando: situacao.diasAguardando ?? null,
       enviada: l.template && l.sent_at
         ? { template: l.template, sentBy: l.sent_by, sentAt: iso(l.sent_at) }
         : null,

@@ -4,6 +4,7 @@ import {
   dataBrasilia, diasEntre, inicioDaSemanaBrasilia,
   classificar, primeiroNome, mensagemPara, listarSubAba,
   ehSaidaDeImplante, mensagemLonga,
+  INTERVALOS, INTERVALO_PADRAO, ehIntervaloValido, limiteCritico,
   type PacienteEmTratamento,
 } from '@/lib/em-tratamento'
 
@@ -56,12 +57,14 @@ describe('classificar', () => {
     expect(classificar(saida('2026-09-10T02:30:00Z'), null, AGORA)?.etiqueta).toBe('amarela')
   })
 
-  it('folha finalizada depois da última aplicação encerra o tratamento', () => {
-    expect(classificar(saida('2026-09-10T12:00:00Z'), saida('2026-09-11T12:00:00Z'), AGORA)).toBeNull()
+  it('folha finalizada depois da última aplicação: aguardando nova prescrição', () => {
+    expect(classificar(saida('2026-09-10T12:00:00Z'), saida('2026-09-11T12:00:00Z'), AGORA))
+      .toEqual({ etiqueta: 'aguardando', diasSemVir: 7, diasAguardando: 6 })
   })
 
-  it('folha no mesmo dia, DEPOIS da aplicação, encerra', () => {
-    expect(classificar(saida('2026-09-10T12:00:00Z'), saida('2026-09-10T18:00:00Z'), AGORA)).toBeNull()
+  it('folha no mesmo dia, DEPOIS da aplicação: aguardando', () => {
+    expect(classificar(saida('2026-09-10T12:00:00Z'), saida('2026-09-10T18:00:00Z'), AGORA))
+      .toEqual({ etiqueta: 'aguardando', diasSemVir: 7, diasAguardando: 7 })
   })
 
   it('aplicação depois da folha é um novo ciclo: volta ao tratamento', () => {
@@ -69,9 +72,14 @@ describe('classificar', () => {
       .toEqual({ etiqueta: 'verde', diasSemVir: 2 })
   })
 
-  it('folha e aplicação no mesmo instante contam como encerrado', () => {
+  it('folha e aplicação no mesmo instante contam como folha depois: aguardando', () => {
     const t = saida('2026-09-10T12:00:00Z')
-    expect(classificar(t, new Date(t), AGORA)).toBeNull()
+    expect(classificar(t, new Date(t), AGORA)).toEqual({ etiqueta: 'aguardando', diasSemVir: 7, diasAguardando: 7 })
+  })
+
+  it('o intervalo não muda quem está aguardando', () => {
+    expect(classificar(saida('2026-09-10T12:00:00Z'), saida('2026-09-11T12:00:00Z'), AGORA, 21))
+      .toEqual({ etiqueta: 'aguardando', diasSemVir: 7, diasAguardando: 6 })
   })
 
   it('folha no mesmo dia, ANTES da aplicação, continua em tratamento', () => {
@@ -104,9 +112,9 @@ describe('primeiroNome', () => {
 
 describe('mensagens', () => {
   it('há um texto para cada etiqueta, todos diferentes e com {nome}', () => {
-    expect(ETIQUETAS).toEqual(['verde', 'amarela', 'vermelha'])
+    expect(ETIQUETAS).toEqual(['verde', 'amarela', 'vermelha', 'aguardando'])
     const textos = ETIQUETAS.map(e => MENSAGENS[e])
-    expect(new Set(textos).size).toBe(3)
+    expect(new Set(textos).size).toBe(4)
     for (const t of textos) expect(t).toContain('{nome}')
   })
 
@@ -143,6 +151,17 @@ describe('listarSubAba', () => {
     patientId, nome, diasSemVir,
     etiqueta: diasSemVir <= 7 ? 'verde' : diasSemVir <= 28 ? 'amarela' : 'vermelha',
     ultimaAplicacao: '2026-09-01T12:00:00.000Z',
+    ultimaFolha: null,
+    intervalo: 7,
+    diasAguardando: null,
+    enviada: null,
+  })
+  const pa = (patientId: number, nome: string, diasAguardando: number): PacienteEmTratamento => ({
+    patientId, nome, diasSemVir: diasAguardando + 3, diasAguardando,
+    etiqueta: 'aguardando',
+    ultimaAplicacao: '2026-08-01T12:00:00.000Z',
+    ultimaFolha: '2026-08-04T12:00:00.000Z',
+    intervalo: 7,
     enviada: null,
   })
   const lista = [p(1, 'Bruno', 3), p(2, 'Ana', 40), p(3, 'Carla', 10), p(4, 'Alice', 1), p(5, 'Davi', 40)]
@@ -163,6 +182,18 @@ describe('listarSubAba', () => {
     const antes = lista.map(x => x.patientId)
     listarSubAba(lista, 'todos')
     expect(lista.map(x => x.patientId)).toEqual(antes)
+  })
+
+  const comAguardando = [...lista, pa(6, 'Zeca', 3), pa(7, 'Beto', 20), pa(8, 'Ana Paula', 20)]
+
+  it('Todos, Não veio e Veio não mostram quem está aguardando', () => {
+    expect(listarSubAba(comAguardando, 'todos').map(x => x.nome)).toEqual(['Ana', 'Davi', 'Carla', 'Bruno', 'Alice'])
+    expect(listarSubAba(comAguardando, 'nao_veio').map(x => x.nome)).toEqual(['Ana', 'Davi', 'Carla'])
+    expect(listarSubAba(comAguardando, 'veio').map(x => x.nome)).toEqual(['Alice', 'Bruno'])
+  })
+
+  it('Aguardando: só os 🔵, quem espera há mais tempo primeiro, empate por nome', () => {
+    expect(listarSubAba(comAguardando, 'aguardando').map(x => x.nome)).toEqual(['Ana Paula', 'Beto', 'Zeca'])
   })
 })
 
@@ -200,7 +231,7 @@ describe('ehSaidaDeImplante', () => {
 
 describe('mensagemLonga', () => {
   // Retrato dos textos atuais, não uma regra: se o dono encurtar um texto, ajuste aqui.
-  it('as três mensagens atuais são longas', () => {
+  it('as mensagens atuais são longas', () => {
     for (const e of ETIQUETAS) expect(mensagemLonga(mensagemPara(e, 'Ana'))).toBe(true)
   })
 
@@ -213,5 +244,68 @@ describe('mensagemLonga', () => {
   it('mais de 3 linhas ou mais de 180 caracteres é longa', () => {
     expect(mensagemLonga('a\nb\nc\nd')).toBe(true)
     expect(mensagemLonga('x'.repeat(181))).toBe(true)
+  })
+})
+
+describe('intervalo de aplicação', () => {
+  it('as opções e o padrão', () => {
+    expect(INTERVALOS).toEqual([7, 10, 14, 15, 21, 28])
+    expect(INTERVALO_PADRAO).toBe(7)
+  })
+
+  it('só aceita as opções da lista, como número', () => {
+    expect(ehIntervaloValido(7)).toBe(true)
+    expect(ehIntervaloValido(15)).toBe(true)
+    expect(ehIntervaloValido(12)).toBe(false)
+    expect(ehIntervaloValido('7')).toBe(false)
+    expect(ehIntervaloValido(null)).toBe(false)
+  })
+
+  it('limite crítico: 28 dias, ou 2 intervalos a partir de 15', () => {
+    expect([7, 10, 14, 15, 21, 28].map(limiteCritico)).toEqual([28, 28, 28, 30, 42, 56])
+  })
+})
+
+describe('classificar pelo intervalo', () => {
+  const s = (iso: string) => new Date(iso)
+  const e = (iso: string, n: number) => classificar(s(iso), null, AGORA, n)?.etiqueta
+
+  it('intervalo 10: até 10 em dia, 11–28 faltou, 29+ crítico', () => {
+    expect(e('2026-09-07T12:00:00Z', 10)).toBe('verde')     // 10 dias
+    expect(e('2026-09-06T12:00:00Z', 10)).toBe('amarela')   // 11
+    expect(e('2026-08-20T12:00:00Z', 10)).toBe('amarela')   // 28
+    expect(e('2026-08-19T12:00:00Z', 10)).toBe('vermelha')  // 29
+  })
+
+  it('intervalo 15: até 15 em dia, 16–30 faltou, 31+ crítico', () => {
+    expect(e('2026-09-02T12:00:00Z', 15)).toBe('verde')     // 15
+    expect(e('2026-09-01T12:00:00Z', 15)).toBe('amarela')   // 16
+    expect(e('2026-08-18T12:00:00Z', 15)).toBe('amarela')   // 30
+    expect(e('2026-08-17T12:00:00Z', 15)).toBe('vermelha')  // 31
+  })
+
+  it('intervalo 21: até 21 em dia, 22–42 faltou, 43+ crítico', () => {
+    expect(e('2026-08-27T12:00:00Z', 21)).toBe('verde')     // 21
+    expect(e('2026-08-26T12:00:00Z', 21)).toBe('amarela')   // 22
+    expect(e('2026-08-06T12:00:00Z', 21)).toBe('amarela')   // 42
+    expect(e('2026-08-05T12:00:00Z', 21)).toBe('vermelha')  // 43
+  })
+
+  it('sem intervalo informado vale 7 (comportamento de antes)', () => {
+    expect(classificar(s('2026-09-10T12:00:00Z'), null, AGORA)).toEqual({ etiqueta: 'verde', diasSemVir: 7 })
+    expect(classificar(s('2026-09-09T12:00:00Z'), null, AGORA)).toEqual({ etiqueta: 'amarela', diasSemVir: 8 })
+  })
+
+  it('intervalo inválido (0, negativo) cai no padrão de 7', () => {
+    expect(e('2026-09-09T12:00:00Z', 0)).toBe('amarela')
+    expect(e('2026-09-10T12:00:00Z', -5)).toBe('verde')
+  })
+})
+
+describe('mensagem de quem aguarda nova prescrição', () => {
+  it('convida para a reavaliação, com o primeiro nome', () => {
+    const texto = mensagemPara('aguardando', 'MARIA SOUZA')
+    expect(texto.startsWith('Oi, Maria! Tudo bem? 😊 Sua prescrição chegou ao fim')).toBe(true)
+    expect(texto).toContain('consulta de reavaliação')
   })
 })
