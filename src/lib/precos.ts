@@ -43,6 +43,20 @@ export function chaveLaboratorio(nome: string): string {
   return normalizarNome(nome ?? '')
 }
 
+// "82,00", "1.250,50", "R$ 82,00" valem; "82.00", "12abc", "1,2,3" não.
+// reaisToCents sozinho trata ponto como milhar e ignora lixo: bom para o
+// campo do admin que digita aos poucos, perigoso aqui, onde o texto vem da
+// leitura da nota e o valor errado fica gravado para sempre.
+const FORMATO_BR = /^\d{1,3}(\.\d{3})+(,\d{1,2})?$|^\d+(,\d{1,2})?$/
+
+/** Centavos, ou `null` se não for um valor brasileiro válido e positivo. */
+export function valorParaCentavos(texto: string): number | null {
+  const limpo = (texto ?? '').replace(/R\$/gi, '').replace(/\s/g, '')
+  if (!FORMATO_BR.test(limpo)) return null
+  const centavos = reaisToCents(limpo)
+  return centavos > 0 ? centavos : null
+}
+
 export type ResultadoValidacao =
   | { ok: true; centavos: number; laboratorio: string; quantidade: number }
   | { ok: false; erros: ('valor' | 'laboratorio' | 'quantidade')[] }
@@ -53,16 +67,17 @@ export function validarCompra(dados: {
   laboratorio: string
   quantidade: number
 }): ResultadoValidacao {
-  const centavos = reaisToCents(dados.valor ?? '')
+  const centavos = valorParaCentavos(dados.valor ?? '')
   const laboratorio = (dados.laboratorio ?? '').trim()
   const quantidade = Number(dados.quantidade)
 
   const erros: ('valor' | 'laboratorio' | 'quantidade')[] = []
-  if (!(centavos > 0)) erros.push('valor')
+  if (centavos === null) erros.push('valor')
   if (!laboratorio) erros.push('laboratorio')
   if (!(quantidade > 0)) erros.push('quantidade')
 
-  return erros.length ? { ok: false, erros } : { ok: true, centavos, laboratorio, quantidade }
+  if (erros.length || centavos === null) return { ok: false, erros }
+  return { ok: true, centavos, laboratorio, quantidade }
 }
 
 /** Percentual sobre a compra anterior; `null` quando não há anterior. */
@@ -84,10 +99,14 @@ export function nivelVariacao(pct: number | null): NivelVariacao {
  * compras (caixa → frasco), o percentual não significa nada e some.
  */
 export function resumirGrupo(grupo: GrupoPreco): ResumoPreco {
+  // Duas compras na MESMA data mantêm a ordem que o chamador passou:
+  // listarPrecos ordena `purchased_at DESC, id DESC` no banco e Array.sort é
+  // estável — não tire esse ORDER BY sem revisar aqui.
   const historico = [...grupo.historico].sort((a, b) => b.data.localeCompare(a.data))
   const ultimo = historico[0]
+  if (!ultimo) throw new Error('resumirGrupo: grupo sem histórico')
   const anterior = historico[1] ?? null
-  const unidadeMudou = !!anterior && (anterior.unidade ?? '') !== (ultimo.unidade ?? '')
+  const unidadeMudou = !!anterior && normalizarNome(anterior.unidade ?? '') !== normalizarNome(ultimo.unidade ?? '')
   const pct = unidadeMudou ? null : variacao(anterior?.centavos ?? null, ultimo.centavos)
   return { ultimo, anterior, variacao: pct, nivel: nivelVariacao(pct), unidadeMudou }
 }
@@ -97,9 +116,11 @@ export function ordenarPorAumento(grupos: GrupoPreco[]): GrupoPreco[] {
   return [...grupos].sort((a, b) => {
     const va = resumirGrupo(a).variacao
     const vb = resumirGrupo(b).variacao
-    if (va === null && vb === null) return a.produto.localeCompare(b.produto, 'pt-BR')
+    if (va === null && vb === null) {
+      return a.produto.localeCompare(b.produto, 'pt-BR') || a.laboratorio.localeCompare(b.laboratorio, 'pt-BR')
+    }
     if (va === null) return 1
     if (vb === null) return -1
-    return vb - va || a.produto.localeCompare(b.produto, 'pt-BR')
+    return vb - va || a.produto.localeCompare(b.produto, 'pt-BR') || a.laboratorio.localeCompare(b.laboratorio, 'pt-BR')
   })
 }

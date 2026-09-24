@@ -1,7 +1,7 @@
 // __tests__/lib/precos.test.ts
 import {
   chaveProduto, chaveLaboratorio, validarCompra, variacao, nivelVariacao,
-  resumirGrupo, ordenarPorAumento,
+  resumirGrupo, ordenarPorAumento, valorParaCentavos,
   ALTA_PCT, ATENCAO_PCT,
   type Compra, type GrupoPreco,
 } from '@/lib/precos'
@@ -28,7 +28,29 @@ describe('chaves de agrupamento', () => {
   })
 })
 
+describe('valorParaCentavos', () => {
+  it('aceita o formato brasileiro', () => {
+    expect(valorParaCentavos('82,00')).toBe(8200)
+    expect(valorParaCentavos('R$ 82,00')).toBe(8200)
+    expect(valorParaCentavos(' 82,00 ')).toBe(8200)
+    expect(valorParaCentavos('1.250,50')).toBe(125050)
+    expect(valorParaCentavos('1.250')).toBe(125000)
+    expect(valorParaCentavos('1250')).toBe(125000)
+  })
+
+  it('recusa o que não é um valor brasileiro válido e positivo', () => {
+    for (const texto of ['82.00', '1.2', '12abc', '1,2,3', '1e3', '0,001', '-5,00', '', 'R$']) {
+      expect(valorParaCentavos(texto)).toBeNull()
+    }
+  })
+})
+
 describe('validarCompra', () => {
+  it('recusa ponto-decimal (que reaisToCents leria como 100x o valor)', () => {
+    expect(validarCompra({ valor: '82.00', laboratorio: 'X', quantidade: 1 }).ok).toBe(false)
+  })
+
+
   it('aceita o caso normal e devolve os valores limpos', () => {
     expect(validarCompra({ valor: 'R$ 82,00', laboratorio: '  BioMeds ', quantidade: 10 }))
       .toEqual({ ok: true, centavos: 8200, laboratorio: 'BioMeds', quantidade: 10 })
@@ -115,11 +137,21 @@ describe('resumirGrupo', () => {
     expect(r.ultimo.centavos).toBe(11000)
     expect(r.variacao).toBe(10)
   })
+
+  it('unidade só difere em caixa/espaço: não conta como mudança', () => {
+    const r = resumirGrupo(grupo([compra('2026-09-20', 11000, 'Frasco'), compra('2026-08-10', 10000, 'frasco')]))
+    expect(r.unidadeMudou).toBe(false)
+    expect(r.variacao).toBe(10)
+  })
+
+  it('histórico vazio é erro, não undefined silencioso', () => {
+    expect(() => resumirGrupo(grupo([]))).toThrow(/sem histórico/)
+  })
 })
 
 describe('ordenarPorAumento', () => {
-  const g = (produto: string, historico: Compra[]): GrupoPreco =>
-    ({ produto, laboratorio: 'Lab', chave: produto, historico })
+  const g = (produto: string, historico: Compra[], laboratorio = 'Lab'): GrupoPreco =>
+    ({ produto, laboratorio, chave: produto, historico })
 
   it('maior aumento primeiro; primeira compra por último; empate por nome', () => {
     const grupos = [
@@ -136,5 +168,21 @@ describe('ordenarPorAumento', () => {
     const antes = grupos.map(x => x.produto)
     ordenarPorAumento(grupos)
     expect(grupos.map(x => x.produto)).toEqual(antes)
+  })
+
+  it('mesmo produto e mesmo aumento em dois laboratórios: desempata por laboratório', () => {
+    const grupos = [
+      g('HMB', [compra('2026-09-20', 11000), compra('2026-08-10', 10000)], 'Zeta'),
+      g('HMB', [compra('2026-09-20', 11000), compra('2026-08-10', 10000)], 'Alfa'),
+    ]
+    expect(ordenarPorAumento(grupos).map(x => x.laboratorio)).toEqual(['Alfa', 'Zeta'])
+  })
+
+  it('mesmo produto, ambos sem comparação: desempata por laboratório', () => {
+    const grupos = [
+      g('Ana', [compra('2026-09-20', 10000)], 'Zeta'),
+      g('Ana', [compra('2026-09-20', 10000)], 'Alfa'),
+    ]
+    expect(ordenarPorAumento(grupos).map(x => x.laboratorio)).toEqual(['Alfa', 'Zeta'])
   })
 })
