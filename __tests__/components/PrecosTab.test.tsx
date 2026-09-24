@@ -235,7 +235,8 @@ describe('PrecosTab', () => {
       if (String(url).includes('scan-nf')) {
         return lida([{ name: 'HMB', quantity: 10, unit: 'frasco', unit_price: '100,00', laboratory: 'BioMeds', purchase_date: '2026-05-10' }])
       }
-      if (init?.method === 'POST') return { ok: false, status: 500, json: async () => ({ error: 'x' }) }
+      // Corpo que não é JSON (um HTML de proxy, por exemplo): sobra a genérica.
+      if (init?.method === 'POST') return { ok: false, status: 500, json: async () => { throw new Error('não é JSON') } }
       return { ok: true, status: 200, json: async () => GRUPOS }
     })
     render(<PrecosTab />)
@@ -246,6 +247,27 @@ describe('PrecosTab', () => {
     expect(await screen.findByText(/Não foi possível salvar os preços/)).toBeInTheDocument()
     expect(screen.getByLabelText('Produto 1')).toHaveValue('HMB')
     expect(screen.getByLabelText('Valor unitário 1')).toHaveValue('100,00')
+  })
+
+  // Sem o motivo do servidor, 403 (sessão expirada) e o teto de itens viravam
+  // o mesmo "tente de novo" — e a tentativa seguinte falhava igual.
+  it('o motivo do servidor chega à tela em vez da mensagem genérica', async () => {
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (String(url).includes('scan-nf')) {
+        return lida([{ name: 'HMB', quantity: 10, unit: 'frasco', unit_price: '100,00', laboratory: 'BioMeds', purchase_date: '2026-05-10' }])
+      }
+      if (init?.method === 'POST') return { ok: false, status: 403, json: async () => ({ error: 'Sessão expirada. Entre de novo.' }) }
+      return { ok: true, status: 200, json: async () => GRUPOS }
+    })
+    render(<PrecosTab />)
+    await waitFor(() => expect(linhas()).toHaveLength(3))
+    await userEvent.upload(screen.getByLabelText('Foto ou PDF da nota antiga'), arquivo())
+    await userEvent.click(await screen.findByRole('button', { name: 'Salvar preços' }))
+
+    expect(await screen.findByText('Sessão expirada. Entre de novo.')).toBeInTheDocument()
+    expect(screen.queryByText(/Não foi possível salvar os preços/)).not.toBeInTheDocument()
+    // O que foi digitado continua na tela para a correção.
+    expect(screen.getByLabelText('Produto 1')).toHaveValue('HMB')
   })
 
   it('o botão da nota antiga continua na tela quando a lista não carrega', async () => {

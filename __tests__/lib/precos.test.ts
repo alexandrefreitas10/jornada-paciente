@@ -153,6 +153,27 @@ describe('resumirGrupo', () => {
     expect(r.variacao).toBe(10)
   })
 
+  // A nota fiscal manda o plural e o lançamento manual manda o singular do
+  // cadastro: se isso contasse como mudança, o produto perdia o percentual
+  // para sempre.
+  it('plural não é mudança de unidade: frascos = frasco', () => {
+    const r = resumirGrupo(grupo([compra('2026-09-20', 11000, 'frascos'), compra('2026-08-10', 10000, 'frasco')]))
+    expect(r.unidadeMudou).toBe(false)
+    expect(r.variacao).toBe(10)
+  })
+
+  it('plural com acento e caixa também casa: Caixas = caixa', () => {
+    const r = resumirGrupo(grupo([compra('2026-09-20', 11000, 'Caixas'), compra('2026-08-10', 10000, 'caixa')]))
+    expect(r.unidadeMudou).toBe(false)
+    expect(r.variacao).toBe(10)
+  })
+
+  it('unidade curta não é mutilada: ml continua diferente de mg', () => {
+    const r = resumirGrupo(grupo([compra('2026-09-20', 11000, 'ml'), compra('2026-08-10', 10000, 'mg')]))
+    expect(r.unidadeMudou).toBe(true)
+    expect(r.variacao).toBeNull()
+  })
+
   it('histórico vazio é erro, não undefined silencioso', () => {
     expect(() => resumirGrupo(grupo([]))).toThrow(/sem histórico/)
   })

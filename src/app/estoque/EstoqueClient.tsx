@@ -335,6 +335,17 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   const [resetLoading, setResetLoading] = useState(false)
   const [laboratorios, setLaboratorios] = useState<string[]>([])
 
+  // Precisa recarregar depois de cada entrada: o laboratório é texto livre e,
+  // sem a lista atualizada, o próximo lançamento não recebe a sugestão do que
+  // acabou de ser digitado — "BioMeds" e "Bio Meds" viram dois históricos.
+  const carregarLaboratorios = useCallback(() => {
+    fetch('/api/estoque/precos')
+      .then(r => (r.ok ? r.json() : []))
+      .then((grupos: { laboratorio: string }[]) =>
+        setLaboratorios([...new Set(grupos.map(g => g.laboratorio))].sort((a, b) => a.localeCompare(b, 'pt-BR'))))
+      .catch(() => {})
+  }, [])
+
   useEffect(() => {
     Promise.all([
       fetch('/api/estoque/items').then(r => r.json()),
@@ -349,12 +360,8 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
       setPageLoading(false)
     }).catch(() => setPageLoading(false))
 
-    fetch('/api/estoque/precos')
-      .then(r => (r.ok ? r.json() : []))
-      .then((grupos: { laboratorio: string }[]) =>
-        setLaboratorios([...new Set(grupos.map(g => g.laboratorio))].sort((a, b) => a.localeCompare(b, 'pt-BR'))))
-      .catch(() => {})
-  }, [])
+    carregarLaboratorios()
+  }, [carregarLaboratorios])
 
   // ── Entrada por NF / Estoque ────────────────────────────────
   const [nfLoading, setNfLoading] = useState(false)
@@ -471,6 +478,10 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
       setNfItems([]); setNfS3Key(null); setNfFilename(null)
       setTab('entradas')
     }
+    // Qualquer linha que entrou já gravou um laboratório: a sugestão precisa
+    // conhecê-lo antes do próximo lançamento (vale também na falha parcial,
+    // onde o que sobrou na tela costuma ser do MESMO laboratório).
+    if (savedIds.length > 0) carregarLaboratorios()
     if (savedIds.length > 0) setQrDocxPrompt(savedIds)
     setNfSaving(false)
   }
@@ -495,13 +506,29 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   const meSelectedItem = items.find(i => i.id === Number(meItemId))
   const meIsTirzep = (meSelectedItem?.name ?? meNewName).toLowerCase().includes('tirzep')
   const meTotalMg = meFrascos && meMgFrasco ? Number(meFrascos) * Number(meMgFrasco) : null
+  // Quantidade que o servidor valida: na tirzepatida a compra é contada em
+  // frascos (purchase_quantity), nos demais é a quantidade digitada. Sem
+  // fallback: campo vazio trava o botão em vez de liberar um 400.
+  const meQtdCompra = meIsTirzep && meTotalMg && Number(meFrascos) > 0 ? Number(meFrascos) : Number(meQty)
+  const meCompraOk = validarCompra({ valor: mePreco, laboratorio: meLab, quantidade: meQtdCompra }).ok
 
   async function saveManualEntrada() {
     setMeSaving(true)
     let itemId = Number(meItemId)
     if (meIsNew && meNewName) {
       const res = await fetch('/api/estoque/items', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: meNewName, unit: meUnit }) })
-      if (res.ok) { const ni = await res.json(); itemId = ni.id; setItems(p => [...p, ni]) }
+      if (res.ok) {
+        const ni = await res.json()
+        itemId = ni.id
+        setItems(p => [...p, ni])
+        // O POST do movimento pode ser recusado (valor/laboratório/quantidade).
+        // Sem apontar o formulário para o item recém-criado, cada nova tentativa
+        // criava OUTRA medicação e deixava um item de quantidade 0 para trás.
+        // `itemId` acima continua valendo nesta execução — o estado só muda no
+        // próximo render.
+        setMeItemId(String(ni.id))
+        setMeIsNew(false)
+      }
     }
     if (!itemId) { setMeSaving(false); return }
     const finalQty = meIsTirzep && meTotalMg ? meTotalMg : Number(meQty)
@@ -542,6 +569,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
     const [ir, mr, logsRes] = await Promise.all([fetch('/api/estoque/items'), fetch('/api/estoque/movements'), fetch('/api/estoque/entry-logs')])
     setItems(await ir.json()); setMovements(await mr.json())
     if (logsRes.ok) setEntryLogs(await logsRes.json())
+    carregarLaboratorios()
     setManEntrada(false); setMeItemId(''); setMeNewName(''); setMeQty('1'); setMeLot(''); setMeExpiry(''); setMeObs(''); setMeIsNew(false); setMeFrascos(''); setMeMgFrasco(''); setMePreco(''); setMeLab('')
     setMeSaving(false)
     setQrDocxPrompt([itemId])
@@ -1197,7 +1225,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
               </div>
               {nfFaltando.length > 0 && (
                 <p className="text-sm text-amber-800 mt-3">
-                  Falta valor ou laboratório em: {nfFaltando.join(', ')}.
+                  Falta valor, laboratório ou quantidade em: {nfFaltando.join(', ')}.
                 </p>
               )}
               <div className="flex gap-2 mt-3">
@@ -1268,13 +1296,13 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
                 </div>
                 )}
               </div>
-              {!validarCompra({ valor: mePreco, laboratorio: meLab, quantidade: Number(meQty) || 1 }).ok && (
+              {!meCompraOk && (
                 <p className="text-sm text-amber-800 mt-3">
-                  Informe o valor pago (use vírgula, ex.: 82,00) e o laboratório.
+                  Informe a quantidade, o valor pago (use vírgula, ex.: 82,00) e o laboratório.
                 </p>
               )}
               <div className="flex gap-2 mt-3">
-                <button onClick={saveManualEntrada} disabled={meSaving || (!meItemId && (!meIsNew || !meNewName)) || (meIsTirzep && !meTotalMg) || !validarCompra({ valor: mePreco, laboratorio: meLab, quantidade: Number(meQty) || 1 }).ok} className="px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50">{meSaving ? 'Salvando...' : 'Salvar Entrada'}</button>
+                <button onClick={saveManualEntrada} disabled={meSaving || (!meItemId && (!meIsNew || !meNewName)) || (meIsTirzep && !meTotalMg) || !meCompraOk} className="px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50">{meSaving ? 'Salvando...' : 'Salvar Entrada'}</button>
                 <button onClick={() => setManEntrada(false)} className="px-4 py-2 border border-gray-300 text-sm text-gray-600 rounded-lg hover:bg-gray-50">Cancelar</button>
               </div>
             </div>

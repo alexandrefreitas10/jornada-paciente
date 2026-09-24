@@ -99,6 +99,20 @@ export function nivelVariacao(pct: number | null): NivelVariacao {
 }
 
 /**
+ * Unidade só para COMPARAR. A nota fiscal costuma vir no plural ("caixas",
+ * "frascos") e o cadastro do estoque no singular ("caixa", "frasco"): sem
+ * tirar o "s" o mesmo produto comprado das duas formas ficava marcado como
+ * "unidade mudou" para sempre, e o percentual — a razão da aba existir —
+ * nunca mais aparecia. O "s" só cai quando sobram pelo menos duas letras,
+ * para não transformar unidades curtas em outra coisa.
+ * Não muda o que é gravado nem o que é exibido.
+ */
+function chaveUnidade(unidade: string | null): string {
+  const base = normalizarNome(unidade ?? '')
+  return base.length > 2 && base.endsWith('s') ? base.slice(0, -1) : base
+}
+
+/**
  * Resume um par produto+laboratório. Se a unidade mudou entre as duas últimas
  * compras (caixa → frasco), o percentual não significa nada e some.
  */
@@ -110,7 +124,7 @@ export function resumirGrupo(grupo: GrupoPreco): ResumoPreco {
   const ultimo = historico[0]
   if (!ultimo) throw new Error('resumirGrupo: grupo sem histórico')
   const anterior = historico[1] ?? null
-  const unidadeMudou = !!anterior && normalizarNome(anterior.unidade ?? '') !== normalizarNome(ultimo.unidade ?? '')
+  const unidadeMudou = !!anterior && chaveUnidade(anterior.unidade) !== chaveUnidade(ultimo.unidade)
   const pct = unidadeMudou ? null : variacao(anterior?.centavos ?? null, ultimo.centavos)
   return { ultimo, anterior, variacao: pct, nivel: nivelVariacao(pct), unidadeMudou }
 }

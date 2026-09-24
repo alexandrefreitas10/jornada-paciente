@@ -136,7 +136,18 @@ export function PrecosTab() {
           })),
         }),
       })
-      if (!res.ok) throw new Error(String(res.status))
+      if (!res.ok) {
+        // O motivo do servidor (sessão expirada, limite de itens) é a única
+        // coisa que diz o que fazer — engoli-lo virava um retry sem fim.
+        // Corpo sem JSON ou sem `error` continua caindo na mensagem genérica,
+        // e só o `error` do servidor chega à tela: um erro de rede não vira texto.
+        const corpo: unknown = await res.json().catch(() => null)
+        const motivo = corpo && typeof corpo === 'object' && typeof (corpo as { error?: unknown }).error === 'string'
+          ? (corpo as { error: string }).error.trim()
+          : ''
+        setErroNota(motivo || 'Não foi possível salvar os preços. Tente de novo.')
+        return
+      }
       setLinhas(null)
       setS3Key(null)
       setDataNota('')
