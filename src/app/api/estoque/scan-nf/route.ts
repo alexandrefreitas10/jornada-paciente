@@ -94,10 +94,18 @@ Identifique cada item e retorne APENAS um JSON array com o seguinte formato (sem
     "quantity": 10,
     "unit": "caixas",
     "lot": "ABC123",
-    "expiry_date": "12/2026"
+    "expiry_date": "12/2026",
+    "unit_price": "82,00",
+    "laboratory": "Nome do laboratório/fabricante ou do fornecedor que emitiu a nota",
+    "purchase_date": "2026-09-20"
   }
 ]
-Se não encontrar lote ou validade, use null. Seja objetivo e liste todos os itens da nota.`
+Regras:
+- "unit_price" é o valor de UMA unidade (o valor unitário da linha, não o total). Use o formato brasileiro, sem "R$".
+- "laboratory" é o mesmo para todos os itens quando a nota tem um único emitente.
+- "purchase_date" é a data de emissão da nota, no formato AAAA-MM-DD.
+- Se não encontrar algum campo, use null. Não invente valores.
+Seja objetivo e liste todos os itens da nota.`
 
 const PROMPT_INVENTORY = `Este é um documento de lista de contagem/inventário de estoque de medicamentos.
 

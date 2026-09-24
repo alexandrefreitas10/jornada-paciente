@@ -1,9 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { centsToReais } from '@/lib/money'
 import { normalizarNome } from '@/lib/stock-actives'
-import { ordenarPorAumento, resumirGrupo, type Compra, type GrupoPreco, type NivelVariacao } from '@/lib/precos'
+import { ordenarPorAumento, resumirGrupo, validarCompra, type Compra, type GrupoPreco, type NivelVariacao } from '@/lib/precos'
 
 const NIVEL: Record<NivelVariacao, { icone: string; classe: string }> = {
   alta: { icone: '🔴', classe: 'text-red-700 bg-red-50 border-red-200' },
@@ -25,18 +25,50 @@ const reais = (centavos: number) => `R$ ${centsToReais(centavos) || '0,00'}`
 const dia = (data: string) => new Date(`${data}T12:00:00`).toLocaleDateString('pt-BR')
 const pct = (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(1).replace('.', ',')}%`
 
+const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/
+// A leitura da nota devolve JSON de modelo: qualquer campo pode chegar com outro
+// tipo. Um unit_price numérico derrubaria o .replace de valorParaCentavos no
+// render, então tudo vira string antes de entrar no estado.
+const texto = (v: unknown) => (v == null ? '' : String(v))
+
+/** Uma linha da nota antiga em edição. Tudo texto: é formulário, não modelo. */
+interface LinhaNota {
+  produto: string
+  quantidade: string
+  unidade: string
+  valor: string
+  laboratorio: string
+}
+
+type ItemLido = Partial<Record<'name' | 'quantity' | 'unit' | 'unit_price' | 'laboratory' | 'purchase_date', unknown>>
+
 export function PrecosTab() {
   const [grupos, setGrupos] = useState<GrupoPreco[] | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [busca, setBusca] = useState('')
   const [aberto, setAberto] = useState<string | null>(null)
 
+  // Nota antiga (retroativo): só preço, sem entrada de estoque.
+  // `erroNota` é separado de `erro` de propósito: o erro da lista aparece no
+  // lugar da lista, o da nota dentro do cartão da nota — um não pode apagar o outro.
+  const [linhas, setLinhas] = useState<LinhaNota[] | null>(null)
+  const [erroNota, setErroNota] = useState<string | null>(null)
+  const [dataNota, setDataNota] = useState('')
+  const [s3Key, setS3Key] = useState<string | null>(null)
+  const [lendo, setLendo] = useState(false)
+  const [salvando, setSalvando] = useState(false)
+  const arquivoRef = useRef<HTMLInputElement>(null)
+
   const carregar = useCallback(async () => {
     setErro(null)
     try {
       const res = await fetch('/api/estoque/precos')
       if (!res.ok) throw new Error(String(res.status))
-      setGrupos(await res.json())
+      const dados: unknown = await res.json()
+      if (!Array.isArray(dados)) throw new Error('resposta fora do formato')
+      // resumirGrupo estoura em grupo sem compra e não há error boundary nesta
+      // árvore: histórico vazio nunca entra no estado.
+      setGrupos((dados as GrupoPreco[]).filter(g => Array.isArray(g?.historico) && g.historico.length > 0))
     } catch {
       setErro('Não foi possível carregar os preços. Recarregue a página.')
     }
@@ -44,10 +76,167 @@ export function PrecosTab() {
 
   useEffect(() => { carregar() }, [carregar])
 
+  const hoje = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+
+  async function lerNota(e: React.ChangeEvent<HTMLInputElement>) {
+    const arquivo = e.target.files?.[0]
+    if (!arquivo) return
+    setLendo(true)
+    setErroNota(null)
+    try {
+      const form = new FormData()
+      form.append('file', arquivo)
+      const res = await fetch('/api/estoque/scan-nf', { method: 'POST', body: form })
+      if (!res.ok) throw new Error(String(res.status))
+      const dados = await res.json()
+      const brutos: ItemLido[] = Array.isArray(dados?.items)
+        ? (dados.items as unknown[]).filter((i): i is ItemLido => !!i && typeof i === 'object')
+        : []
+      if (dados?.parseError || brutos.length === 0) {
+        setErroNota(typeof dados?.parseError === 'string' ? dados.parseError : 'Não foi possível ler os itens da nota.')
+        return
+      }
+      setLinhas(brutos.map(i => ({
+        produto: texto(i.name),
+        quantidade: i.quantity == null ? '1' : texto(i.quantity),
+        unidade: texto(i.unit),
+        valor: texto(i.unit_price),
+        laboratorio: texto(i.laboratory),
+      })))
+      const lida = brutos.map(i => texto(i.purchase_date)).find(d => DATA_ISO.test(d))
+      setDataNota(lida ?? hoje())
+      setS3Key(typeof dados?.s3Key === 'string' ? dados.s3Key : null)
+    } catch {
+      setErroNota('Não foi possível ler a nota. Tente de novo.')
+    } finally {
+      setLendo(false)
+      if (arquivoRef.current) arquivoRef.current.value = ''
+    }
+  }
+
+  async function salvarNota() {
+    // O botão já está desabilitado nesses casos; a guarda existe para que um
+    // clique em corrida não mande nota pela metade.
+    if (!linhas || linhas.length === 0 || notaFaltando.length > 0 || !dataValida) return
+    setSalvando(true)
+    setErroNota(null)
+    try {
+      const res = await fetch('/api/estoque/precos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          itens: linhas.map(l => ({
+            produto: l.produto,
+            valor: l.valor,
+            laboratorio: l.laboratorio,
+            quantidade: Number(l.quantidade),
+            unidade: l.unidade || null,
+            data: dataNota,
+            nfS3Key: s3Key,
+          })),
+        }),
+      })
+      if (!res.ok) throw new Error(String(res.status))
+      setLinhas(null)
+      setS3Key(null)
+      setDataNota('')
+      await carregar()
+    } catch {
+      // As linhas ficam na tela: nada do que foi digitado se perde numa falha.
+      setErroNota('Não foi possível salvar os preços. Tente de novo.')
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  const dataValida = DATA_ISO.test(dataNota)
+  const notaFaltando = (linhas ?? [])
+    .filter(l => !l.produto.trim() || !validarCompra({ valor: l.valor, laboratorio: l.laboratorio, quantidade: Number(l.quantidade) }).ok)
+    .map(l => l.produto.trim() || '(sem nome)')
+  const podeSalvar = !!linhas && linhas.length > 0 && notaFaltando.length === 0 && dataValida
+
+  // Fica FORA do `if (!grupos)`: quando a lista falha, a única ação da aba não
+  // pode sumir junto com ela.
+  const cartaoNota = (
+    <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-2">
+      <div className="flex items-center gap-3 flex-wrap">
+        <button
+          type="button"
+          onClick={() => arquivoRef.current?.click()}
+          disabled={lendo}
+          className="px-3 py-1.5 rounded-lg text-sm font-medium bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
+        >
+          {lendo ? 'Lendo a nota...' : '📄 Registrar preços de nota antiga'}
+        </button>
+        <p className="text-xs text-gray-500">Isto não dá entrada no estoque — só registra o preço.</p>
+      </div>
+      <input
+        ref={arquivoRef}
+        type="file"
+        accept="image/*,application/pdf"
+        aria-label="Foto ou PDF da nota antiga"
+        onChange={lerNota}
+        className="hidden"
+      />
+      {erroNota && <p role="alert" className="text-sm text-red-600">{erroNota}</p>}
+
+      {linhas && (
+        <div className="space-y-2 pt-2">
+          <label className="flex items-center gap-2 text-xs text-gray-600">
+            Data da compra
+            <input
+              type="date"
+              value={dataNota}
+              onChange={e => setDataNota(e.target.value)}
+              className="border border-gray-300 rounded px-2 py-1 text-sm"
+            />
+          </label>
+          {linhas.map((l, idx) => (
+            <div key={idx} className="flex gap-2 flex-wrap items-center bg-gray-50 border border-gray-100 rounded-lg p-2">
+              <input value={l.produto} onChange={e => setLinhas(p => p!.map((x, i) => i === idx ? { ...x, produto: e.target.value } : x))}
+                aria-label={`Produto ${idx + 1}`} placeholder="Produto *" className="flex-1 min-w-[140px] border border-gray-200 rounded px-2 py-1 text-sm" />
+              <input value={l.quantidade} onChange={e => setLinhas(p => p!.map((x, i) => i === idx ? { ...x, quantidade: e.target.value } : x))}
+                aria-label={`Quantidade ${idx + 1}`} placeholder="Qtd" className="w-20 border border-gray-200 rounded px-2 py-1 text-sm" />
+              <input value={l.unidade} onChange={e => setLinhas(p => p!.map((x, i) => i === idx ? { ...x, unidade: e.target.value } : x))}
+                aria-label={`Unidade ${idx + 1}`} placeholder="Un" className="w-20 border border-gray-200 rounded px-2 py-1 text-sm" />
+              <input value={l.valor} onChange={e => setLinhas(p => p!.map((x, i) => i === idx ? { ...x, valor: e.target.value } : x))}
+                aria-label={`Valor unitário ${idx + 1}`} placeholder="Valor unit. R$ *" className="w-28 border border-gray-200 rounded px-2 py-1 text-sm" />
+              <input value={l.laboratorio} onChange={e => setLinhas(p => p!.map((x, i) => i === idx ? { ...x, laboratorio: e.target.value } : x))}
+                aria-label={`Laboratório ${idx + 1}`} placeholder="Laboratório *" className="w-32 border border-gray-200 rounded px-2 py-1 text-sm" />
+              <button type="button" onClick={() => setLinhas(p => p!.filter((_, i) => i !== idx))}
+                aria-label={`Remover ${l.produto || 'item'}`} className="text-red-400 hover:text-red-600 text-sm px-1">✕</button>
+            </div>
+          ))}
+          {notaFaltando.length > 0 && (
+            <p className="text-sm text-amber-800">Falta valor, laboratório ou quantidade em: {notaFaltando.join(', ')}.</p>
+          )}
+          {!dataValida && <p className="text-sm text-amber-800">Informe a data da compra.</p>}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={salvarNota}
+              disabled={salvando || !podeSalvar}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+            >
+              {salvando ? 'Salvando...' : 'Salvar preços'}
+            </button>
+            <button type="button" onClick={() => { setLinhas(null); setS3Key(null); setDataNota(''); setErroNota(null) }}
+              className="px-3 py-1.5 rounded-lg text-sm text-gray-600 hover:bg-gray-100">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+
   if (!grupos) {
     return (
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 text-center text-sm text-gray-500">
-        {erro ?? 'Carregando...'}
+      <div className="space-y-4">
+        {cartaoNota}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 text-center text-sm text-gray-500">
+          {erro ?? 'Carregando...'}
+        </div>
       </div>
     )
   }
@@ -60,6 +249,12 @@ export function PrecosTab() {
 
   return (
     <div className="space-y-4">
+      {cartaoNota}
+
+      {/* A lista já carregou uma vez: um erro aqui é de recarga (depois de salvar
+          uma nota, por exemplo) e a lista na tela está velha — precisa aparecer. */}
+      {erro && <p role="alert" className="text-sm text-red-600">{erro}</p>}
+
       <div className="relative">
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
           <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
