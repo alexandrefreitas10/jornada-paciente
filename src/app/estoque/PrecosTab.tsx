@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { centsToReais } from '@/lib/money'
 import { normalizarNome } from '@/lib/stock-actives'
-import { ordenarPorAumento, resumirGrupo, type GrupoPreco, type NivelVariacao } from '@/lib/precos'
+import { ordenarPorAumento, resumirGrupo, type Compra, type GrupoPreco, type NivelVariacao } from '@/lib/precos'
 
 const NIVEL: Record<NivelVariacao, { icone: string; classe: string }> = {
   alta: { icone: '🔴', classe: 'text-red-700 bg-red-50 border-red-200' },
@@ -11,6 +11,12 @@ const NIVEL: Record<NivelVariacao, { icone: string; classe: string }> = {
   estavel: { icone: '', classe: 'text-gray-600 bg-gray-50 border-gray-200' },
   queda: { icone: '🟢', classe: 'text-green-700 bg-green-50 border-green-200' },
   primeira: { icone: '', classe: 'text-gray-500 bg-gray-50 border-gray-200' },
+}
+
+const FONTE: Record<Compra['fonte'], string> = {
+  nf: 'nota fiscal',
+  manual: 'lançamento manual',
+  retroativo: 'nota antiga',
 }
 
 // centsToReais devolve '' para zero — aqui o preço é sempre exibido.
@@ -70,6 +76,11 @@ export function PrecosTab() {
         />
       </div>
 
+      <p className="text-xs text-gray-500">
+        Mostra as compras lançadas com valor. Ajuste de quantidade não entra, e um preço
+        lançado errado só se corrige lançando a compra certa.
+      </p>
+
       {grupos.length === 0 ? (
         <p className="text-center py-10 text-sm text-gray-400">
           Nenhum preço registrado ainda. Eles aparecem aqui conforme as entradas forem lançadas.
@@ -120,7 +131,7 @@ export function PrecosTab() {
                         <span className="font-medium text-gray-800">{reais(c.centavos)}</span>
                         <span>{c.quantidade}{c.unidade ? ` ${c.unidade}` : ''}</span>
                         <span>{dia(c.data)}</span>
-                        <span className="text-gray-400">{c.fonte === 'retroativo' ? 'nota antiga' : c.fonte}</span>
+                        <span className="text-gray-400">{FONTE[c.fonte] ?? c.fonte}</span>
                       </li>
                     ))}
                   </ul>
