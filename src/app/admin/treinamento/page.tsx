@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type { TrainingKb } from '@/lib/training/types'
-import { centsToReais, reaisToCents } from '@/lib/training/money'
+import { centsToReais, reaisToCents } from '@/lib/money'
 
 // A tela é o cadastro do gabarito que a IA usa para simular pacientes e
 // avaliar a secretária. Sem isso preenchido, o módulo de treino inteiro

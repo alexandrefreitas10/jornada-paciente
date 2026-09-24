@@ -1,7 +1,7 @@
 // __tests__/lib/training-money.test.ts
-import { reaisToCents, centsToReais } from '@/lib/training/money'
+import { reaisToCents, centsToReais } from '@/lib/money'
 
-describe('training/money — reaisToCents (item 2: separador de milhar não pode mangular o preço)', () => {
+describe('money — reaisToCents (item 2: separador de milhar não pode mangular o preço)', () => {
   it('número sem separador nenhum', () => {
     expect(reaisToCents('1500')).toBe(150000)
     expect(reaisToCents('900')).toBe(90000)
