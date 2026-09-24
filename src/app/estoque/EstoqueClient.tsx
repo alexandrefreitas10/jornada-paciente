@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import QRCode from 'qrcode'
 import { RelatoriosTab } from './RelatoriosTab'
+import { validarCompra } from '@/lib/precos'
 
 interface StockItem { id: number; name: string; unit: string; quantity: number; notes: string | null; lot: string | null; expiry_date: string | null }
 interface StockMovement {
@@ -10,7 +11,10 @@ interface StockMovement {
   quantity: number; lot: string | null; expiry_date: string | null
   patient_id: number | null; patient_name: string | null; observation: string | null; created_by: string | null; created_at: string
 }
-interface NfItem { name: string; quantity: number; unit: string; lot: string | null; expiry_date: string | null }
+interface NfItem {
+  name: string; quantity: number; unit: string; lot: string | null; expiry_date: string | null
+  unit_price: string; laboratory: string
+}
 interface EntryLog { id: number; type: string; original_filename: string | null; s3_key: string | null; item_count: number; created_by: string | null; created_at: string; download_url: string | null }
 interface EntryLogDetail { item_name: string; quantity: number; lot: string | null; expiry_date: string | null }
 
@@ -323,6 +327,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   const [resetPassword, setResetPassword] = useState('')
   const [resetError, setResetError] = useState('')
   const [resetLoading, setResetLoading] = useState(false)
+  const [laboratorios, setLaboratorios] = useState<string[]>([])
 
   useEffect(() => {
     Promise.all([
@@ -337,6 +342,12 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
       if (Array.isArray(logsData)) setEntryLogs(logsData)
       setPageLoading(false)
     }).catch(() => setPageLoading(false))
+
+    fetch('/api/estoque/precos')
+      .then(r => (r.ok ? r.json() : []))
+      .then((grupos: { laboratorio: string }[]) =>
+        setLaboratorios([...new Set(grupos.map(g => g.laboratorio))].sort((a, b) => a.localeCompare(b, 'pt-BR'))))
+      .catch(() => {})
   }, [])
 
   // ── Entrada por NF / Estoque ────────────────────────────────
@@ -357,7 +368,11 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
     const fd = new FormData(); fd.append('file', file)
     const res = await fetch('/api/estoque/scan-nf', { method: 'POST', body: fd })
     const data = await res.json()
-    if (data.items?.length) { setNfItems(data.items); setNfS3Key(data.s3Key ?? null); setNfFilename(data.originalFilename ?? null) }
+    if (data.items?.length) { setNfItems((data.items as Partial<NfItem>[]).map(i => ({
+        name: i.name ?? '', quantity: Number(i.quantity ?? 0), unit: i.unit ?? 'un',
+        lot: i.lot ?? null, expiry_date: i.expiry_date ?? null,
+        unit_price: i.unit_price ?? '', laboratory: i.laboratory ?? '',
+      }))); setNfS3Key(data.s3Key ?? null); setNfFilename(data.originalFilename ?? null) }
     else { setNfError('Não foi possível extrair itens. Tente uma imagem mais nítida.') }
     setNfLoading(false)
     if (nfInputRef.current) nfInputRef.current.value = ''
@@ -370,7 +385,11 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
     const fd = new FormData(); fd.append('file', file)
     const res = await fetch('/api/estoque/scan-nf?mode=inventory', { method: 'POST', body: fd })
     const data = await res.json()
-    if (data.items?.length) { setNfItems(data.items); setNfS3Key(data.s3Key ?? null); setNfFilename(data.originalFilename ?? null) }
+    if (data.items?.length) { setNfItems((data.items as Partial<NfItem>[]).map(i => ({
+        name: i.name ?? '', quantity: Number(i.quantity ?? 0), unit: i.unit ?? 'un',
+        lot: i.lot ?? null, expiry_date: i.expiry_date ?? null,
+        unit_price: i.unit_price ?? '', laboratory: i.laboratory ?? '',
+      }))); setNfS3Key(data.s3Key ?? null); setNfFilename(data.originalFilename ?? null) }
     else { setNfError(`Não foi possível extrair itens.${data.parseError ? ' Erro: ' + String(data.parseError) : ''}${data.raw ? ' | Raw: ' + String(data.raw).slice(0, 200) : ''}`) }
     setNfLoading(false)
     if (invInputRef.current) invInputRef.current.value = ''
@@ -400,7 +419,12 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
         if (!stockItem) continue
         const movRes = await fetch('/api/estoque/movements', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ item_id: stockItem.id, type: 'entrada', quantity: nfItem.quantity, lot: nfItem.lot, expiry_date: nfItem.expiry_date }),
+          body: JSON.stringify({
+            item_id: stockItem.id, type: 'entrada', quantity: nfItem.quantity,
+            lot: nfItem.lot, expiry_date: nfItem.expiry_date,
+            product_name: stockItem.name, unit_price: nfItem.unit_price,
+            laboratory: nfItem.laboratory, source: 'nf', nf_s3_key: nfS3Key,
+          }),
         })
         if (!movRes.ok) { partialError = `Erro ao registrar entrada: ${nfItem.name}`; break }
         // O servidor pode ter redirecionado a entrada para outro item (regra um card = um lote)
@@ -445,6 +469,8 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
   const [meQty, setMeQty] = useState('1')
   const [meLot, setMeLot] = useState('')
   const [meExpiry, setMeExpiry] = useState('')
+  const [mePreco, setMePreco] = useState('')
+  const [meLab, setMeLab] = useState('')
   const [meObs, setMeObs] = useState('')
   const [meSaving, setMeSaving] = useState(false)
   const [meIsNew, setMeIsNew] = useState(false)
@@ -468,7 +494,15 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
     const finalObs = meIsTirzep && meFrascos && meMgFrasco
       ? `${meFrascos} frasco(s) × ${meMgFrasco}mg${meObs ? ` — ${meObs}` : ''}`
       : (meObs || null)
-    await fetch('/api/estoque/movements', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item_id: itemId, type: 'entrada', quantity: finalQty, lot: meLot || null, expiry_date: meExpiry || null, observation: finalObs }) })
+    const nomeProduto = meIsNew ? meNewName : (items.find(i => i.id === itemId)?.name ?? '')
+    await fetch('/api/estoque/movements', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        item_id: itemId, type: 'entrada', quantity: finalQty,
+        lot: meLot || null, expiry_date: meExpiry || null, observation: finalObs,
+        product_name: nomeProduto, unit_price: mePreco, laboratory: meLab, source: 'manual',
+      }),
+    })
 
     // Create entry log
     await fetch('/api/estoque/entry-logs', {
@@ -745,6 +779,10 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
       setTimeout(() => setReportCopied(false), 2000)
     })
   }
+
+  const nfFaltando = nfItems
+    .filter(ni => !validarCompra({ valor: ni.unit_price, laboratorio: ni.laboratory, quantidade: ni.quantity }).ok)
+    .map(ni => ni.name || '(sem nome)')
 
   if (pageLoading) return (
     <div className="flex items-center justify-center min-h-screen">
@@ -1118,12 +1156,21 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
                       className="w-28 border border-gray-200 rounded px-2 py-1 text-sm" placeholder="Lote" />
                     <input value={ni.expiry_date ?? ''} onChange={e => setNfItems(p => p.map((x, i) => i === idx ? { ...x, expiry_date: e.target.value || null } : x))}
                       className="w-28 border border-gray-200 rounded px-2 py-1 text-sm" placeholder="MM/AAAA" />
+                    <input value={ni.unit_price} onChange={e => setNfItems(p => p.map((x, i) => i === idx ? { ...x, unit_price: e.target.value } : x))}
+                      className="w-28 border border-gray-200 rounded px-2 py-1 text-sm" placeholder="Valor unit. R$ *" />
+                    <input value={ni.laboratory} onChange={e => setNfItems(p => p.map((x, i) => i === idx ? { ...x, laboratory: e.target.value } : x))}
+                      className="w-32 border border-gray-200 rounded px-2 py-1 text-sm" placeholder="Laboratório *" list="laboratorios" />
                     <button onClick={() => setNfItems(p => p.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-600 text-sm px-1">✕</button>
                   </div>
                 ))}
               </div>
+              {nfFaltando.length > 0 && (
+                <p className="text-sm text-amber-800 mt-3">
+                  Falta valor ou laboratório em: {nfFaltando.join(', ')}.
+                </p>
+              )}
               <div className="flex gap-2 mt-3">
-                <button onClick={saveNfItems} disabled={nfSaving} className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-60">
+                <button onClick={saveNfItems} disabled={nfSaving || nfFaltando.length > 0} className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-60">
                   {nfSaving ? 'Salvando...' : '✅ Confirmar Entrada'}
                 </button>
                 <button onClick={() => setNfItems([])} className="px-4 py-2 border border-gray-300 text-sm text-gray-600 rounded-lg hover:bg-gray-50">Cancelar</button>
@@ -1175,6 +1222,8 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
                       <input value={meLot} onChange={e => setMeLot(e.target.value)} placeholder="Lote" className="w-32 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
                       <input value={meExpiry} onChange={e => setMeExpiry(e.target.value)} placeholder="Validade (MM/AAAA)" className="w-40 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
                       <input value={meObs} onChange={e => setMeObs(e.target.value)} placeholder="Observação" className="flex-1 min-w-[140px] border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+                  <input value={mePreco} onChange={e => setMePreco(e.target.value)} placeholder="Valor unit. R$ *" className="w-36 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+                  <input value={meLab} onChange={e => setMeLab(e.target.value)} placeholder="Laboratório *" className="w-40 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" list="laboratorios" />
                     </div>
                   </div>
                 ) : (
@@ -1183,11 +1232,13 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
                   <input value={meLot} onChange={e => setMeLot(e.target.value)} placeholder="Lote" className="w-32 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
                   <input value={meExpiry} onChange={e => setMeExpiry(e.target.value)} placeholder="Validade (MM/AAAA)" className="w-40 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
                   <input value={meObs} onChange={e => setMeObs(e.target.value)} placeholder="Observação" className="flex-1 min-w-[140px] border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+                  <input value={mePreco} onChange={e => setMePreco(e.target.value)} placeholder="Valor unit. R$ *" className="w-36 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+                  <input value={meLab} onChange={e => setMeLab(e.target.value)} placeholder="Laboratório *" className="w-40 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" list="laboratorios" />
                 </div>
                 )}
               </div>
               <div className="flex gap-2 mt-3">
-                <button onClick={saveManualEntrada} disabled={meSaving || (!meItemId && (!meIsNew || !meNewName)) || (meIsTirzep && !meTotalMg)} className="px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50">{meSaving ? 'Salvando...' : 'Salvar Entrada'}</button>
+                <button onClick={saveManualEntrada} disabled={meSaving || (!meItemId && (!meIsNew || !meNewName)) || (meIsTirzep && !meTotalMg) || !validarCompra({ valor: mePreco, laboratorio: meLab, quantidade: Number(meQty) || 1 }).ok} className="px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50">{meSaving ? 'Salvando...' : 'Salvar Entrada'}</button>
                 <button onClick={() => setManEntrada(false)} className="px-4 py-2 border border-gray-300 text-sm text-gray-600 rounded-lg hover:bg-gray-50">Cancelar</button>
               </div>
             </div>
@@ -1463,6 +1514,10 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
       {tab === 'relatorios' && (
         <RelatoriosTab movements={movements} items={items} />
       )}
+
+      <datalist id="laboratorios">
+        {laboratorios.map(l => <option key={l} value={l} />)}
+      </datalist>
     </div>
   )
 }
