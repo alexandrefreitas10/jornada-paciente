@@ -362,7 +362,7 @@ Em `src/lib/db.ts`, no **fim** de `runMigrations()`, antes da `}` que fecha a fu
       unit_price_cents INTEGER NOT NULL CHECK (unit_price_cents > 0),
       quantity NUMERIC NOT NULL CHECK (quantity > 0),
       unit TEXT,
-      total_cents INTEGER,
+      total_cents BIGINT,
       purchased_at DATE NOT NULL,
       source TEXT NOT NULL CHECK (source IN ('nf', 'manual', 'retroativo')),
       item_id INTEGER REFERENCES stock_items(id) ON DELETE SET NULL,
@@ -381,6 +381,7 @@ Em `src/lib/db.ts`, no **fim** de `runMigrations()`, antes da `}` que fecha a fu
 Criar `src/lib/precos-db.ts`:
 
 ```typescript
+import type postgres from 'postgres'
 import sql, { initSchema } from '@/lib/db'
 import { chaveLaboratorio, chaveProduto, type Compra, type Fonte, type GrupoPreco } from './precos'
 
@@ -400,7 +401,7 @@ export interface DadosCompra {
 
 // `tx` permite gravar dentro da transação da entrada de estoque: entrada sem
 // preço não pode existir.
-type Executor = typeof sql
+type Executor = typeof sql | postgres.TransactionSql
 
 export async function registrarCompra(dados: DadosCompra, tx: Executor = sql): Promise<void> {
   const total = Math.round(dados.centavos * dados.quantidade)
@@ -526,7 +527,7 @@ import { registrarCompra, type DadosCompra } from './precos-db'
           movementId: inserted.id,
           createdBy: data.created_by ?? null,
         },
-        tx as unknown as typeof sql,
+        tx,
       )
     }
 ```
