@@ -273,12 +273,12 @@ export function validarCompra(dados: {
   laboratorio: string
   quantidade: number
 }): ResultadoValidacao {
-  const centavos = reaisToCents(dados.valor ?? '')
+  const centavos = valorParaCentavos(dados.valor ?? '')
   const laboratorio = (dados.laboratorio ?? '').trim()
   const quantidade = Number(dados.quantidade)
 
   const erros: ('valor' | 'laboratorio' | 'quantidade')[] = []
-  if (!(centavos > 0)) erros.push('valor')
+  if (!centavos) erros.push('valor')
   if (!laboratorio) erros.push('laboratorio')
   if (!(quantidade > 0)) erros.push('quantidade')
 
@@ -307,7 +307,7 @@ export function resumirGrupo(grupo: GrupoPreco): ResumoPreco {
   const historico = [...grupo.historico].sort((a, b) => b.data.localeCompare(a.data))
   const ultimo = historico[0]
   const anterior = historico[1] ?? null
-  const unidadeMudou = !!anterior && (anterior.unidade ?? '') !== (ultimo.unidade ?? '')
+  const unidadeMudou = !!anterior && normalizarNome(anterior.unidade ?? '') !== normalizarNome(ultimo.unidade ?? '')
   const pct = unidadeMudou ? null : variacao(anterior?.centavos ?? null, ultimo.centavos)
   return { ultimo, anterior, variacao: pct, nivel: nivelVariacao(pct), unidadeMudou }
 }
