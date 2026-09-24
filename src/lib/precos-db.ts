@@ -1,3 +1,4 @@
+import type postgres from 'postgres'
 import sql, { initSchema } from '@/lib/db'
 import { chaveLaboratorio, chaveProduto, type Compra, type Fonte, type GrupoPreco } from './precos'
 
@@ -17,8 +18,11 @@ export interface DadosCompra {
 
 // `tx` permite gravar dentro da transação da entrada de estoque: entrada sem
 // preço não pode existir.
-type Executor = typeof sql
+type Executor = typeof sql | postgres.TransactionSql
 
+// Assume que `initSchema()` já rodou: os dois chamadores (createMovement e
+// registrarComprasRetroativas) garantem isso antes de chamar. Não chame esta
+// função "a frio" de uma rota nova sem migrar antes.
 export async function registrarCompra(dados: DadosCompra, tx: Executor = sql): Promise<void> {
   const total = Math.round(dados.centavos * dados.quantidade)
   await tx`
@@ -40,7 +44,7 @@ export async function registrarComprasRetroativas(lista: DadosCompra[]): Promise
   if (lista.length === 0) return 0
   await initSchema()
   await sql.begin(async (tx) => {
-    for (const dados of lista) await registrarCompra(dados, tx as unknown as Executor)
+    for (const dados of lista) await registrarCompra(dados, tx)
   })
   return lista.length
 }

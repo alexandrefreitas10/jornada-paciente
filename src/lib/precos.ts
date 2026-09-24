@@ -49,12 +49,16 @@ export function chaveLaboratorio(nome: string): string {
 // leitura da nota e o valor errado fica gravado para sempre.
 const FORMATO_BR = /^\d{1,3}(\.\d{3})+(,\d{1,2})?$|^\d+(,\d{1,2})?$/
 
+/** R$ 1.000.000,00 por unidade: acima disso é engano de digitação, e o
+ *  total estouraria o limite da coluna, derrubando a entrada inteira. */
+export const LIMITE_CENTAVOS = 100_000_000
+
 /** Centavos, ou `null` se não for um valor brasileiro válido e positivo. */
 export function valorParaCentavos(texto: string): number | null {
   const limpo = (texto ?? '').replace(/R\$/gi, '').replace(/\s/g, '')
   if (!FORMATO_BR.test(limpo)) return null
   const centavos = reaisToCents(limpo)
-  return centavos > 0 ? centavos : null
+  return centavos > 0 && centavos <= LIMITE_CENTAVOS ? centavos : null
 }
 
 export type ResultadoValidacao =

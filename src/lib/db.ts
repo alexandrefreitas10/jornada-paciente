@@ -562,7 +562,7 @@ async function runMigrations() {
       unit_price_cents INTEGER NOT NULL CHECK (unit_price_cents > 0),
       quantity NUMERIC NOT NULL CHECK (quantity > 0),
       unit TEXT,
-      total_cents INTEGER,
+      total_cents BIGINT,
       purchased_at DATE NOT NULL,
       source TEXT NOT NULL CHECK (source IN ('nf', 'manual', 'retroativo')),
       item_id INTEGER REFERENCES stock_items(id) ON DELETE SET NULL,

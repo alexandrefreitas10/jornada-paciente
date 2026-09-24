@@ -43,6 +43,11 @@ describe('valorParaCentavos', () => {
       expect(valorParaCentavos(texto)).toBeNull()
     }
   })
+
+  it('aceita até o teto e recusa acima dele', () => {
+    expect(valorParaCentavos('1.000.000,00')).toBe(100_000_000)
+    expect(valorParaCentavos('1.000.000,01')).toBeNull()
+  })
 })
 
 describe('validarCompra', () => {
@@ -65,6 +70,10 @@ describe('validarCompra', () => {
     for (const valor of ['', '0', '0,00', 'abc', 'R$']) {
       expect(validarCompra({ valor, laboratorio: 'X', quantidade: 1 }).ok).toBe(false)
     }
+  })
+
+  it('recusa valor acima do teto (fat-finger de digitação)', () => {
+    expect(validarCompra({ valor: '99999999999', laboratorio: 'X', quantidade: 1 }).ok).toBe(false)
   })
 
   it('recusa laboratório vazio e quantidade não positiva', () => {
