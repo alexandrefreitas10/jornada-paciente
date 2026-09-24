@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import QRCode from 'qrcode'
 import { RelatoriosTab } from './RelatoriosTab'
+import { PrecosTab } from './PrecosTab'
 import { validarCompra } from '@/lib/precos'
 
 interface StockItem { id: number; name: string; unit: string; quantity: number; notes: string | null; lot: string | null; expiry_date: string | null }
@@ -23,7 +24,7 @@ const textoNf = (v: unknown) => (v == null ? '' : String(v))
 interface EntryLog { id: number; type: string; original_filename: string | null; s3_key: string | null; item_count: number; created_by: string | null; created_at: string; download_url: string | null }
 interface EntryLogDetail { item_name: string; quantity: number; lot: string | null; expiry_date: string | null }
 
-type Tab = 'estoque' | 'entradas' | 'saidas' | 'relatorios'
+type Tab = 'estoque' | 'entradas' | 'saidas' | 'relatorios' | 'precos'
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -631,6 +632,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
     { key: 'entradas', label: '⬆️ Entradas' },
     { key: 'saidas', label: '⬇️ Saídas' },
     { key: 'relatorios', label: '📊 Relatórios' },
+    { key: 'precos', label: '💰 Preços' },
   ]
 
   const entries = movements.filter(m => m.type === 'entrada')
@@ -1548,6 +1550,9 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
       {tab === 'relatorios' && (
         <RelatoriosTab movements={movements} items={items} />
       )}
+
+      {/* ── ABA PREÇOS ── */}
+      {tab === 'precos' && <PrecosTab />}
 
       <datalist id="laboratorios">
         {laboratorios.map(l => <option key={l} value={l} />)}
