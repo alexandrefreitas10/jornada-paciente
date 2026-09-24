@@ -164,7 +164,8 @@ leitura), para o agrupamento não mudar se a normalização mudar depois.
 - `GET /api/estoque/precos` — lista para a aba.
 - `POST /api/estoque/precos` — notas antigas (`source: 'retroativo'`), sem mexer
   no estoque.
-- Todas exigem `canEstoqueSession()` e registram auditoria.
+- Todas exigem `canEstoqueSession()`. Quem lançou fica gravado na própria
+  compra (`created_by`); o registro retroativo também vai para a auditoria.
 
 ### Leitura da nota — `src/app/api/estoque/scan-nf/route.ts`
 
