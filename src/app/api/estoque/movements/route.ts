@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
   const session = await auth()
   const createdBy = session?.user?.name ?? null
   const body = await req.json()
-  const { item_id, type, quantity, lot, expiry_date, patient_id, patient_name, observation, nf_s3_key, measurement_id, idempotency_key, unit_price, laboratory, purchased_at, product_name, source, unit } = body
+  const { item_id, type, quantity, lot, expiry_date, patient_id, patient_name, observation, nf_s3_key, measurement_id, idempotency_key, unit_price, laboratory, purchased_at, product_name, source, unit, purchase_quantity } = body
   if (!item_id || !type || !quantity) {
     return NextResponse.json({ error: 'item_id, type e quantity são obrigatórios' }, { status: 400 })
   }
@@ -33,10 +33,16 @@ export async function POST(req: NextRequest) {
   let compra: DadosEntradaCompra | null = null
   if (type === 'entrada') {
     const produto = String(product_name ?? '').trim()
+    // Tirzepatida entra em mg no estoque mas é comprada em frascos: quando a
+    // tela manda a quantidade da compra, é ela que vale para o preço unitário
+    // (senão o total viraria preço × total de mg). A validação do movimento em
+    // si continua sendo sobre `quantity`.
+    const qtdCompra = Number(purchase_quantity)
+    const quantidadeCompra = Number.isFinite(qtdCompra) && qtdCompra > 0 ? qtdCompra : Number(quantity)
     const validada = validarCompra({
       valor: String(unit_price ?? ''),
       laboratorio: String(laboratory ?? ''),
-      quantidade: Number(quantity),
+      quantidade: quantidadeCompra,
     })
     if (!produto || !validada.ok) {
       // Sem o nome do produto o histórico ficaria órfão: a chave de

@@ -15,6 +15,11 @@ interface NfItem {
   name: string; quantity: number; unit: string; lot: string | null; expiry_date: string | null
   unit_price: string; laboratory: string
 }
+// O que volta da leitura da NF é JSON de modelo: qualquer campo pode chegar com
+// outro tipo (um unit_price numérico derrubaria o .replace de valorParaCentavos
+// durante o render). Por isso o cru é `unknown` e só vira NfItem depois do String().
+type NfItemBruto = Partial<Record<keyof NfItem, unknown>>
+const textoNf = (v: unknown) => (v == null ? '' : String(v))
 interface EntryLog { id: number; type: string; original_filename: string | null; s3_key: string | null; item_count: number; created_by: string | null; created_at: string; download_url: string | null }
 interface EntryLogDetail { item_name: string; quantity: number; lot: string | null; expiry_date: string | null }
 
@@ -368,10 +373,10 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
     const fd = new FormData(); fd.append('file', file)
     const res = await fetch('/api/estoque/scan-nf', { method: 'POST', body: fd })
     const data = await res.json()
-    if (data.items?.length) { setNfItems((data.items as Partial<NfItem>[]).map(i => ({
-        name: i.name ?? '', quantity: Number(i.quantity ?? 0), unit: i.unit ?? 'un',
-        lot: i.lot ?? null, expiry_date: i.expiry_date ?? null,
-        unit_price: i.unit_price ?? '', laboratory: i.laboratory ?? '',
+    if (data.items?.length) { setNfItems((data.items as NfItemBruto[]).map(i => ({
+        name: textoNf(i.name), quantity: Number(i.quantity ?? 0), unit: textoNf(i.unit) || 'un',
+        lot: i.lot == null ? null : String(i.lot), expiry_date: i.expiry_date == null ? null : String(i.expiry_date),
+        unit_price: textoNf(i.unit_price), laboratory: textoNf(i.laboratory),
       }))); setNfS3Key(data.s3Key ?? null); setNfFilename(data.originalFilename ?? null) }
     else { setNfError('Não foi possível extrair itens. Tente uma imagem mais nítida.') }
     setNfLoading(false)
@@ -385,10 +390,10 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
     const fd = new FormData(); fd.append('file', file)
     const res = await fetch('/api/estoque/scan-nf?mode=inventory', { method: 'POST', body: fd })
     const data = await res.json()
-    if (data.items?.length) { setNfItems((data.items as Partial<NfItem>[]).map(i => ({
-        name: i.name ?? '', quantity: Number(i.quantity ?? 0), unit: i.unit ?? 'un',
-        lot: i.lot ?? null, expiry_date: i.expiry_date ?? null,
-        unit_price: i.unit_price ?? '', laboratory: i.laboratory ?? '',
+    if (data.items?.length) { setNfItems((data.items as NfItemBruto[]).map(i => ({
+        name: textoNf(i.name), quantity: Number(i.quantity ?? 0), unit: textoNf(i.unit) || 'un',
+        lot: i.lot == null ? null : String(i.lot), expiry_date: i.expiry_date == null ? null : String(i.expiry_date),
+        unit_price: textoNf(i.unit_price), laboratory: textoNf(i.laboratory),
       }))); setNfS3Key(data.s3Key ?? null); setNfFilename(data.originalFilename ?? null) }
     else { setNfError(`Não foi possível extrair itens.${data.parseError ? ' Erro: ' + String(data.parseError) : ''}${data.raw ? ' | Raw: ' + String(data.raw).slice(0, 200) : ''}`) }
     setNfLoading(false)
@@ -399,9 +404,13 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
     setNfSaving(true)
     setNfError('')
     const savedIds: number[] = []
+    // Linhas que já entraram: numa falha parcial elas saem da lista, senão o
+    // retry duplicaria movimento E preço (dois preços iguais fazem a variação
+    // ler 0% "estável" e esconder um aumento real).
+    const linhasSalvas = new Set<number>()
     let partialError: string | null = null
     try {
-      for (const nfItem of nfItems) {
+      for (const [idx, nfItem] of nfItems.entries()) {
         // Prioriza o item com mesmo nome E mesmo lote (um card = um lote)
         let stockItem = items.find(i =>
           i.name.toLowerCase() === nfItem.name.toLowerCase() &&
@@ -421,7 +430,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             item_id: stockItem.id, type: 'entrada', quantity: nfItem.quantity,
-            lot: nfItem.lot, expiry_date: nfItem.expiry_date,
+            lot: nfItem.lot, expiry_date: nfItem.expiry_date, unit: nfItem.unit,
             product_name: stockItem.name, unit_price: nfItem.unit_price,
             laboratory: nfItem.laboratory, source: 'nf', nf_s3_key: nfS3Key,
           }),
@@ -430,6 +439,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
         // O servidor pode ter redirecionado a entrada para outro item (regra um card = um lote)
         const savedMov = await movRes.json()
         savedIds.push(savedMov.item_id ?? stockItem.id)
+        linhasSalvas.add(idx)
       }
     } catch (e) {
       partialError = 'Erro inesperado: ' + String(e)
@@ -452,6 +462,9 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
     if (movsRes.ok) setMovements(await movsRes.json())
 
     if (partialError) {
+      // Tira da lista só o que confirmadamente entrou: clicar de novo reenvia
+      // apenas o que falhou (e o que nem chegou a ser tentado).
+      if (linhasSalvas.size > 0) setNfItems(prev => prev.filter((_, i) => !linhasSalvas.has(i)))
       setNfError(partialError + (savedIds.length ? ` — ${savedIds.length} item(ns) já foram salvos e registrados no log.` : ''))
     } else {
       setNfItems([]); setNfS3Key(null); setNfFilename(null)
@@ -495,14 +508,30 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
       ? `${meFrascos} frasco(s) × ${meMgFrasco}mg${meObs ? ` — ${meObs}` : ''}`
       : (meObs || null)
     const nomeProduto = meIsNew ? meNewName : (items.find(i => i.id === itemId)?.name ?? '')
-    await fetch('/api/estoque/movements', {
+    // Tirzepatida: o movimento é em mg (finalQty), mas o valor digitado é POR
+    // FRASCO — a compra vai em frascos, senão o total seria preço × total de mg.
+    const compraEmFrascos = meIsTirzep && meTotalMg && Number(meFrascos) > 0
+    const unidadeCompra = compraEmFrascos
+      ? 'frasco'
+      : (meIsNew ? (meUnit || null) : (items.find(i => i.id === itemId)?.unit ?? null))
+    const res = await fetch('/api/estoque/movements', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         item_id: itemId, type: 'entrada', quantity: finalQty,
         lot: meLot || null, expiry_date: meExpiry || null, observation: finalObs,
         product_name: nomeProduto, unit_price: mePreco, laboratory: meLab, source: 'manual',
+        unit: unidadeCompra,
+        ...(compraEmFrascos ? { purchase_quantity: Number(meFrascos) } : {}),
       }),
     })
+    if (!res.ok) {
+      // Sem isto o modal fechava, o log dizia "1 item" e o QR aparecia mesmo
+      // quando o servidor recusou a entrada (valor/laboratório inválidos).
+      const data = await res.json().catch(() => ({}))
+      alert(data.error || 'Erro ao registrar entrada.')
+      setMeSaving(false)
+      return
+    }
 
     // Create entry log
     await fetch('/api/estoque/entry-logs', {
@@ -512,7 +541,7 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
     const [ir, mr, logsRes] = await Promise.all([fetch('/api/estoque/items'), fetch('/api/estoque/movements'), fetch('/api/estoque/entry-logs')])
     setItems(await ir.json()); setMovements(await mr.json())
     if (logsRes.ok) setEntryLogs(await logsRes.json())
-    setManEntrada(false); setMeItemId(''); setMeNewName(''); setMeQty('1'); setMeLot(''); setMeExpiry(''); setMeObs(''); setMeIsNew(false); setMeFrascos(''); setMeMgFrasco('')
+    setManEntrada(false); setMeItemId(''); setMeNewName(''); setMeQty('1'); setMeLot(''); setMeExpiry(''); setMeObs(''); setMeIsNew(false); setMeFrascos(''); setMeMgFrasco(''); setMePreco(''); setMeLab('')
     setMeSaving(false)
     setQrDocxPrompt([itemId])
   }
@@ -1237,6 +1266,11 @@ export default function EstoqueClient({ initialItems, initialMovements }: { init
                 </div>
                 )}
               </div>
+              {!validarCompra({ valor: mePreco, laboratorio: meLab, quantidade: Number(meQty) || 1 }).ok && (
+                <p className="text-sm text-amber-800 mt-3">
+                  Informe o valor pago (use vírgula, ex.: 82,00) e o laboratório.
+                </p>
+              )}
               <div className="flex gap-2 mt-3">
                 <button onClick={saveManualEntrada} disabled={meSaving || (!meItemId && (!meIsNew || !meNewName)) || (meIsTirzep && !meTotalMg) || !validarCompra({ valor: mePreco, laboratorio: meLab, quantidade: Number(meQty) || 1 }).ok} className="px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50">{meSaving ? 'Salvando...' : 'Salvar Entrada'}</button>
                 <button onClick={() => setManEntrada(false)} className="px-4 py-2 border border-gray-300 text-sm text-gray-600 rounded-lg hover:bg-gray-50">Cancelar</button>
