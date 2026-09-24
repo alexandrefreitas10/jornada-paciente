@@ -2,6 +2,7 @@ import sql, { initSchema } from './db'
 import { logAudit } from './audit'
 import { ehSaidaDeImplante } from './em-tratamento'
 import { logSystemError } from './system-errors'
+import { registrarCompra, type DadosCompra } from './precos-db'
 
 export interface StockItem {
   id: number
@@ -175,6 +176,7 @@ export async function createMovement(data: {
   created_by?: string | null
   measurement_id?: number | null
   idempotency_key?: string | null
+  compra?: Omit<DadosCompra, 'movementId' | 'itemId' | 'createdBy'> | null
 }): Promise<StockMovement> {
   await initSchema()
 
@@ -259,6 +261,21 @@ export async function createMovement(data: {
       )
       RETURNING *
     `
+
+    // Entrada sem preço não pode existir: grava na mesma transação, e se isto
+    // falhar a entrada inteira volta atrás (ao contrário da reativação, que é
+    // isolada num savepoint de propósito).
+    if (data.type === 'entrada' && data.compra) {
+      await registrarCompra(
+        {
+          ...data.compra,
+          itemId: itemId,
+          movementId: inserted.id,
+          createdBy: data.created_by ?? null,
+        },
+        tx,
+      )
+    }
 
     // Paciente que tinha parado e voltou a aplicar sai de Pacientes Antigos
     // sozinho. Implante não conta: é semestral e não significa retomar o

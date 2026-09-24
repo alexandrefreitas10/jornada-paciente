@@ -549,6 +549,31 @@ async function runMigrations() {
       END IF;
     END $$;
   `).catch(() => {})
+
+  // Preços pagos: uma linha por compra. O histórico é por produto+laboratório
+  // (nome normalizado), porque cada item de estoque é um lote, não um produto.
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS stock_purchases (
+      id SERIAL PRIMARY KEY,
+      product_name TEXT NOT NULL,
+      product_key TEXT NOT NULL,
+      laboratory TEXT NOT NULL,
+      laboratory_key TEXT NOT NULL,
+      unit_price_cents INTEGER NOT NULL CHECK (unit_price_cents > 0),
+      quantity NUMERIC NOT NULL CHECK (quantity > 0),
+      unit TEXT,
+      total_cents BIGINT,
+      purchased_at DATE NOT NULL,
+      source TEXT NOT NULL CHECK (source IN ('nf', 'manual', 'retroativo')),
+      item_id INTEGER REFERENCES stock_items(id) ON DELETE SET NULL,
+      movement_id INTEGER REFERENCES stock_movements(id) ON DELETE SET NULL,
+      nf_s3_key TEXT,
+      created_by TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS stock_purchases_produto_idx
+      ON stock_purchases (product_key, laboratory_key, purchased_at DESC);
+  `).catch(() => {})
 }
 
 export default sql
