@@ -253,9 +253,12 @@ describe('chaveProduto: mesmo ativo escrito diferente', () => {
     diferente('BCAA + HMB - 5ML', 'BCAA + HMB + LIDOCAINA 5ML')
   })
 
-  it('nome feito só de palavra ignorada não vira chave vazia', () => {
+  it('nome sem palavra de verdade não vira chave vazia nem junta produtos', () => {
     expect(chaveProduto('Frasco')).not.toBe('')
     diferente('Frasco', 'Pellet')
+    // "Frasco 3ml" e "Ampola 3ml" sobrariam ambos como "3ml".
+    diferente('FRASCO 3ML', 'AMPOLA 3ML')
+    diferente('SERINGA 3ML', 'POTE 3ML')
   })
 
   it('não sabe abreviação — e isso é esperado', () => {
@@ -308,6 +311,7 @@ describe('juntarRepetidos', () => {
     const lista = [c('2026-04-23', 583, 20), c('2026-04-23', 583, 30)]
     juntarRepetidos(lista)
     expect(lista).toHaveLength(2)
+    expect(lista.map(x => x.quantidade)).toEqual([20, 30])
   })
 
   it('lista vazia devolve lista vazia', () => {

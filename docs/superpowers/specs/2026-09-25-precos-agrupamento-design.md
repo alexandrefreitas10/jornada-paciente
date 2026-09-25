@@ -11,7 +11,7 @@ fiscais antigas de seis laboratórios. Duas coisas apareceram no uso real:
 1. **A mesma nota traz o mesmo ativo em várias linhas**, com o mesmo preço
    unitário, porque a nota quebra a quantidade em lotes. O histórico mostra as
    três linhas. Com o tempo isso enche a tela de repetição sem informação.
-   Levantamento em produção: 15 grupos repetidos, o maior com 4 linhas
+   Levantamento em produção: 16 grupos repetidos, dois deles com 4 linhas
    (`UNDECANOATO 1G/4ML`, 5+5+5+5).
 
 2. **O mesmo ativo vem escrito diferente de uma nota para a outra** e vira duas

@@ -51,17 +51,18 @@ const PALAVRAS_IGNORADAS = new Set([...PALAVRAS_FORMA, ...PALAVRAS_LIGACAO])
 
 // "300 mg" e "300mg" são a mesma dose escrita de dois jeitos. Só cola quando a
 // palavra seguinte ao número é uma unidade conhecida, para não grudar
-// "b 12" em "b12" nem número de lote em nome.
+// "b 12" (Complexo B 12) em "b12". Colar demais nunca separa dois nomes que já
+// estavam juntos — só pode juntar —, então o risco aqui é baixo de propósito.
 const NUMERO_E_UNIDADE = /(\d)\s+(mg|mcg|g|kg|ml|l|ui|ug|mm|cm)\b/g
 
 /** Produto e laboratório são agrupados por nome normalizado, não por id. */
 export function chaveProduto(nome: string): string {
   const base = normalizarNome(nome ?? '').replace(NUMERO_E_UNIDADE, '$1$2')
   const restante = base.split(' ').filter(p => p && !PALAVRAS_IGNORADAS.has(p)).join(' ')
-  // Um nome feito só de palavras ignoradas ("Frasco", "Pellet") sobraria vazio
-  // e juntaria com qualquer outro igualmente truncado. Nota digitada à mão é
-  // exatamente onde isso aparece: nesse caso vale o nome inteiro.
-  return restante || base
+  // Se o que sobrou não tem nenhuma palavra de verdade ("Frasco 3ml" → "3ml",
+  // "Ampola 3ml" → "3ml"), a chave juntaria dois produtos diferentes — e preço
+  // lançado não se corrige. Nesses casos vale o nome inteiro.
+  return restante.split(' ').some(p => /^[a-z]+$/.test(p)) ? restante : base
 }
 
 export function chaveLaboratorio(nome: string): string {
