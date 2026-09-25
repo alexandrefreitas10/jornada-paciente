@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { centsToReais } from '@/lib/money'
 import { normalizarNome } from '@/lib/stock-actives'
-import { ordenarPorAumento, resumirGrupo, validarCompra, type Compra, type GrupoPreco, type NivelVariacao } from '@/lib/precos'
+import { juntarRepetidos, ordenarPorAumento, resumirGrupo, validarCompra, type Compra, type GrupoPreco, type NivelVariacao } from '@/lib/precos'
 
 const NIVEL: Record<NivelVariacao, { icone: string; classe: string }> = {
   alta: { icone: '🔴', classe: 'text-red-700 bg-red-50 border-red-200' },
@@ -18,6 +18,9 @@ const FONTE: Record<Compra['fonte'], string> = {
   manual: 'lançamento manual',
   retroativo: 'nota antiga',
 }
+// Quando lançamentos de fontes diferentes caem na mesma linha, não há uma
+// fonte para mostrar.
+const rotuloFonte = (fonte: Compra['fonte'] | null) => (fonte ? FONTE[fonte] : 'vários lançamentos')
 
 // centsToReais devolve '' para zero — aqui o preço é sempre exibido.
 const reais = (centavos: number) => `R$ ${centsToReais(centavos) || '0,00'}`
@@ -297,6 +300,7 @@ export function PrecosTab() {
         <ul className="space-y-3">
           {visiveis.map(g => {
             const r = resumirGrupo(g)
+            const historico = juntarRepetidos(g.historico)
             const nivel = NIVEL[r.nivel]
             const abertoAqui = aberto === g.chave
             return (
@@ -327,17 +331,17 @@ export function PrecosTab() {
                   aria-expanded={abertoAqui}
                   className="text-xs font-medium text-violet-700 hover:text-violet-900"
                 >
-                  {abertoAqui ? '▲ Fechar histórico' : `▼ Ver histórico (${g.historico.length})`}
+                  {abertoAqui ? '▲ Fechar histórico' : `▼ Ver histórico (${historico.length})`}
                 </button>
 
                 {abertoAqui && (
                   <ul className="border-t border-gray-100 pt-2 space-y-1">
-                    {[...g.historico].sort((a, b) => b.data.localeCompare(a.data)).map((c, i) => (
+                    {historico.map((c, i) => (
                       <li key={i} className="flex flex-wrap gap-x-3 text-xs text-gray-600">
                         <span className="font-medium text-gray-800">{reais(c.centavos)}</span>
                         <span>{c.quantidade}{c.unidade ? ` ${c.unidade}` : ''}</span>
                         <span>{dia(c.data)}</span>
-                        <span className="text-gray-400">{FONTE[c.fonte] ?? c.fonte}</span>
+                        <span className="text-gray-400">{rotuloFonte(c.fonte)}</span>
                       </li>
                     ))}
                   </ul>

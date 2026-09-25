@@ -292,4 +292,42 @@ describe('PrecosTab', () => {
     await waitFor(() => expect(linhas()).toHaveLength(3))
     expect(screen.queryByText(/Vazio/)).not.toBeInTheDocument()
   })
+
+  it('junta os lançamentos repetidos da mesma nota numa linha só', async () => {
+    fetchMock.mockImplementationOnce(async () => ({
+      ok: true, status: 200, json: async () => [{
+        produto: 'N-ACETIL CISTEINA 300MG - 2ML', laboratorio: 'Health Tech', chave: 'nac|ht',
+        historico: [
+          { centavos: 583, quantidade: 20, unidade: 'un', data: '2026-04-23', fonte: 'retroativo' },
+          { centavos: 583, quantidade: 30, unidade: 'un', data: '2026-04-23', fonte: 'retroativo' },
+          { centavos: 583, quantidade: 40, unidade: 'un', data: '2026-04-23', fonte: 'retroativo' },
+        ],
+      }],
+    }))
+    render(<PrecosTab />)
+    await waitFor(() => expect(linhas()).toHaveLength(1))
+    // O contador conta linhas já juntadas.
+    const abrir = within(linhas()[0]).getByRole('button', { name: /histórico \(1\)/i })
+    expect(linhas()[0]).toHaveTextContent('primeira compra')
+    expect(linhas()[0]).not.toHaveTextContent('0,0%')
+    await userEvent.click(abrir)
+    expect(within(linhas()[0]).getByText('90 un')).toBeInTheDocument()
+    expect(within(linhas()[0]).queryByText('20 un')).not.toBeInTheDocument()
+  })
+
+  it('lançamentos juntados de fontes diferentes dizem "vários lançamentos"', async () => {
+    fetchMock.mockImplementationOnce(async () => ({
+      ok: true, status: 200, json: async () => [{
+        produto: 'TRIMIX 2ML', laboratorio: 'Stin Pharma', chave: 'trimix|stin',
+        historico: [
+          { centavos: 6900, quantidade: 5, unidade: 'frasco', data: '2026-04-14', fonte: 'retroativo' },
+          { centavos: 6900, quantidade: 5, unidade: 'frasco', data: '2026-04-14', fonte: 'nf' },
+        ],
+      }],
+    }))
+    render(<PrecosTab />)
+    await waitFor(() => expect(linhas()).toHaveLength(1))
+    await userEvent.click(within(linhas()[0]).getByRole('button', { name: /histórico/i }))
+    expect(within(linhas()[0]).getByText('vários lançamentos')).toBeInTheDocument()
+  })
 })

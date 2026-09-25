@@ -73,7 +73,10 @@ export async function listarPrecos(): Promise<GrupoPreco[]> {
 
   const grupos = new Map<string, GrupoPreco>()
   for (const l of linhas) {
-    const chave = `${l.product_key}|${l.laboratory_key}`
+    // A chave é calculada aqui, e não a gravada no INSERT: assim as compras já
+    // lançadas se reagrupam sozinhas quando a regra de nome melhora, sem
+    // migração. As colunas continuam gravadas e indexadas.
+    const chave = `${chaveProduto(l.product_name)}|${chaveLaboratorio(l.laboratory)}`
     const compra: Compra = {
       centavos: l.unit_price_cents,
       quantidade: Number(l.quantity),
