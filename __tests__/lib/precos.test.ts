@@ -1,9 +1,9 @@
 // __tests__/lib/precos.test.ts
 import {
   chaveProduto, chaveLaboratorio, validarCompra, variacao, nivelVariacao,
-  resumirGrupo, ordenarPorAumento, valorParaCentavos,
+  resumirGrupo, ordenarPorAumento, valorParaCentavos, juntarRepetidos,
   ALTA_PCT, ATENCAO_PCT,
-  type Compra, type GrupoPreco,
+  type Compra, type GrupoPreco, type Fonte,
 } from '@/lib/precos'
 
 const compra = (data: string, centavos: number, unidade: string | null = 'frasco'): Compra => ({
@@ -214,5 +214,126 @@ describe('ordenarPorAumento', () => {
       g('Ana', [compra('2026-09-20', 10000)], 'Alfa'),
     ]
     expect(ordenarPorAumento(grupos).map(x => x.laboratorio)).toEqual(['Alfa', 'Zeta'])
+  })
+})
+
+describe('chaveProduto: mesmo ativo escrito diferente', () => {
+  const mesmo = (a: string, b: string) => expect(chaveProduto(a)).toBe(chaveProduto(b))
+  const diferente = (a: string, b: string) => expect(chaveProduto(a)).not.toBe(chaveProduto(b))
+
+  it('ignora a forma farmacêutica', () => {
+    mesmo('Testosterona 300 MG - Pellet', 'Testosterona 300mg')
+    mesmo('NADH 300 MG - Pellet', 'NADH 300MG')
+    mesmo('Estradiol 25 mg implante', 'Estradiol 25mg')
+  })
+
+  it('ignora o espaço entre número e unidade', () => {
+    mesmo('Testosterona 300 mg', 'TESTOSTERONA 300MG')
+    mesmo('L-CARNITINA 600MG - 2ML', 'L-Carnitina 600 mg 2 ml')
+    mesmo('UNDECANOATO 1G/4ML', 'Undecanoato 1 g 4 ml')
+  })
+
+  it('ignora palavra de ligação', () => {
+    mesmo('POOL DE AMINOACIDOS 5ML', 'Pool Aminoácidos 5ml')
+    mesmo('SULFATO DE ZINCO 20MG - 2ML', 'Sulfato Zinco 20mg 2ml')
+  })
+
+  it('dose continua separando', () => {
+    diferente('Testosterona 200 mg', 'Testosterona 300 mg')
+    diferente('Oxandrolona 100 mg', 'Oxandrolona 200 mg')
+  })
+
+  it('volume continua separando', () => {
+    diferente('D-RIBOSE 500MG 2ML', 'D-RIBOSE 500MG/3ML')
+    diferente('POOL AMINOACIDOS 3,8% - 10ML', 'POOL DE AMINOACIDOS 5ML')
+  })
+
+  it('produtos parecidos continuam separados', () => {
+    diferente('COMPLEXO B (COM B1) 1ML', 'COMPLEXO B (SEM B1) 1ML')
+    diferente('BCAA + HMB - 5ML', 'BCAA + HMB + LIDOCAINA 5ML')
+  })
+
+  it('não sabe abreviação — e isso é esperado', () => {
+    diferente('HIDROXIMETILBUTIRATO 150MG-2ML', 'HMB 150mg 2ml')
+  })
+})
+
+describe('juntarRepetidos', () => {
+  const c = (data: string, centavos: number, quantidade: number, unidade: string | null = 'un', fonte: Fonte = 'retroativo'): Compra =>
+    ({ data, centavos, quantidade, unidade, fonte })
+
+  it('mesma data e mesmo preço viram uma linha com a quantidade somada', () => {
+    const r = juntarRepetidos([c('2026-04-23', 583, 20), c('2026-04-23', 583, 30), c('2026-04-23', 583, 40)])
+    expect(r).toHaveLength(1)
+    expect(r[0].quantidade).toBe(90)
+    expect(r[0].centavos).toBe(583)
+    expect(r[0].lancamentos).toBe(3)
+    expect(r[0].fonte).toBe('retroativo')
+  })
+
+  it('preço diferente na mesma data continua separado', () => {
+    const r = juntarRepetidos([c('2026-04-23', 583, 20), c('2026-04-23', 600, 30)])
+    expect(r).toHaveLength(2)
+  })
+
+  it('unidade diferente na mesma data continua separada', () => {
+    const r = juntarRepetidos([c('2026-04-23', 583, 20, 'frasco'), c('2026-04-23', 583, 30, 'caixa')])
+    expect(r).toHaveLength(2)
+  })
+
+  it('plural e singular da unidade são a mesma unidade', () => {
+    const r = juntarRepetidos([c('2026-04-23', 583, 20, 'frascos'), c('2026-04-23', 583, 30, 'frasco')])
+    expect(r).toHaveLength(1)
+    expect(r[0].quantidade).toBe(50)
+  })
+
+  it('fontes diferentes viram fonte nula', () => {
+    const r = juntarRepetidos([c('2026-04-23', 583, 20, 'un', 'nf'), c('2026-04-23', 583, 30, 'un', 'manual')])
+    expect(r).toHaveLength(1)
+    expect(r[0].fonte).toBeNull()
+  })
+
+  it('datas diferentes nunca se juntam, e vêm da mais nova para a mais velha', () => {
+    const r = juntarRepetidos([c('2026-04-23', 583, 20), c('2026-08-10', 583, 5), c('2026-04-23', 583, 30)])
+    expect(r.map(x => x.data)).toEqual(['2026-08-10', '2026-04-23'])
+    expect(r[1].quantidade).toBe(50)
+  })
+
+  it('não altera a lista recebida', () => {
+    const lista = [c('2026-04-23', 583, 20), c('2026-04-23', 583, 30)]
+    juntarRepetidos(lista)
+    expect(lista).toHaveLength(2)
+  })
+
+  it('lista vazia devolve lista vazia', () => {
+    expect(juntarRepetidos([])).toEqual([])
+  })
+})
+
+describe('resumirGrupo sobre o histórico juntado', () => {
+  const g = (historico: Compra[]): GrupoPreco =>
+    ({ produto: 'N-Acetil Cisteína 300mg 2ml', laboratorio: 'Health Tech', chave: 'x', historico })
+  const c = (data: string, centavos: number, quantidade: number): Compra =>
+    ({ data, centavos, quantidade, unidade: 'un', fonte: 'retroativo' })
+
+  it('nota inteira repetida é PRIMEIRA COMPRA, não 0%', () => {
+    const r = resumirGrupo(g([c('2026-04-23', 583, 20), c('2026-04-23', 583, 30), c('2026-04-23', 583, 40)]))
+    expect(r.anterior).toBeNull()
+    expect(r.variacao).toBeNull()
+    expect(r.nivel).toBe('primeira')
+    expect(r.ultimo.quantidade).toBe(90)
+  })
+
+  it('com uma nota mais antiga, compara com ela', () => {
+    const r = resumirGrupo(g([
+      c('2026-08-10', 700, 10), c('2026-08-10', 700, 10),
+      c('2026-04-23', 583, 20), c('2026-04-23', 583, 30),
+    ]))
+    expect(r.ultimo.centavos).toBe(700)
+    expect(r.ultimo.quantidade).toBe(20)
+    expect(r.anterior?.centavos).toBe(583)
+    expect(r.anterior?.quantidade).toBe(50)
+    expect(r.variacao).toBeCloseTo(20.06, 1)
+    expect(r.nivel).toBe('alta')
   })
 })
