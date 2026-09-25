@@ -27,16 +27,42 @@ export interface GrupoPreco {
 }
 
 export interface ResumoPreco {
-  ultimo: Compra
-  anterior: Compra | null
+  ultimo: CompraAgrupada
+  anterior: CompraAgrupada | null
   variacao: number | null
   nivel: NivelVariacao
   unidadeMudou: boolean
 }
 
+/**
+ * Forma farmacêutica não distingue o ativo: o mesmo produto vem "Pellet" numa
+ * nota e sem nada na outra. Dose e volume, sim — decisão do dono.
+ */
+export const PALAVRAS_FORMA = [
+  'pellet', 'pellets', 'implante', 'implantes', 'frasco', 'frascos',
+  'ampola', 'ampolas', 'comprimido', 'comprimidos', 'capsula', 'capsulas',
+  'seringa', 'seringas', 'sache', 'saches', 'pote', 'potes',
+]
+
+/** "Pool de Aminoácidos" e "Pool Aminoácidos" são o mesmo produto. */
+export const PALAVRAS_LIGACAO = ['de', 'da', 'do', 'das', 'dos']
+
+const PALAVRAS_IGNORADAS = new Set([...PALAVRAS_FORMA, ...PALAVRAS_LIGACAO])
+
+// "300 mg" e "300mg" são a mesma dose escrita de dois jeitos. Só cola quando a
+// palavra seguinte ao número é uma unidade conhecida, para não grudar
+// "b 12" (Complexo B 12) em "b12". Colar demais nunca separa dois nomes que já
+// estavam juntos — só pode juntar —, então o risco aqui é baixo de propósito.
+const NUMERO_E_UNIDADE = /(\d)\s+(mg|mcg|g|kg|ml|l|ui|ug|mm|cm)\b/g
+
 /** Produto e laboratório são agrupados por nome normalizado, não por id. */
 export function chaveProduto(nome: string): string {
-  return normalizarNome(nome ?? '')
+  const base = normalizarNome(nome ?? '').replace(NUMERO_E_UNIDADE, '$1$2')
+  const restante = base.split(' ').filter(p => p && !PALAVRAS_IGNORADAS.has(p)).join(' ')
+  // Se o que sobrou não tem nenhuma palavra de verdade ("Frasco 3ml" → "3ml",
+  // "Ampola 3ml" → "3ml"), a chave juntaria dois produtos diferentes — e preço
+  // lançado não se corrige. Nesses casos vale o nome inteiro.
+  return restante.split(' ').some(p => /^[a-z]+$/.test(p)) ? restante : base
 }
 
 export function chaveLaboratorio(nome: string): string {
@@ -107,9 +133,47 @@ export function nivelVariacao(pct: number | null): NivelVariacao {
  * para não transformar unidades curtas em outra coisa.
  * Não muda o que é gravado nem o que é exibido.
  */
-function chaveUnidade(unidade: string | null): string {
+export function chaveUnidade(unidade: string | null): string {
   const base = normalizarNome(unidade ?? '')
   return base.length > 2 && base.endsWith('s') ? base.slice(0, -1) : base
+}
+
+/** Uma linha do histórico depois de juntar os lançamentos repetidos da nota. */
+export interface CompraAgrupada {
+  centavos: number
+  quantidade: number // somada
+  unidade: string | null
+  data: string // AAAA-MM-DD
+  fonte: Fonte | null // null = os lançamentos juntados vieram de fontes diferentes
+  lancamentos: number // quantas linhas do banco entraram nesta
+}
+
+/**
+ * A nota fiscal quebra o mesmo ativo em várias linhas (20 + 30 + 40 frascos),
+ * todas com o mesmo preço unitário. Para o histórico isso é uma compra só —
+ * e, pior, deixava a variação comparar a nota com ela mesma e marcar 0%.
+ * Preço diferente ou unidade diferente na mesma data NÃO se juntam: aí é
+ * informação de verdade.
+ */
+export function juntarRepetidos(historico: Compra[]): CompraAgrupada[] {
+  const juntadas = new Map<string, CompraAgrupada>()
+  // Mais recente primeiro; Map preserva a ordem de inserção, então a saída
+  // já sai ordenada sem precisar de um segundo sort.
+  for (const c of [...historico].sort((a, b) => b.data.localeCompare(a.data))) {
+    const chave = `${c.data}|${c.centavos}|${chaveUnidade(c.unidade)}`
+    const atual = juntadas.get(chave)
+    if (!atual) {
+      juntadas.set(chave, {
+        centavos: c.centavos, quantidade: c.quantidade, unidade: c.unidade,
+        data: c.data, fonte: c.fonte, lancamentos: 1,
+      })
+      continue
+    }
+    atual.quantidade += c.quantidade
+    atual.lancamentos += 1
+    if (atual.fonte !== c.fonte) atual.fonte = null
+  }
+  return [...juntadas.values()]
 }
 
 /**
@@ -117,10 +181,9 @@ function chaveUnidade(unidade: string | null): string {
  * compras (caixa → frasco), o percentual não significa nada e some.
  */
 export function resumirGrupo(grupo: GrupoPreco): ResumoPreco {
-  // Duas compras na MESMA data mantêm a ordem que o chamador passou:
-  // listarPrecos ordena `purchased_at DESC, id DESC` no banco e Array.sort é
-  // estável — não tire esse ORDER BY sem revisar aqui.
-  const historico = [...grupo.historico].sort((a, b) => b.data.localeCompare(a.data))
+  // O histórico é juntado antes de comparar: a "compra anterior" tem que ser a
+  // nota anterior, não outra linha da mesma nota.
+  const historico = juntarRepetidos(grupo.historico)
   const ultimo = historico[0]
   if (!ultimo) throw new Error('resumirGrupo: grupo sem histórico')
   const anterior = historico[1] ?? null
