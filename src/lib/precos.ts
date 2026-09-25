@@ -56,11 +56,12 @@ const NUMERO_E_UNIDADE = /(\d)\s+(mg|mcg|g|kg|ml|l|ui|ug|mm|cm)\b/g
 
 /** Produto e laboratório são agrupados por nome normalizado, não por id. */
 export function chaveProduto(nome: string): string {
-  return normalizarNome(nome ?? '')
-    .replace(NUMERO_E_UNIDADE, '$1$2')
-    .split(' ')
-    .filter(p => p && !PALAVRAS_IGNORADAS.has(p))
-    .join(' ')
+  const base = normalizarNome(nome ?? '').replace(NUMERO_E_UNIDADE, '$1$2')
+  const restante = base.split(' ').filter(p => p && !PALAVRAS_IGNORADAS.has(p)).join(' ')
+  // Um nome feito só de palavras ignoradas ("Frasco", "Pellet") sobraria vazio
+  // e juntaria com qualquer outro igualmente truncado. Nota digitada à mão é
+  // exatamente onde isso aparece: nesse caso vale o nome inteiro.
+  return restante || base
 }
 
 export function chaveLaboratorio(nome: string): string {

@@ -253,6 +253,11 @@ describe('chaveProduto: mesmo ativo escrito diferente', () => {
     diferente('BCAA + HMB - 5ML', 'BCAA + HMB + LIDOCAINA 5ML')
   })
 
+  it('nome feito só de palavra ignorada não vira chave vazia', () => {
+    expect(chaveProduto('Frasco')).not.toBe('')
+    diferente('Frasco', 'Pellet')
+  })
+
   it('não sabe abreviação — e isso é esperado', () => {
     diferente('HIDROXIMETILBUTIRATO 150MG-2ML', 'HMB 150mg 2ml')
   })
