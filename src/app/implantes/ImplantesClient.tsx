@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { ImplantNotes } from '@/components/ImplantNotes'
+import { chavesDePessoa } from '@/lib/implantes'
 
 interface Patient { id: number; name: string }
 interface StockItem { id: number; name: string; unit: string; quantity: number; lot: string | null; expiry_date: string | null }
@@ -283,9 +284,13 @@ export default function ImplantesClient({ patients }: Props) {
   const activeImplants   = implants.filter(i => !i.archived_at)
   const archivedImplants = implants.filter(i => !!i.archived_at)
 
+  // A chave é calculada sobre a lista inteira (ativos + arquivados) para que o
+  // mesmo paciente tenha a mesma chave nas duas listas e nas observações.
+  const chaveDe = chavesDePessoa(implants)
+
   // Agrupa ativos por paciente — mostra o mais recente como card principal
   const grouped = activeImplants.reduce((acc, imp) => {
-    const key = String(imp.patient_id ?? imp.patient_name)
+    const key = chaveDe(imp)
     if (!acc[key]) acc[key] = []
     acc[key].push(imp)
     return acc
@@ -305,7 +310,7 @@ export default function ImplantesClient({ patients }: Props) {
 
   // Agrupa arquivados por paciente — mostra o mais recente
   const archivedGrouped = archivedImplants.reduce((acc, imp) => {
-    const key = String(imp.patient_id ?? imp.patient_name)
+    const key = chaveDe(imp)
     if (!acc[key]) acc[key] = []
     acc[key].push(imp)
     return acc
@@ -701,7 +706,7 @@ export default function ImplantesClient({ patients }: Props) {
 
                   {/* Histórico de implantes do mesmo paciente */}
                   {(() => {
-                    const key = String(implant.patient_id ?? implant.patient_name)
+                    const key = chaveDe(implant)
                     const history = (grouped[key] ?? []).filter(i => i.id !== implant.id).sort((a, b) =>
                       new Date(b.last_implant_date).getTime() - new Date(a.last_implant_date).getTime()
                     )
@@ -753,7 +758,7 @@ export default function ImplantesClient({ patients }: Props) {
 
                   {/* Observações de acompanhamento — todos os cards Atrasado/Em breve */}
                   {implant.days_until <= 30 && (
-                    <ImplantNotes patientKey={String(implant.patient_id ?? implant.patient_name)} />
+                    <ImplantNotes patientKey={chaveDe(implant)} />
                   )}
                 </div>
               )
