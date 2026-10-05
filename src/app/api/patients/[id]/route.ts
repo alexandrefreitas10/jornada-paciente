@@ -31,6 +31,16 @@ export async function PUT(request: Request, { params }: Params) {
       digitos = tel.digitos
     }
     await updatePatient(Number(id), { name, start_date: start_date ?? '', duration: duration ?? '', notes: notes ?? '', phone: digitos })
+
+    const session = await auth()
+    await logAudit({
+      userName: session?.user?.name ?? 'Desconhecido',
+      action: 'UPDATE',
+      entityType: 'patient',
+      entityId: Number(id),
+      patientId: Number(id),
+      details: digitos ? `${name.trim()} · telefone ${digitos}` : name.trim(),
+    })
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: 'Erro ao atualizar' }, { status: 500 })

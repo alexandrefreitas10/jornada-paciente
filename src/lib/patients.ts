@@ -139,7 +139,11 @@ export async function updatePatient(id: number, input: PatientInput): Promise<vo
     UPDATE patients
     SET name = ${input.name.trim()}, start_date = ${input.start_date},
         duration = ${input.duration}, notes = ${input.notes},
-        phone = ${input.phone || null}
+        -- Telefone em branco significa "não mexe", não "apaga": a aba da ficha
+        -- aberta ANTES de alguém preencher o número pelo card de Em tratamento
+        -- ainda carrega phone = null, e salvar o nome por ali zeraria o que
+        -- acabou de ser coletado. Nada no app precisa limpar um telefone.
+        phone = COALESCE(${input.phone || null}, phone)
     WHERE id = ${id}
   `
 }

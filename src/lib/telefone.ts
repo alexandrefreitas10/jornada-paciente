@@ -22,6 +22,12 @@ export function validarTelefone(texto: string | null | undefined): ResultadoTele
   if (d.length < 10 || d.length > 11) {
     return { ok: false, motivo: 'O telefone precisa ter DDD e 8 ou 9 dígitos.' }
   }
+  // Fixo brasileiro começa em 2-5; de 6 a 9 é celular antigo que perdeu o 9 da
+  // frente. Aceitar seria guardar um número que o WhatsApp nunca entrega, e
+  // nada avisaria depois.
+  if (d.length === 10 && Number(d[2]) >= 6) {
+    return { ok: false, motivo: 'Celular precisa do 9 na frente (ex.: (62) 98149-1277).' }
+  }
   const ddd = Number(d.slice(0, 2))
   if (ddd < 11 || ddd > 99) return { ok: false, motivo: 'DDD inválido.' }
   if (d.length === 11 && d[2] !== '9') {

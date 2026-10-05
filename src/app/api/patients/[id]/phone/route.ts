@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { logAudit } from '@/lib/audit'
-import { updatePatientPhone } from '@/lib/patients'
-import { validarTelefone } from '@/lib/telefone'
+import { getPatient, updatePatientPhone } from '@/lib/patients'
+import { formatarTelefone, validarTelefone } from '@/lib/telefone'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +18,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const tel = validarTelefone(typeof body?.phone === 'string' ? body.phone : '')
   if (!tel.ok) return NextResponse.json({ error: tel.motivo }, { status: 400 })
 
+  // Lê o telefone de antes para a trilha mostrar o que foi sobrescrito.
+  const anterior = (await getPatient(Number(id)))?.phone ?? ''
   await updatePatientPhone(Number(id), tel.digitos)
 
   const session = await auth()
@@ -26,7 +28,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     action: 'telefone_atualizado',
     entityType: 'patient',
     entityId: Number(id),
-    details: tel.digitos,
+    // Sem patientId a linha cai com patient_id NULL e não aparece na aba de
+    // auditoria da ficha — que é justo onde a equipe vai procurar.
+    patientId: Number(id),
+    details: `${anterior ? formatarTelefone(anterior) : 'sem telefone'} → ${formatarTelefone(tel.digitos)}`,
   })
   return NextResponse.json({ ok: true, phone: tel.digitos })
 }

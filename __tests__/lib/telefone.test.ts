@@ -57,6 +57,33 @@ describe('validarTelefone', () => {
   })
 })
 
+describe('validarTelefone · celular antigo que perdeu o 9', () => {
+  it('recusa 10 dígitos começando em 6-9 (celular sem o 9 da frente)', () => {
+    // São exatamente os números que a equipe vai copiar de fichas de papel.
+    expect(validarTelefone('62 8149-1277').ok).toBe(false)
+    expect(validarTelefone('(62) 9149-1277').ok).toBe(false)
+    expect(validarTelefone('62 6149-1277').ok).toBe(false)
+    expect(validarTelefone('62 7149-1277').ok).toBe(false)
+  })
+
+  it('diz que falta o 9', () => {
+    const r = validarTelefone('62 8149-1277')
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.motivo).toMatch(/9 na frente/)
+  })
+
+  it('fixo de verdade (2 a 5) continua passando', () => {
+    expect(validarTelefone('(62) 3241-1277')).toEqual({ ok: true, digitos: '6232411277' })
+    expect(validarTelefone('(62) 2241-1277')).toEqual({ ok: true, digitos: '6222411277' })
+    expect(validarTelefone('(62) 5241-1277')).toEqual({ ok: true, digitos: '6252411277' })
+    expect(validarTelefone('(62) 4241-1277')).toEqual({ ok: true, digitos: '6242411277' })
+  })
+
+  it('celular de 11 dígitos não é afetado', () => {
+    expect(validarTelefone('(62) 98149-1277')).toEqual({ ok: true, digitos: '62981491277' })
+  })
+})
+
 describe('formatarTelefone', () => {
   it('formata celular e fixo', () => {
     expect(formatarTelefone('62981491277')).toBe('(62) 98149-1277')

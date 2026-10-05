@@ -132,11 +132,24 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
               {patient.start_date && patient.duration && ' · '}
               {patient.duration}
             </p>
+            {/* A linha do telefone abre a MESMA edição do ✏️: o "sem telefone"
+                é um pedido de ação e antes não tinha onde clicar. Continua botão
+                quando há número, para poder corrigir um errado. */}
             <p className="text-sm mt-0.5">
-              {patient.phone ? (
-                <span className="text-gray-500">📱 {formatarTelefone(patient.phone)}</span>
+              {readOnly ? (
+                <span className={patient.phone ? 'text-gray-500' : 'text-amber-700'}>
+                  📱 {patient.phone ? formatarTelefone(patient.phone) : 'sem telefone'}
+                </span>
               ) : (
-                <span className="text-amber-700">📱 sem telefone</span>
+                <button
+                  type="button"
+                  onClick={() => setEditOpen(true)}
+                  className={`text-left underline decoration-dotted underline-offset-2 hover:decoration-solid ${
+                    patient.phone ? 'text-gray-500' : 'text-amber-700 font-medium'
+                  }`}
+                >
+                  📱 {patient.phone ? formatarTelefone(patient.phone) : 'sem telefone — adicionar'}
+                </button>
               )}
             </p>
             {patient.notes && (
@@ -227,7 +240,9 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
           title="Editar Paciente"
           initial={{
             name: patient.name,
-            phone: patient.phone ?? '',
+            // Formatado: "62999551207" cru no campo parece defeito. O
+            // validarTelefone tira a formatação antes de gravar.
+            phone: formatarTelefone(patient.phone),
             start_date: patient.start_date,
             duration: patient.duration,
             notes: patient.notes,

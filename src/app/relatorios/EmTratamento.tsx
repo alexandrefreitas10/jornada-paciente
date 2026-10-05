@@ -330,6 +330,7 @@ export function EmTratamento() {
                     <div className="mt-1 flex items-center gap-1">
                       <input
                         type="tel"
+                        aria-label={`Telefone de ${p.nome}`}
                         value={telefoneDigitado[p.patientId] ?? ''}
                         onChange={e => setTelefoneDigitado(d => ({ ...d, [p.patientId]: e.target.value }))}
                         placeholder="Telefone com DDD"
