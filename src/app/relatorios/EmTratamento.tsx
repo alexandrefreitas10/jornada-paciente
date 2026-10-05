@@ -7,6 +7,7 @@ import {
   type Etiqueta, type PacienteEmTratamento, type SubAba,
 } from '@/lib/em-tratamento'
 import { validarMotivo, MOTIVO_MAX } from '@/lib/arquivo-paciente'
+import { formatarTelefone, validarTelefone } from '@/lib/telefone'
 
 const SUB_ABAS: { key: SubAba; label: string }[] = [
   { key: 'todos', label: 'Todos' },
@@ -94,6 +95,8 @@ export function EmTratamento() {
   const [motivo, setMotivo] = useState('')
   const [salvandoArquivo, setSalvandoArquivo] = useState(false)
   const [salvandoIntervalo, setSalvandoIntervalo] = useState<Set<number>>(() => new Set())
+  const [telefoneDigitado, setTelefoneDigitado] = useState<Record<number, string>>({})
+  const [salvandoTelefone, setSalvandoTelefone] = useState<number | null>(null)
 
   const carregar = useCallback(async () => {
     setErro(null)
@@ -181,6 +184,28 @@ export function EmTratamento() {
     }
   }
 
+  async function salvarTelefone(p: PacienteEmTratamento) {
+    const tel = validarTelefone(telefoneDigitado[p.patientId] ?? '')
+    if (!tel.ok) { setAviso({ id: p.patientId, texto: tel.motivo }); return }
+    setSalvandoTelefone(p.patientId)
+    setAviso(null)
+    try {
+      const res = await fetch(`/api/patients/${p.patientId}/phone`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: tel.digitos }),
+      })
+      if (!res.ok) throw new Error(String(res.status))
+      setLista(atual => atual && atual.map(x =>
+        x.patientId === p.patientId ? { ...x, telefone: tel.digitos } : x))
+      setTelefoneDigitado(d => ({ ...d, [p.patientId]: '' }))
+    } catch {
+      setAviso({ id: p.patientId, texto: 'Não foi possível salvar o telefone.' })
+    } finally {
+      setSalvandoTelefone(null)
+    }
+  }
+
   function abrirArquivamento(id: number) {
     setAviso(null)
     setMotivo('')
@@ -224,6 +249,9 @@ export function EmTratamento() {
 
   const visiveis = listarSubAba(lista, subAba)
   const enviadas = visiveis.filter(p => p.enviada).length
+  // A lista inteira, não a sub-aba: é um placar de quantos ainda faltam, e
+  // mudaria a cada clique se seguisse o filtro.
+  const semTelefone = lista.filter(p => !p.telefone).length
   const contagem: Record<SubAba, number> = {
     todos: lista.filter(p => p.etiqueta !== 'aguardando').length,
     nao_veio: lista.filter(p => p.etiqueta === 'amarela' || p.etiqueta === 'vermelha').length,
@@ -254,6 +282,11 @@ export function EmTratamento() {
         <p className="text-sm font-medium text-gray-700">
           {enviadas} de {visiveis.length} mensagens enviadas nesta semana
         </p>
+        {semTelefone > 0 && (
+          <p className="text-sm font-medium text-amber-800">
+            📱 {semTelefone} em tratamento ainda sem telefone
+          </p>
+        )}
       </div>
 
       {visiveis.length === 0 ? (
@@ -291,6 +324,27 @@ export function EmTratamento() {
                       ))}
                     </select>
                   </label>
+                  {p.telefone ? (
+                    <p className="text-xs text-gray-500 mt-1"><span aria-hidden="true">📱</span> {formatarTelefone(p.telefone)}</p>
+                  ) : (
+                    <div className="mt-1 flex items-center gap-1">
+                      <input
+                        type="tel"
+                        value={telefoneDigitado[p.patientId] ?? ''}
+                        onChange={e => setTelefoneDigitado(d => ({ ...d, [p.patientId]: e.target.value }))}
+                        placeholder="Telefone com DDD"
+                        className="w-44 border border-amber-300 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-violet-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => salvarTelefone(p)}
+                        disabled={salvandoTelefone === p.patientId}
+                        className="text-xs font-medium text-violet-700 hover:text-violet-900 disabled:opacity-50"
+                      >
+                        {salvandoTelefone === p.patientId ? '...' : 'Salvar telefone'}
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <span className={`shrink-0 text-xs font-semibold px-2 py-1 rounded-full border ${ETIQUETA[p.etiqueta].classe}`}>
                   {ETIQUETA[p.etiqueta].icone} {ETIQUETA[p.etiqueta].nome}

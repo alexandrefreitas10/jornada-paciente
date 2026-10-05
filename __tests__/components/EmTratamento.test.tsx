@@ -15,6 +15,9 @@ let fetchMock: jest.Mock
 
 beforeEach(() => {
   fetchMock = jest.fn(async (url: string, init?: RequestInit) => {
+    if (init?.method === 'PATCH' && url.includes('/phone')) {
+      return { ok: true, status: 200, json: async () => ({ ok: true, phone: JSON.parse(String(init.body)).phone }) }
+    }
     if (init?.method === 'PATCH') {
       return { ok: true, status: 200, json: async () => ({ intervalo: JSON.parse(String(init.body)).intervalo }) }
     }
@@ -393,5 +396,42 @@ describe('EmTratamento', () => {
 
     liberar[3]({ ok: true, status: 200, json: async () => ({ intervalo: 14 }) })
     await waitFor(() => expect(within(ana).getByRole('combobox', { name: 'Intervalo de aplicação' })).toBeEnabled())
+  })
+
+  it('mostra o telefone de quem tem e cobra de quem não tem', async () => {
+    render(<EmTratamento />)
+    await waitFor(() => expect(screen.getAllByRole('listitem').length).toBeGreaterThan(0))
+    expect(screen.getByText('(62) 98149-1277')).toBeInTheDocument()
+    expect(screen.getAllByPlaceholderText('Telefone com DDD').length).toBeGreaterThan(0)
+  })
+
+  it('conta quantos estão sem telefone', async () => {
+    render(<EmTratamento />)
+    expect(await screen.findByText(/ainda sem telefone/)).toBeInTheDocument()
+  })
+
+  it('salva o telefone digitado no card', async () => {
+    render(<EmTratamento />)
+    await waitFor(() => expect(screen.getAllByRole('listitem').length).toBeGreaterThan(0))
+    const campo = screen.getAllByPlaceholderText('Telefone com DDD')[0]
+    await userEvent.type(campo, '62999887766')
+    await userEvent.click(screen.getAllByRole('button', { name: 'Salvar telefone' })[0])
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringMatching(/\/api\/patients\/\d+\/phone$/),
+        expect.objectContaining({ method: 'PATCH' }),
+      ),
+    )
+    expect(await screen.findByText('(62) 99988-7766')).toBeInTheDocument()
+  })
+
+  it('não salva telefone inválido e diz o motivo', async () => {
+    render(<EmTratamento />)
+    await waitFor(() => expect(screen.getAllByRole('listitem').length).toBeGreaterThan(0))
+    const antes = fetchMock.mock.calls.length
+    await userEvent.type(screen.getAllByPlaceholderText('Telefone com DDD')[0], '123')
+    await userEvent.click(screen.getAllByRole('button', { name: 'Salvar telefone' })[0])
+    expect(await screen.findByText(/DDD/i)).toBeInTheDocument()
+    expect(fetchMock.mock.calls.length).toBe(antes)
   })
 })

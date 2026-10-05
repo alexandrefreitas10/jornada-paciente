@@ -2,9 +2,11 @@
 'use client'
 
 import { useState } from 'react'
+import { validarTelefone } from '@/lib/telefone'
 
 interface PatientFormData {
   name: string
+  phone: string
   start_date: string
   duration: string
   notes: string
@@ -15,11 +17,16 @@ interface Props {
   onSave: (data: PatientFormData) => Promise<void>
   onClose: () => void
   title: string
+  /**
+   * Só o cadastro novo exige telefone. Na edição ele fica opcional: 165
+   * pacientes ainda não têm número, e travar impediria de corrigir o nome deles.
+   */
+  telefoneObrigatorio?: boolean
 }
 
-export function PatientModal({ initial, onSave, onClose, title }: Props) {
+export function PatientModal({ initial, onSave, onClose, title, telefoneObrigatorio = false }: Props) {
   const [form, setForm] = useState<PatientFormData>(
-    initial ?? { name: '', start_date: '', duration: '', notes: '' }
+    initial ?? { name: '', start_date: '', duration: '', notes: '', phone: '' }
   )
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -27,6 +34,9 @@ export function PatientModal({ initial, onSave, onClose, title }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!form.name.trim()) { setError('Nome é obrigatório'); return }
+    const tel = validarTelefone(form.phone)
+    if (telefoneObrigatorio && !tel.ok) { setError(tel.motivo); return }
+    if (form.phone.trim() && !tel.ok) { setError(tel.motivo); return }
     setLoading(true)
     setError('')
     try {
@@ -51,6 +61,18 @@ export function PatientModal({ initial, onSave, onClose, title }: Props) {
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               placeholder="Nome do paciente"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Telefone {telefoneObrigatorio && '*'}
+            </label>
+            <input
+              type="tel"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-400"
+              value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              placeholder="(62) 98149-1277"
             />
           </div>
           <div>

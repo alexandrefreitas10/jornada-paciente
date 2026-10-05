@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { PatientDetail } from '@/lib/patients'
+import { formatarTelefone } from '@/lib/telefone'
 import { Measurement } from '@/lib/measurements'
 import { TASK_PHASES, ALL_TASK_KEYS } from '@/lib/task-definitions'
 import { ProgressBar } from './ProgressBar'
@@ -78,11 +79,19 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
     await fetch(`/api/patients/${patient.id}/tasks/${taskKey}`, { method })
   }
 
-  async function handleEdit(data: { name: string; start_date: string; duration: string; notes: string }) {
+  async function handleEdit(data: { name: string; phone: string; start_date: string; duration: string; notes: string }) {
+    // O PUT regrava o telefone que recebe: mandar o campo é o que impede a
+    // edição de apagar o número de quem já tem.
     const res = await fetch(`/api/patients/${patient.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        name: data.name,
+        start_date: data.start_date,
+        duration: data.duration,
+        notes: data.notes,
+        phone: data.phone,
+      }),
     })
     if (!res.ok) throw new Error('Erro ao atualizar')
     router.refresh()
@@ -122,6 +131,13 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
               {patient.start_date && `Início: ${patient.start_date}`}
               {patient.start_date && patient.duration && ' · '}
               {patient.duration}
+            </p>
+            <p className="text-sm mt-0.5">
+              {patient.phone ? (
+                <span className="text-gray-500">📱 {formatarTelefone(patient.phone)}</span>
+              ) : (
+                <span className="text-amber-700">📱 sem telefone</span>
+              )}
             </p>
             {patient.notes && (
               <p className="text-sm text-gray-500 italic mt-1">{patient.notes}</p>
@@ -211,6 +227,7 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
           title="Editar Paciente"
           initial={{
             name: patient.name,
+            phone: patient.phone ?? '',
             start_date: patient.start_date,
             duration: patient.duration,
             notes: patient.notes,
