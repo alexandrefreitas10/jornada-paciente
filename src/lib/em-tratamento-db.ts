@@ -7,6 +7,7 @@ import {
 interface Linha {
   patient_id: number
   name: string
+  phone: string | null
   intervalo: number
   ultima_saida: Date | string
   ultima_folha: Date | string | null
@@ -41,7 +42,7 @@ export async function listarEmTratamento(agora = new Date()): Promise<PacienteEm
       WHERE file_type = 'prescription' AND deleted_at IS NULL
       GROUP BY patient_id
     )
-    SELECT p.id AS patient_id, p.name, p.application_interval_days AS intervalo,
+    SELECT p.id AS patient_id, p.name, p.phone, p.application_interval_days AS intervalo,
            s.ultima_saida, f.ultima_folha,
            t.template, t.sent_by, t.sent_at
     FROM saidas s
@@ -64,6 +65,7 @@ export async function listarEmTratamento(agora = new Date()): Promise<PacienteEm
     lista.push({
       patientId: l.patient_id,
       nome: l.name,
+      telefone: l.phone,
       ultimaAplicacao: iso(l.ultima_saida),
       ultimaFolha: l.ultima_folha ? iso(l.ultima_folha) : null,
       intervalo: l.intervalo,

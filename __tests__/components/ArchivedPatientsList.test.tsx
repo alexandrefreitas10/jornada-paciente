@@ -6,7 +6,7 @@ import type { ArchivedPatientItem } from '@/lib/patients'
 jest.mock('next/navigation', () => ({ useRouter: () => ({ refresh: jest.fn() }) }))
 
 const base = {
-  start_date: '2026-07-01', duration: '12', notes: '', created_at: '2026-07-01T12:00:00.000Z',
+  phone: null, start_date: '2026-07-01', duration: '12', notes: '', created_at: '2026-07-01T12:00:00.000Z',
   created_by: 'Carlos', completed_count: 0,
 }
 

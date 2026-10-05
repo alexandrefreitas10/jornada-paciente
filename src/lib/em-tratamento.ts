@@ -36,6 +36,7 @@ export interface MarcacaoEnviada {
 export interface PacienteEmTratamento {
   patientId: number
   nome: string
+  telefone: string | null
   ultimaAplicacao: string // ISO
   ultimaFolha: string | null // ISO da última folha finalizada, se houver
   intervalo: number

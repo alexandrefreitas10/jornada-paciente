@@ -5,10 +5,10 @@ import { EmTratamento } from '@/app/relatorios/EmTratamento'
 import type { PacienteEmTratamento } from '@/lib/em-tratamento'
 
 const LISTA: PacienteEmTratamento[] = [
-  { patientId: 1, nome: 'BRUNO LIMA', etiqueta: 'verde', diasSemVir: 2, ultimaAplicacao: '2026-09-15T12:00:00.000Z', ultimaFolha: null, intervalo: 7, diasAguardando: null, enviada: null },
-  { patientId: 2, nome: 'Carla Dias', etiqueta: 'amarela', diasSemVir: 10, ultimaAplicacao: '2026-09-07T12:00:00.000Z', ultimaFolha: null, intervalo: 7, diasAguardando: null, enviada: null },
-  { patientId: 3, nome: 'Ana Souza', etiqueta: 'vermelha', diasSemVir: 40, ultimaAplicacao: '2026-08-08T12:00:00.000Z', ultimaFolha: null, intervalo: 7, diasAguardando: null, enviada: null },
-  { patientId: 4, nome: 'Davi Rocha', etiqueta: 'aguardando', diasSemVir: 12, ultimaAplicacao: '2026-09-05T12:00:00.000Z', ultimaFolha: '2026-09-12T12:00:00.000Z', intervalo: 7, diasAguardando: 5, enviada: null },
+  { patientId: 1, nome: 'BRUNO LIMA', telefone: '62981491277', etiqueta: 'verde', diasSemVir: 2, ultimaAplicacao: '2026-09-15T12:00:00.000Z', ultimaFolha: null, intervalo: 7, diasAguardando: null, enviada: null },
+  { patientId: 2, nome: 'Carla Dias', telefone: null, etiqueta: 'amarela', diasSemVir: 10, ultimaAplicacao: '2026-09-07T12:00:00.000Z', ultimaFolha: null, intervalo: 7, diasAguardando: null, enviada: null },
+  { patientId: 3, nome: 'Ana Souza', telefone: null, etiqueta: 'vermelha', diasSemVir: 40, ultimaAplicacao: '2026-08-08T12:00:00.000Z', ultimaFolha: null, intervalo: 7, diasAguardando: null, enviada: null },
+  { patientId: 4, nome: 'Davi Rocha', telefone: null, etiqueta: 'aguardando', diasSemVir: 12, ultimaAplicacao: '2026-09-05T12:00:00.000Z', ultimaFolha: '2026-09-12T12:00:00.000Z', intervalo: 7, diasAguardando: 5, enviada: null },
 ]
 
 let fetchMock: jest.Mock
