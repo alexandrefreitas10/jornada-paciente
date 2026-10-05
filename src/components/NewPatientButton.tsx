@@ -9,7 +9,7 @@ export function NewPatientButton() {
   const [open, setOpen] = useState(false)
   const router = useRouter()
 
-  async function handleSave(data: { name: string; start_date: string; duration: string; notes: string }) {
+  async function handleSave(data: { name: string; phone: string; start_date: string; duration: string; notes: string }) {
     const res = await fetch('/api/patients', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -30,6 +30,7 @@ export function NewPatientButton() {
       {open && (
         <PatientModal
           title="Novo Paciente"
+          telefoneObrigatorio
           onSave={handleSave}
           onClose={() => setOpen(false)}
         />

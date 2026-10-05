@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { PatientDetail } from '@/lib/patients'
+import { formatarTelefone } from '@/lib/telefone'
 import { Measurement } from '@/lib/measurements'
 import { TASK_PHASES, ALL_TASK_KEYS } from '@/lib/task-definitions'
 import { ProgressBar } from './ProgressBar'
@@ -78,11 +79,19 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
     await fetch(`/api/patients/${patient.id}/tasks/${taskKey}`, { method })
   }
 
-  async function handleEdit(data: { name: string; start_date: string; duration: string; notes: string }) {
+  async function handleEdit(data: { name: string; phone: string; start_date: string; duration: string; notes: string }) {
+    // O PUT regrava o telefone que recebe: mandar o campo é o que impede a
+    // edição de apagar o número de quem já tem.
     const res = await fetch(`/api/patients/${patient.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        name: data.name,
+        start_date: data.start_date,
+        duration: data.duration,
+        notes: data.notes,
+        phone: data.phone,
+      }),
     })
     if (!res.ok) throw new Error('Erro ao atualizar')
     router.refresh()
@@ -122,6 +131,26 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
               {patient.start_date && `Início: ${patient.start_date}`}
               {patient.start_date && patient.duration && ' · '}
               {patient.duration}
+            </p>
+            {/* A linha do telefone abre a MESMA edição do ✏️: o "sem telefone"
+                é um pedido de ação e antes não tinha onde clicar. Continua botão
+                quando há número, para poder corrigir um errado. */}
+            <p className="text-sm mt-0.5">
+              {readOnly ? (
+                <span className={patient.phone ? 'text-gray-500' : 'text-amber-700'}>
+                  📱 {patient.phone ? formatarTelefone(patient.phone) : 'sem telefone'}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setEditOpen(true)}
+                  className={`text-left underline decoration-dotted underline-offset-2 hover:decoration-solid ${
+                    patient.phone ? 'text-gray-500' : 'text-amber-700 font-medium'
+                  }`}
+                >
+                  📱 {patient.phone ? formatarTelefone(patient.phone) : 'sem telefone — adicionar'}
+                </button>
+              )}
             </p>
             {patient.notes && (
               <p className="text-sm text-gray-500 italic mt-1">{patient.notes}</p>
@@ -211,6 +240,9 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
           title="Editar Paciente"
           initial={{
             name: patient.name,
+            // Formatado: "62999551207" cru no campo parece defeito. O
+            // validarTelefone tira a formatação antes de gravar.
+            phone: formatarTelefone(patient.phone),
             start_date: patient.start_date,
             duration: patient.duration,
             notes: patient.notes,

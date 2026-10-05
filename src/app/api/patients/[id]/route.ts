@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { getPatient, updatePatient, deletePatient } from '@/lib/patients'
 import { logAudit } from '@/lib/audit'
+import { validarTelefone } from '@/lib/telefone'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -16,11 +17,30 @@ export async function PUT(request: Request, { params }: Params) {
   const { id } = await params
   try {
     const body = await request.json()
-    const { name, start_date, duration, notes } = body
+    const { name, start_date, duration, notes, phone } = body
     if (!name?.trim()) {
       return NextResponse.json({ error: 'Nome é obrigatório' }, { status: 400 })
     }
-    await updatePatient(Number(id), { name, start_date: start_date ?? '', duration: duration ?? '', notes: notes ?? '' })
+    // Na edição o telefone pode continuar vazio: 165 pacientes ainda não têm, e
+    // travar impediria de corrigir o nome deles. Mas inválido não passa.
+    const bruto = typeof phone === 'string' ? phone.trim() : ''
+    let digitos = ''
+    if (bruto) {
+      const tel = validarTelefone(bruto)
+      if (!tel.ok) return NextResponse.json({ error: tel.motivo }, { status: 400 })
+      digitos = tel.digitos
+    }
+    await updatePatient(Number(id), { name, start_date: start_date ?? '', duration: duration ?? '', notes: notes ?? '', phone: digitos })
+
+    const session = await auth()
+    await logAudit({
+      userName: session?.user?.name ?? 'Desconhecido',
+      action: 'UPDATE',
+      entityType: 'patient',
+      entityId: Number(id),
+      patientId: Number(id),
+      details: digitos ? `${name.trim()} · telefone ${digitos}` : name.trim(),
+    })
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: 'Erro ao atualizar' }, { status: 500 })

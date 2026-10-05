@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { listPatients, createPatient } from '@/lib/patients'
 import { auth } from '@/auth'
+import { validarTelefone } from '@/lib/telefone'
 
 export async function GET() {
   try {
@@ -16,11 +17,17 @@ export async function POST(request: Request) {
     const session = await auth()
     const createdBy = session?.user?.name ?? null
     const body = await request.json()
-    const { name, start_date, duration, notes } = body
+    const { name, start_date, duration, notes, phone } = body
     if (!name?.trim()) {
       return NextResponse.json({ error: 'Nome é obrigatório' }, { status: 400 })
     }
-    const id = await createPatient({ name, start_date: start_date ?? '', duration: duration ?? '', notes: notes ?? '', created_by: createdBy })
+    // Decisão do dono: paciente novo não entra sem telefone. A trava vale aqui
+    // também, não só na tela.
+    const tel = validarTelefone(phone)
+    if (!tel.ok) {
+      return NextResponse.json({ error: tel.motivo }, { status: 400 })
+    }
+    const id = await createPatient({ name, start_date: start_date ?? '', duration: duration ?? '', notes: notes ?? '', phone: tel.digitos, created_by: createdBy })
     return NextResponse.json({ id }, { status: 201 })
   } catch {
     return NextResponse.json({ error: 'Erro ao criar paciente' }, { status: 500 })

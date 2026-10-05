@@ -5,16 +5,19 @@ import { EmTratamento } from '@/app/relatorios/EmTratamento'
 import type { PacienteEmTratamento } from '@/lib/em-tratamento'
 
 const LISTA: PacienteEmTratamento[] = [
-  { patientId: 1, nome: 'BRUNO LIMA', etiqueta: 'verde', diasSemVir: 2, ultimaAplicacao: '2026-09-15T12:00:00.000Z', ultimaFolha: null, intervalo: 7, diasAguardando: null, enviada: null },
-  { patientId: 2, nome: 'Carla Dias', etiqueta: 'amarela', diasSemVir: 10, ultimaAplicacao: '2026-09-07T12:00:00.000Z', ultimaFolha: null, intervalo: 7, diasAguardando: null, enviada: null },
-  { patientId: 3, nome: 'Ana Souza', etiqueta: 'vermelha', diasSemVir: 40, ultimaAplicacao: '2026-08-08T12:00:00.000Z', ultimaFolha: null, intervalo: 7, diasAguardando: null, enviada: null },
-  { patientId: 4, nome: 'Davi Rocha', etiqueta: 'aguardando', diasSemVir: 12, ultimaAplicacao: '2026-09-05T12:00:00.000Z', ultimaFolha: '2026-09-12T12:00:00.000Z', intervalo: 7, diasAguardando: 5, enviada: null },
+  { patientId: 1, nome: 'BRUNO LIMA', telefone: '62981491277', etiqueta: 'verde', diasSemVir: 2, ultimaAplicacao: '2026-09-15T12:00:00.000Z', ultimaFolha: null, intervalo: 7, diasAguardando: null, enviada: null },
+  { patientId: 2, nome: 'Carla Dias', telefone: null, etiqueta: 'amarela', diasSemVir: 10, ultimaAplicacao: '2026-09-07T12:00:00.000Z', ultimaFolha: null, intervalo: 7, diasAguardando: null, enviada: null },
+  { patientId: 3, nome: 'Ana Souza', telefone: null, etiqueta: 'vermelha', diasSemVir: 40, ultimaAplicacao: '2026-08-08T12:00:00.000Z', ultimaFolha: null, intervalo: 7, diasAguardando: null, enviada: null },
+  { patientId: 4, nome: 'Davi Rocha', telefone: null, etiqueta: 'aguardando', diasSemVir: 12, ultimaAplicacao: '2026-09-05T12:00:00.000Z', ultimaFolha: '2026-09-12T12:00:00.000Z', intervalo: 7, diasAguardando: 5, enviada: null },
 ]
 
 let fetchMock: jest.Mock
 
 beforeEach(() => {
   fetchMock = jest.fn(async (url: string, init?: RequestInit) => {
+    if (init?.method === 'PATCH' && url.includes('/phone')) {
+      return { ok: true, status: 200, json: async () => ({ ok: true, phone: JSON.parse(String(init.body)).phone }) }
+    }
     if (init?.method === 'PATCH') {
       return { ok: true, status: 200, json: async () => ({ intervalo: JSON.parse(String(init.body)).intervalo }) }
     }
@@ -393,5 +396,59 @@ describe('EmTratamento', () => {
 
     liberar[3]({ ok: true, status: 200, json: async () => ({ intervalo: 14 }) })
     await waitFor(() => expect(within(ana).getByRole('combobox', { name: 'Intervalo de aplicação' })).toBeEnabled())
+  })
+
+  it('mostra o telefone de quem tem e cobra de quem não tem', async () => {
+    render(<EmTratamento />)
+    await waitFor(() => expect(screen.getAllByRole('listitem').length).toBeGreaterThan(0))
+    expect(screen.getByText('(62) 98149-1277')).toBeInTheDocument()
+    expect(screen.getAllByPlaceholderText('Telefone com DDD').length).toBeGreaterThan(0)
+  })
+
+  it('conta quantos estão sem telefone', async () => {
+    render(<EmTratamento />)
+    // 3 das 4 fixtures estão sem telefone (o contador é da lista inteira,
+    // não da sub-aba): o número importa, /ainda sem telefone/ passaria com
+    // qualquer um.
+    expect(await screen.findByText('📱 3 em tratamento ainda sem telefone')).toBeInTheDocument()
+  })
+
+  it('não mostra o contador quando todos têm telefone', async () => {
+    const todosComTelefone = LISTA.map(p => ({ ...p, telefone: '62981491277' }))
+    fetchMock.mockImplementation(async () => ({
+      ok: true, status: 200, json: async () => todosComTelefone,
+    }))
+    render(<EmTratamento />)
+    await waitFor(() => expect(cards().length).toBeGreaterThan(0))
+    expect(screen.queryByText(/ainda sem telefone/)).not.toBeInTheDocument()
+  })
+
+  it('salva o telefone digitado no card', async () => {
+    render(<EmTratamento />)
+    await waitFor(() => expect(screen.getAllByRole('listitem').length).toBeGreaterThan(0))
+    expect(await screen.findByText('📱 3 em tratamento ainda sem telefone')).toBeInTheDocument()
+    // Pelo rótulo: o campo é de um paciente com nome, não "o primeiro input".
+    const campo = screen.getByRole('textbox', { name: 'Telefone de Ana Souza' })
+    await userEvent.type(campo, '62999887766')
+    await userEvent.click(screen.getAllByRole('button', { name: 'Salvar telefone' })[0])
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringMatching(/\/api\/patients\/\d+\/phone$/),
+        expect.objectContaining({ method: 'PATCH' }),
+      ),
+    )
+    expect(await screen.findByText('(62) 99988-7766')).toBeInTheDocument()
+    // E o placar anda: era 3 sem telefone, agora 2.
+    expect(await screen.findByText('📱 2 em tratamento ainda sem telefone')).toBeInTheDocument()
+  })
+
+  it('não salva telefone inválido e diz o motivo', async () => {
+    render(<EmTratamento />)
+    await waitFor(() => expect(screen.getAllByRole('listitem').length).toBeGreaterThan(0))
+    const antes = fetchMock.mock.calls.length
+    await userEvent.type(screen.getAllByPlaceholderText('Telefone com DDD')[0], '123')
+    await userEvent.click(screen.getAllByRole('button', { name: 'Salvar telefone' })[0])
+    expect(await screen.findByText(/DDD/i)).toBeInTheDocument()
+    expect(fetchMock.mock.calls.length).toBe(antes)
   })
 })

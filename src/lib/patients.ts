@@ -3,6 +3,7 @@ import sql, { initSchema } from './db'
 export interface PatientRow {
   id: number
   name: string
+  phone: string | null
   start_date: string
   duration: string
   notes: string
@@ -26,6 +27,8 @@ export interface PatientDetail extends PatientRow {
 
 export interface PatientInput {
   name: string
+  /** Só dígitos, com DDD. Vazio = sem telefone. */
+  phone: string
   start_date: string
   duration: string
   notes: string
@@ -87,8 +90,8 @@ export async function createPatient(input: PatientInput): Promise<number> {
   if (!input.name.trim()) throw new Error('name is required')
   await initSchema()
   const rows = await sql`
-    INSERT INTO patients (name, start_date, duration, notes, created_by)
-    VALUES (${input.name.trim()}, ${input.start_date}, ${input.duration}, ${input.notes}, ${input.created_by ?? null})
+    INSERT INTO patients (name, start_date, duration, notes, phone, created_by)
+    VALUES (${input.name.trim()}, ${input.start_date}, ${input.duration}, ${input.notes}, ${input.phone || null}, ${input.created_by ?? null})
     RETURNING id
   `
   return rows[0].id
@@ -135,7 +138,12 @@ export async function updatePatient(id: number, input: PatientInput): Promise<vo
   await sql`
     UPDATE patients
     SET name = ${input.name.trim()}, start_date = ${input.start_date},
-        duration = ${input.duration}, notes = ${input.notes}
+        duration = ${input.duration}, notes = ${input.notes},
+        -- Telefone em branco significa "não mexe", não "apaga": a aba da ficha
+        -- aberta ANTES de alguém preencher o número pelo card de Em tratamento
+        -- ainda carrega phone = null, e salvar o nome por ali zeraria o que
+        -- acabou de ser coletado. Nada no app precisa limpar um telefone.
+        phone = COALESCE(${input.phone || null}, phone)
     WHERE id = ${id}
   `
 }
@@ -148,4 +156,11 @@ export async function deletePatient(id: number, deletedBy?: string | null): Prom
 export async function restorePatient(id: number): Promise<void> {
   await initSchema()
   await sql`UPDATE patients SET deleted_at = NULL WHERE id = ${id}`
+}
+
+/** Altera SÓ o telefone. Não existe para ser genérica: a rota de perfil do
+ *  portal regrava nascimento e e-mail juntos e apagaria os dois. */
+export async function updatePatientPhone(id: number, phone: string): Promise<void> {
+  await initSchema()
+  await sql`UPDATE patients SET phone = ${phone || null} WHERE id = ${id}`
 }

@@ -149,6 +149,7 @@ describe('mensagens', () => {
 describe('listarSubAba', () => {
   const p = (patientId: number, nome: string, diasSemVir: number): PacienteEmTratamento => ({
     patientId, nome, diasSemVir,
+    telefone: null,
     etiqueta: diasSemVir <= 7 ? 'verde' : diasSemVir <= 28 ? 'amarela' : 'vermelha',
     ultimaAplicacao: '2026-09-01T12:00:00.000Z',
     ultimaFolha: null,
@@ -158,6 +159,7 @@ describe('listarSubAba', () => {
   })
   const pa = (patientId: number, nome: string, diasAguardando: number): PacienteEmTratamento => ({
     patientId, nome, diasSemVir: diasAguardando + 3, diasAguardando,
+    telefone: null,
     etiqueta: 'aguardando',
     ultimaAplicacao: '2026-08-01T12:00:00.000Z',
     ultimaFolha: '2026-08-04T12:00:00.000Z',

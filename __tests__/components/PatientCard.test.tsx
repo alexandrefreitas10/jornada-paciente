@@ -14,6 +14,7 @@ const patient = {
   start_date: '2026-06-01',
   duration: '3 meses',
   notes: '',
+  phone: null,
   created_at: '2026-06-01',
   completed_count: 7,
 }
