@@ -50,6 +50,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 userName={session.user.name ?? ''}
                 isAdmin={!!(session.user as { is_admin?: boolean }).is_admin}
                 canEstoque={!!(session.user as { can_estoque?: boolean }).can_estoque}
+                canConciliacao={!!(session.user as { can_conciliacao?: boolean }).can_conciliacao}
               />
             </header>
           )}

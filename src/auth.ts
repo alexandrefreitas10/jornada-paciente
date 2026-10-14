@@ -28,7 +28,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null
         }
         await clearAttempts('staff', username)
-        return { id: String(user.id), name: user.username, is_admin: user.is_admin, can_estoque: user.can_estoque }
+        return {
+          id: String(user.id),
+          name: user.username,
+          is_admin: user.is_admin,
+          can_estoque: user.can_estoque,
+          can_conciliacao: user.can_conciliacao,
+        }
       },
     }),
   ],
@@ -41,6 +47,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         token.is_admin = (user as any).is_admin ?? false
         token.can_estoque = (user as any).can_estoque ?? false
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        token.can_conciliacao = (user as any).can_conciliacao ?? false
       }
       return token
     },
@@ -50,6 +58,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ;(session.user as any).is_admin = token.is_admin ?? false
         ;(session.user as any).can_estoque = token.can_estoque ?? false
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(session.user as any).can_conciliacao = token.can_conciliacao ?? false
       }
       return session
     },

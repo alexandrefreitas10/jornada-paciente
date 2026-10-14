@@ -3,7 +3,14 @@
 import { useState, useRef, useEffect } from 'react'
 import { AdminPasswordModal } from '@/components/AdminPasswordModal'
 
-type User = { id: number; username: string; is_admin: boolean; can_estoque: boolean; created_at: string }
+type User = {
+  id: number
+  username: string
+  is_admin: boolean
+  can_estoque: boolean
+  can_conciliacao: boolean
+  created_at: string
+}
 
 type EditMode = { type: 'username'; value: string } | { type: 'password'; value: string; confirm: string }
 
@@ -81,6 +88,10 @@ export function UsersClient({ initialUsers }: { initialUsers: User[] }) {
 
   // Exclusão
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null)
+
+  // Permissão que não foi salva, por usuário: o erro aparece na linha de quem
+  // falhou, e não num canto solto da tela.
+  const [permError, setPermError] = useState<{ id: number; msg: string } | null>(null)
 
   if (!unlocked) {
     return <AdminGate onUnlock={() => setUnlocked(true)} />
@@ -166,14 +177,33 @@ export function UsersClient({ initialUsers }: { initialUsers: User[] }) {
     setPendingDeleteId(null)
   }
 
-  async function toggleEstoque(u: User) {
-    const next = !u.can_estoque
-    await fetch(`/api/usuarios/${u.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ can_estoque: next }),
-    })
-    setUsers(prev => prev.map(x => x.id === u.id ? { ...x, can_estoque: next } : x))
+  // As duas permissões vão pelo mesmo PUT, uma chave por vez (a rota trata um
+  // campo por chamada).
+  //
+  // O botão só muda DEPOIS do servidor confirmar. O aviso ali em cima diz que a
+  // permissão vale no próximo login, então um botão que acende sozinho num PUT
+  // que falhou manda o dono pedir ao funcionário que saia e entre de novo — e
+  // ele volta sem o acesso, sem ninguém entender por quê.
+  async function togglePermissao(u: User, campo: 'can_estoque' | 'can_conciliacao') {
+    const next = !u[campo]
+    setPermError(null)
+    try {
+      const res = await fetch(`/api/usuarios/${u.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [campo]: next }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        const motivo = body && typeof body.error === 'string' ? body.error : 'Erro ao salvar a permissão'
+        setPermError({ id: u.id, msg: motivo })
+        return
+      }
+    } catch {
+      setPermError({ id: u.id, msg: 'Não foi possível falar com o servidor. A permissão não mudou.' })
+      return
+    }
+    setUsers(prev => prev.map(x => x.id === u.id ? { ...x, [campo]: next } : x))
   }
 
   return (
@@ -215,6 +245,15 @@ export function UsersClient({ initialUsers }: { initialUsers: User[] }) {
           </button>
         </form>
       </div>
+
+      {/* Permissão só entra na sessão no login: a sessão é um JWT e os campos
+          `can_estoque`/`can_conciliacao` são lidos na autenticação. Ligar o
+          botão aqui não mexe em quem já está logado — sem este aviso, parece
+          que o botão não funcionou. */}
+      <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2">
+        📦 Estoque e 💰 Conciliação só passam a valer no próximo login: quem já estiver com a sessão aberta precisa
+        <strong> sair e entrar de novo</strong>. A Conciliação abre o financeiro inteiro da clínica.
+      </p>
 
       {/* Lista de usuários */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
@@ -278,19 +317,32 @@ export function UsersClient({ initialUsers }: { initialUsers: User[] }) {
                     <p className="text-sm font-medium text-gray-900 truncate">{u.username}</p>
                     {u.is_admin && <span className="text-xs bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full">Admin</span>}
                     {u.can_estoque && !u.is_admin && <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">📦 Estoque</span>}
+                    {u.can_conciliacao && !u.is_admin && <span className="text-xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full">💰 Conciliação</span>}
                   </div>
                   <p className="text-xs text-gray-400 mt-0.5">
                     Cadastrado em {new Date(u.created_at).toLocaleDateString('pt-BR')}
                   </p>
+                  {permError?.id === u.id && (
+                    <p className="text-xs text-red-600 mt-0.5">{permError.msg}</p>
+                  )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
                   {!u.is_admin && (
                     <button
-                      onClick={() => toggleEstoque(u)}
+                      onClick={() => togglePermissao(u, 'can_estoque')}
                       className={`text-xs px-2 py-1 rounded-lg transition-colors ${u.can_estoque ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'text-gray-500 hover:bg-gray-100'}`}
                       title={u.can_estoque ? 'Remover acesso ao estoque' : 'Liberar acesso ao estoque'}
                     >
                       📦 {u.can_estoque ? 'Estoque ✓' : 'Estoque'}
+                    </button>
+                  )}
+                  {!u.is_admin && (
+                    <button
+                      onClick={() => togglePermissao(u, 'can_conciliacao')}
+                      className={`text-xs px-2 py-1 rounded-lg transition-colors ${u.can_conciliacao ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'text-gray-500 hover:bg-gray-100'}`}
+                      title={u.can_conciliacao ? 'Remover acesso à Conciliação' : 'Liberar acesso à Conciliação (financeiro completo)'}
+                    >
+                      💰 {u.can_conciliacao ? 'Conciliação ✓' : 'Conciliação'}
                     </button>
                   )}
                   <button

@@ -7,9 +7,10 @@ interface Props {
   userName: string
   isAdmin: boolean
   canEstoque?: boolean
+  canConciliacao?: boolean
 }
 
-export function NavMenu({ userName, isAdmin, canEstoque }: Props) {
+export function NavMenu({ userName, isAdmin, canEstoque, canConciliacao }: Props) {
   const [open, setOpen] = useState(false)
 
   const links = [
@@ -22,6 +23,7 @@ export function NavMenu({ userName, isAdmin, canEstoque }: Props) {
     { href: '/treinamento', label: 'Treinamento' },
     ...(isAdmin ? [{ href: '/admin/treinamento', label: 'Base do Treino' }] : []),
     ...(isAdmin || canEstoque ? [{ href: '/estoque', label: 'Estoque' }] : []),
+    ...(isAdmin || canConciliacao ? [{ href: '/conciliacao', label: 'Conciliação' }] : []),
     ...(isAdmin ? [{ href: '/feedbacks', label: 'Feedbacks' }] : []),
     ...(isAdmin ? [{ href: '/erros', label: 'Erros' }] : []),
     { href: '/pacientes-antigos', label: 'Pacientes Antigos' },

@@ -574,6 +574,76 @@ async function runMigrations() {
     CREATE INDEX IF NOT EXISTS stock_purchases_produto_idx
       ON stock_purchases (product_key, laboratory_key, purchased_at DESC);
   `).catch(() => {})
+
+  // Conciliação: um envio por mês de referência. `mes` é sempre o dia 1 e é
+  // ÚNICO — reenviar o mês apaga o anterior e o CASCADE limpa as linhas dos
+  // dois lados, para não sobrar meia conciliação de duas versões diferentes.
+  // Dinheiro em centavos inteiros (BIGINT), como no resto do projeto.
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS conciliacao_meses (
+      id SERIAL PRIMARY KEY,
+      mes DATE NOT NULL UNIQUE,
+      recebidas_s3_key TEXT,
+      pagas_s3_key TEXT,
+      unicred_s3_key TEXT,
+      itau_s3_key TEXT,
+      created_by TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS conciliacao_sistema (
+      id SERIAL PRIMARY KEY,
+      mes_id INTEGER NOT NULL REFERENCES conciliacao_meses(id) ON DELETE CASCADE,
+      data DATE NOT NULL,
+      competencia DATE,
+      valor_centavos BIGINT NOT NULL,
+      banco TEXT NOT NULL CHECK (banco IN ('unicred','itau')),
+      nome TEXT NOT NULL,
+      descricao TEXT,
+      categoria TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS conciliacao_extrato (
+      id SERIAL PRIMARY KEY,
+      mes_id INTEGER NOT NULL REFERENCES conciliacao_meses(id) ON DELETE CASCADE,
+      banco TEXT NOT NULL CHECK (banco IN ('unicred','itau')),
+      data DATE NOT NULL,
+      valor_centavos BIGINT NOT NULL,
+      descricao TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS conciliacao_sistema_mes_idx ON conciliacao_sistema (mes_id);
+    CREATE INDEX IF NOT EXISTS conciliacao_extrato_mes_idx ON conciliacao_extrato (mes_id);
+  `).catch(() => {})
+
+  // Os descartes da leitura dos quatro arquivos ficam guardados com o mês. Sem
+  // eles, reabrir setembro no mês seguinte mostraria as mesmas diferenças SEM o
+  // aviso de que o leitor tropeçou — e aí o dono cobra do BPO um bug do leitor.
+  // Sem DEFAULT de propósito: num mês gravado antes destas colunas o valor é
+  // NULL, que é "não sei", e a tela prefere não dizer nada a dizer "zero".
+  await sql.unsafe(`
+    ALTER TABLE conciliacao_meses ADD COLUMN IF NOT EXISTS nao_entendidas_unicred INTEGER;
+    ALTER TABLE conciliacao_meses ADD COLUMN IF NOT EXISTS nao_entendidas_itau INTEGER;
+    ALTER TABLE conciliacao_meses ADD COLUMN IF NOT EXISTS sem_valor_recebidas INTEGER;
+    ALTER TABLE conciliacao_meses ADD COLUMN IF NOT EXISTS sem_valor_pagas INTEGER;
+  `).catch(() => {})
+
+  // A prova de leitura de cada extrato: saldo de abertura impresso, soma dos
+  // movimentos lidos e saldo de fechamento impresso. Guardada pelo mesmo motivo
+  // que os descartes acima — reabrir o mês tem de trazer o aviso de volta —, e
+  // sem DEFAULT pelo mesmo motivo: NULL é "não sei", e "não sei" não pode virar
+  // "fecha". O resíduo não é coluna: ele é abertura + soma - fechamento, e
+  // guardá-lo abriria a chance de ele discordar das três parcelas.
+  // BIGINT porque é dinheiro em centavos, como no resto do projeto.
+  await sql.unsafe(`
+    ALTER TABLE conciliacao_meses ADD COLUMN IF NOT EXISTS saldo_abertura_unicred BIGINT;
+    ALTER TABLE conciliacao_meses ADD COLUMN IF NOT EXISTS saldo_soma_unicred BIGINT;
+    ALTER TABLE conciliacao_meses ADD COLUMN IF NOT EXISTS saldo_fechamento_unicred BIGINT;
+    ALTER TABLE conciliacao_meses ADD COLUMN IF NOT EXISTS saldo_abertura_itau BIGINT;
+    ALTER TABLE conciliacao_meses ADD COLUMN IF NOT EXISTS saldo_soma_itau BIGINT;
+    ALTER TABLE conciliacao_meses ADD COLUMN IF NOT EXISTS saldo_fechamento_itau BIGINT;
+  `).catch(() => {})
+
+  // A permissão da aba Conciliação. Ninguém é marcado por SQL: a marcação é
+  // feita na tela de Usuários, pelo dono, e aí fica registrado quem marcou.
+  await sql.unsafe(`ALTER TABLE users ADD COLUMN IF NOT EXISTS can_conciliacao BOOLEAN DEFAULT FALSE`).catch(() => {})
 }
 
 export default sql

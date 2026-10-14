@@ -16,6 +16,20 @@ export async function canEstoqueSession(): Promise<boolean> {
   return !!u?.is_admin || !!u?.can_estoque
 }
 
+// Conciliação é dos donos da clínica: admin ou permissão can_conciliacao. A aba
+// expõe o financeiro inteiro (retiradas, salários, fornecedores), então é a
+// permissão mais fechada do sistema.
+//
+// Esta função só funciona porque `can_conciliacao` é colocado na sessão em
+// `src/auth.ts` (no `authorize`, no callback `jwt` e no callback `session`) —
+// sem os três, ela devolveria `false` para todo mundo e a aba não abriria para
+// ninguém.
+export async function canConciliacaoSession(): Promise<boolean> {
+  const session = await auth()
+  const u = session?.user as { is_admin?: boolean; can_conciliacao?: boolean } | undefined
+  return !!u?.is_admin || !!u?.can_conciliacao
+}
+
 // Helpers de autorização por propriedade (defesa contra IDOR).
 //
 // O proxy garante que o paciente do portal só acessa /api/patients/{seuProprioId}/*.

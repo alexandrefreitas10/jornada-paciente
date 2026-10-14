@@ -7,6 +7,7 @@ export interface User {
   password_hash: string
   is_admin: boolean
   can_estoque: boolean
+  can_conciliacao: boolean
   created_at: string
 }
 
@@ -24,12 +25,19 @@ export async function findAdminUser(): Promise<User | null> {
 
 export async function listUsers(): Promise<Omit<User, 'password_hash'>[]> {
   await initSchema()
-  return sql<Omit<User, 'password_hash'>[]>`SELECT id, username, is_admin, can_estoque, created_at FROM users ORDER BY created_at ASC`
+  return sql<Omit<User, 'password_hash'>[]>`SELECT id, username, is_admin, can_estoque, can_conciliacao, created_at FROM users ORDER BY created_at ASC`
 }
 
 export async function setCanEstoque(id: number, value: boolean): Promise<void> {
   await initSchema()
   await sql`UPDATE users SET can_estoque = ${value} WHERE id = ${id}`
+}
+
+// A permissão da aba Conciliação, separada de `can_estoque` de propósito: são
+// dados diferentes e gente diferente (a Conciliação é dos dois donos).
+export async function setCanConciliacao(id: number, value: boolean): Promise<void> {
+  await initSchema()
+  await sql`UPDATE users SET can_conciliacao = ${value} WHERE id = ${id}`
 }
 
 export async function createUser(username: string, password: string): Promise<Omit<User, 'password_hash'>> {

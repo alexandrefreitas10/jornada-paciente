@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { deleteUser, updateUsername, updatePassword, setCanEstoque } from '@/lib/users'
+import { deleteUser, updateUsername, updatePassword, setCanEstoque, setCanConciliacao } from '@/lib/users'
 import { isAdminSession } from '@/lib/authz'
 
 type Params = { params: Promise<{ uid: string }> }
@@ -37,6 +37,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   if (body.can_estoque !== undefined) {
     await setCanEstoque(Number(uid), !!body.can_estoque)
+    return NextResponse.json({ ok: true })
+  }
+
+  if (body.can_conciliacao !== undefined) {
+    await setCanConciliacao(Number(uid), !!body.can_conciliacao)
     return NextResponse.json({ ok: true })
   }
 
