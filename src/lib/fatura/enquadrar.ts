@@ -59,19 +59,29 @@ export function chaveEstabelecimento(nome: string): string {
 }
 
 /**
+ * É a linha opaca do BPO? Comparação normalizada: "Cartão de Crédito" e
+ * "cartao de credito" são a MESMA linha, e quem lê a planilha não controla a
+ * grafia que o BPO digitou. Mora aqui porque `CATEGORIA_CARTAO` e a
+ * normalização moram aqui — duas regras de "é o cartão?" divergiriam no dia
+ * em que uma delas mudasse.
+ */
+export function ehCategoriaCartao(categoria: string | null | undefined): boolean {
+  const nome = categoria?.trim()
+  return !!nome && normalizar(nome) === normalizar(CATEGORIA_CARTAO)
+}
+
+/**
  * As categorias oferecidas são as que o BPO JÁ USA no mês (mais o "não
  * identificado"). Não existe lista fixa no código de propósito: se a IA pudesse
  * devolver uma categoria que não está nos lançamentos, a comparação mês a mês
  * compararia contra uma categoria que não existe do outro lado.
  */
 export function categoriasDisponiveis(categoriasDoMes: Iterable<string>): string[] {
-  // Comparação normalizada: "Cartão de Crédito" e "cartao de credito" são a
-  // mesma linha do BPO, e oferecê-la de volta como destino não informa nada.
-  const cartao = normalizar(CATEGORIA_CARTAO)
+  // A linha do cartão nunca é destino: oferecê-la de volta não informa nada.
   const vistas = new Set<string>()
   for (const c of categoriasDoMes) {
     const nome = c?.trim()
-    if (!nome || normalizar(nome) === cartao) continue
+    if (!nome || ehCategoriaCartao(nome)) continue
     vistas.add(nome)
   }
   return [...vistas, NAO_IDENTIFICADO]

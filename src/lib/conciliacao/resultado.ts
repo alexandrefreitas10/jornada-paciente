@@ -1,3 +1,5 @@
+import type { CompraEnquadrada } from '@/lib/fatura/enquadrar'
+import { substituirCartao } from '@/lib/fatura/substituir'
 import { compararCategorias, compararFornecedores, type LinhaComparativo } from './comparativo'
 import { conciliar, type ResultadoConciliacao } from './conciliar'
 import type { Banco, ConferenciaSaldo, LancamentoExtrato, LancamentoSistema, PeriodoExtrato } from './tipos'
@@ -96,13 +98,37 @@ export function montarResultado(entrada: {
   mes: string
   sistema: LancamentoSistema[]
   extrato: LancamentoExtratoBanco[]
-  anterior: { mes: string; sistema: LancamentoSistema[] } | null
+  anterior: { mes: string; sistema: LancamentoSistema[]; compras?: CompraEnquadrada[] | null } | null
+  /** Compras da fatura do cartão do mês, já enquadradas em categoria. Quando
+   *  vêm, a linha opaca "Cartão de Crédito" do comparativo é substituída por
+   *  elas (ver `substituirCartao`). Vazio ou ausente = o mês continua como
+   *  antes de a fatura existir. */
+  compras?: CompraEnquadrada[] | null
   leitura?: Leitura | null
 }): ResultadoMes {
-  const anterior = entrada.anterior?.sistema ?? []
-  const categorias = compararCategorias(entrada.sistema, anterior)
+  // ABRE OS DOIS MESES OU NENHUM. Comparar um mês aberto contra um mês fechado
+  // faria TODA categoria do cartão aparecer como se tivesse nascido no mês
+  // atual — alta de 100% em tudo, e a mentira cai justamente para o lado que
+  // mais convida a uma decisão errada. Sem mês anterior gravado não existe essa
+  // comparação (a tela diz isso, em vez de mostrar alta de 100%), e aí abrir o
+  // mês atual é só ganho.
+  const comprasAtual = entrada.compras ?? []
+  const comprasAnterior = entrada.anterior?.compras ?? []
+  const abrirCartao = entrada.anterior
+    ? comprasAtual.length > 0 && comprasAnterior.length > 0
+    : comprasAtual.length > 0
+
+  // Só o comparativo troca a linha do cartão pelas compras. A conciliação
+  // continua com os lançamentos como o BPO os fez: no extrato o cartão saiu
+  // num débito único, e 60 compras contra um débito seriam 60 divergências.
+  const sistema = abrirCartao ? substituirCartao(entrada.sistema, comprasAtual) : entrada.sistema
+  const anterior = abrirCartao
+    ? substituirCartao(entrada.anterior?.sistema ?? [], comprasAnterior)
+    : entrada.anterior?.sistema ?? []
+
+  const categorias = compararCategorias(sistema, anterior)
   const comFornecedores = (linhas: LinhaComparativo[]): CategoriaComparativo[] =>
-    linhas.map(l => ({ ...l, fornecedores: compararFornecedores(entrada.sistema, anterior, l.chave) }))
+    linhas.map(l => ({ ...l, fornecedores: compararFornecedores(sistema, anterior, l.chave) }))
 
   return {
     mes: entrada.mes,
