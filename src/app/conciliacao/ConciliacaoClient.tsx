@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { LinhaComparativo } from '@/lib/conciliacao/comparativo'
+import { resultadoDoMes, totalizar, type LinhaComparativo } from '@/lib/conciliacao/comparativo'
 import type { ResultadoConciliacao } from '@/lib/conciliacao/conciliar'
 import { mesValido } from '@/lib/conciliacao/periodo'
 import type { CategoriaComparativo, Leitura, LeituraPlanilha, ResultadoMes } from '@/lib/conciliacao/resultado'
@@ -375,6 +375,63 @@ function BlocoBanco({
 // ── Custos ────────────────────────────────────────────────────
 
 /**
+ * O resultado de CAIXA do mês: tudo que entrou menos tudo que saiu.
+ *
+ * Decisão do dono (15/10): nada é excluído — distribuição de lucros, aporte de
+ * capital e amortização de empréstimo entram. É o número que conversa com o
+ * extrato, e por isso o rodapé diz em voz alta o que ele inclui: um mês de
+ * retirada grande aparece negativo sem que a clínica tenha dado prejuízo.
+ */
+function ResultadoDoMes({
+  receitas,
+  despesas,
+  mes,
+  mesAnterior,
+}: {
+  receitas: CategoriaComparativo[]
+  despesas: CategoriaComparativo[]
+  mes: string
+  mesAnterior: string | null
+}) {
+  const r = resultadoDoMes(receitas, despesas)
+  const positivo = r.atual >= 0
+  return (
+    <section className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+      <h2 className="text-base font-semibold text-gray-800">Resultado do mês</h2>
+      <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+        <div>
+          <p className="text-xs text-gray-500">{mesBr(mes)}</p>
+          <p className={`text-2xl font-bold ${positivo ? 'text-green-700' : 'text-red-700'}`}>
+            {reais(r.atual)}
+          </p>
+        </div>
+        {mesAnterior && (
+          <>
+            <div>
+              <p className="text-xs text-gray-500">{mesBr(mesAnterior)}</p>
+              <p className="text-lg font-semibold text-gray-700">{reais(r.anterior)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Diferença</p>
+              <p className={`text-lg font-semibold ${r.diferenca >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                {reaisComSinal(r.diferenca)}
+                {r.percentual !== null && (
+                  <span className="text-sm font-normal"> ({pct(r.percentual)})</span>
+                )}
+              </p>
+            </div>
+          </>
+        )}
+      </div>
+      <p className="text-xs text-gray-500">
+        Entradas menos saídas do mês, como aconteceram no banco. Inclui distribuição de lucros, aporte de
+        capital e pagamento de empréstimo — não é lucro contábil.
+      </p>
+    </section>
+  )
+}
+
+/**
  * Um bloco de categorias (receitas OU despesas).
  *
  * **Despesa aparece como número positivo.** O servidor manda saída negativa, e
@@ -404,6 +461,7 @@ function BlocoCategorias({
   const fator = receita ? 1 : -1
   const exibe = (centavos: number) => fator * centavos
   const colunas = mesAnterior ? 5 : 2
+  const total = totalizar(linhas)
 
   const cor = (c: LinhaComparativo) => {
     const alta = exibe(c.diferenca)
@@ -493,6 +551,21 @@ function BlocoCategorias({
             </tbody>
           )
         })}
+        <tfoot>
+          <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold text-gray-900">
+            <td className={`${TD} py-2`}>Total</td>
+            <td className={`${TD} py-2 text-right whitespace-nowrap`}>{reais(exibe(total.atual))}</td>
+            {mesAnterior && (
+              <>
+                <td className={`${TD} py-2 text-right whitespace-nowrap`}>{reais(exibe(total.anterior))}</td>
+                <td className={`${TD} py-2 text-right whitespace-nowrap ${cor(total)}`}>
+                  {reaisComSinal(exibe(total.diferenca))}
+                </td>
+                <td className={`${TD} py-2 text-right whitespace-nowrap ${cor(total)}`}>{pct(total.percentual)}</td>
+              </>
+            )}
+          </tr>
+        </tfoot>
       </table>
     </section>
   )
@@ -830,6 +903,12 @@ export function ConciliacaoClient() {
                 mesAnterior={resultado.comparativo.mesAnterior}
                 aberta={aberta}
                 abrir={setAberta}
+              />
+              <ResultadoDoMes
+                receitas={resultado.comparativo.receitas}
+                despesas={resultado.comparativo.despesas}
+                mes={resultado.mes}
+                mesAnterior={resultado.comparativo.mesAnterior}
               />
             </div>
           )}

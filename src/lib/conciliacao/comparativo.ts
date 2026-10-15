@@ -117,3 +117,36 @@ export function compararFornecedores(
   const total = [...a.values(), ...b.values()].reduce((x, y) => x + y, 0)
   return montar(a, b, total >= 0).filter(l => l.atual !== 0 || l.anterior !== 0)
 }
+
+/**
+ * Soma um bloco inteiro (receitas OU despesas) numa linha só, para o rodapé da
+ * tabela. Mantém a mesma regra de percentual das categorias: sem base, sem
+ * percentual.
+ */
+export function totalizar(linhas: LinhaComparativo[], chave = 'Total'): LinhaComparativo {
+  const soma = (f: (l: LinhaComparativo) => number) => linhas.reduce((s, l) => s + f(l), 0)
+  return linha(chave, soma(l => l.atual), soma(l => l.anterior))
+}
+
+/**
+ * O resultado de caixa do mês: tudo que entrou menos tudo que saiu. Como
+ * despesa já vem negativa, é uma soma.
+ *
+ * Decisão do dono (15/10): é o resultado de CAIXA, sem excluir nada — inclui
+ * distribuição de lucros, aporte de capital e amortização de empréstimo. É o
+ * número que conversa com o extrato; não é lucro contábil.
+ *
+ * O percentual some quando o sinal vira: de +10.000 para -5.000 "−150%" não
+ * informa nada, e um número que não informa nada numa tela de dinheiro é pior
+ * que um traço.
+ */
+export function resultadoDoMes(
+  receitas: LinhaComparativo[],
+  despesas: LinhaComparativo[],
+): LinhaComparativo {
+  const r = totalizar(receitas)
+  const d = totalizar(despesas)
+  const bruto = linha('Resultado do mês', r.atual + d.atual, r.anterior + d.anterior)
+  const virouDeSinal = bruto.anterior !== 0 && Math.sign(bruto.atual) !== Math.sign(bruto.anterior)
+  return virouDeSinal ? { ...bruto, percentual: null } : bruto
+}

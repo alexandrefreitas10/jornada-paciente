@@ -1,4 +1,4 @@
-import { compararCategorias, compararFornecedores } from '@/lib/conciliacao/comparativo'
+import { compararCategorias, compararFornecedores, resultadoDoMes, totalizar, type LinhaComparativo } from '@/lib/conciliacao/comparativo'
 import type { LancamentoSistema } from '@/lib/conciliacao/tipos'
 
 function l(categoria: string, centavos: number, nome = 'FORNECEDOR EXEMPLO'): LancamentoSistema {
@@ -136,5 +136,71 @@ describe('compararFornecedores', () => {
       'Receita c/ Aluguel',
     )
     expect(r.map(x => x.chave)).toEqual(['DRA EXEMPLO', 'CLINICA EXEMPLO'])
+  })
+})
+
+describe('totalizar', () => {
+  const l = (chave: string, atual: number, anterior: number): LinhaComparativo => ({
+    chave, atual, anterior, diferenca: atual - anterior,
+    percentual: anterior === 0 ? null : Math.round(((atual - anterior) / anterior) * 10000) / 100,
+  })
+
+  it('soma os dois meses e a diferença', () => {
+    const t = totalizar([l('A', 1000, 800), l('B', 500, 700)])
+    expect(t).toMatchObject({ chave: 'Total', atual: 1500, anterior: 1500, diferenca: 0 })
+  })
+
+  it('despesa continua negativa no total', () => {
+    const t = totalizar([l('Aluguel', -100000, -80000), l('Luz', -25000, -30000)])
+    expect(t.atual).toBe(-125000)
+    expect(t.anterior).toBe(-110000)
+    expect(t.diferenca).toBe(-15000)
+    // anterior negativo: gasto subiu sai positivo, como nas categorias
+    expect(t.percentual).toBeCloseTo(13.64, 1)
+  })
+
+  it('sem mês anterior não há percentual', () => {
+    expect(totalizar([l('A', 1000, 0)]).percentual).toBeNull()
+  })
+
+  it('bloco vazio vira total zerado, não estoura', () => {
+    expect(totalizar([])).toMatchObject({ atual: 0, anterior: 0, diferenca: 0, percentual: null })
+  })
+})
+
+describe('resultadoDoMes', () => {
+  const r = (atual: number, anterior = 0): LinhaComparativo =>
+    ({ chave: 'R', atual, anterior, diferenca: atual - anterior, percentual: null })
+  const d = (atual: number, anterior = 0): LinhaComparativo =>
+    ({ chave: 'D', atual, anterior, diferenca: atual - anterior, percentual: null })
+
+  it('receitas menos despesas, com despesa já negativa', () => {
+    // setembro real: 121.853,29 de receita, 193.806,04 de despesa
+    const res = resultadoDoMes([r(12185329)], [d(-19380604)])
+    expect(res.atual).toBe(-7195275)
+  })
+
+  it('mês positivo é positivo', () => {
+    expect(resultadoDoMes([r(10000000)], [d(-4000000)]).atual).toBe(6000000)
+  })
+
+  it('compara com o mês anterior', () => {
+    const res = resultadoDoMes([r(10000000, 8000000)], [d(-4000000, -5000000)])
+    expect(res.atual).toBe(6000000)
+    expect(res.anterior).toBe(3000000)
+    expect(res.diferenca).toBe(3000000)
+    expect(res.percentual).toBe(100)
+  })
+
+  it('quando o sinal vira, não inventa percentual', () => {
+    // de +10.000 para -5.000: "-150%" não quer dizer nada
+    const res = resultadoDoMes([r(500000, 2000000)], [d(-1000000, -1000000)])
+    expect(res.atual).toBe(-500000)
+    expect(res.anterior).toBe(1000000)
+    expect(res.percentual).toBeNull()
+  })
+
+  it('sem mês anterior, sem percentual', () => {
+    expect(resultadoDoMes([r(10000000)], [d(-4000000)]).percentual).toBeNull()
   })
 })

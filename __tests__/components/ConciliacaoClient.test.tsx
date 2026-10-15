@@ -534,6 +534,44 @@ describe('ConciliacaoClient', () => {
     expect(despesas).toHaveTextContent(/sem detalhe por fornecedor/i)
   })
 
+  it('cada bloco soma um total no rodapé', async () => {
+    await abrir()
+    await userEvent.click(screen.getByRole('button', { name: 'Custos' }))
+
+    // Despesas: 8.000 + 2.500 + 20.000 = 30.500 (mostrado positivo);
+    // mês anterior 5.000 + 2.000 + 21.000 = 28.000; gasto subiu 2.500.
+    const despesas = screen.getByRole('table', { name: /despesas/i })
+    const totalDespesas = within(despesas).getByText('Total').closest('tr') as HTMLElement
+    expect(totalDespesas).toHaveTextContent('R$ 30.500,00')
+    expect(totalDespesas).toHaveTextContent('R$ 28.000,00')
+    expect(totalDespesas).toHaveTextContent('+R$ 2.500,00')
+
+    const receitas = screen.getByRole('table', { name: /receitas/i })
+    const totalReceitas = within(receitas).getByText('Total').closest('tr') as HTMLElement
+    expect(totalReceitas).toHaveTextContent('R$ 50.000,00')
+    expect(totalReceitas).toHaveTextContent('R$ 48.000,00')
+  })
+
+  it('mostra o resultado do mês e a comparação com o anterior', async () => {
+    await abrir()
+    await userEvent.click(screen.getByRole('button', { name: 'Custos' }))
+
+    // 50.000 de receita - 30.500 de despesa = 19.500; mês anterior 20.000.
+    const resultado = screen.getByRole('heading', { name: 'Resultado do mês' }).closest('section') as HTMLElement
+    expect(resultado).toHaveTextContent('R$ 19.500,00')
+    expect(resultado).toHaveTextContent('R$ 20.000,00')
+    expect(resultado).toHaveTextContent('-R$ 500,00')
+    // diz o que está incluído, para um mês de retirada grande não ser lido como prejuízo
+    expect(resultado).toHaveTextContent(/distribuição de lucros/i)
+  })
+
+  it('resultado negativo aparece em vermelho e positivo em verde', async () => {
+    await abrir()
+    await userEvent.click(screen.getByRole('button', { name: 'Custos' }))
+    const resultado = screen.getByRole('heading', { name: 'Resultado do mês' }).closest('section') as HTMLElement
+    expect(within(resultado).getByText('R$ 19.500,00')).toHaveClass('text-green-700')
+  })
+
   it('no primeiro mês, o comparativo diz que não há mês anterior', async () => {
     respostaDoMes = { body: PRIMEIRO_MES }
     await abrir()
