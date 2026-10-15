@@ -644,6 +644,55 @@ async function runMigrations() {
   // A permissão da aba Conciliação. Ninguém é marcado por SQL: a marcação é
   // feita na tela de Usuários, pelo dono, e aí fica registrado quem marcou.
   await sql.unsafe(`ALTER TABLE users ADD COLUMN IF NOT EXISTS can_conciliacao BOOLEAN DEFAULT FALSE`).catch(() => {})
+
+  // A fatura do cartão de crédito: o que abre a linha opaca "Cartão de Crédito"
+  // do comparativo. Uma fatura por mês de PAGAMENTO (`mes`, sempre dia 1).
+  //
+  // `fatura_cartao` NÃO tem FK para `conciliacao_meses`, de propósito: é isso
+  // que faz reenviar o mês (porque o BPO corrigiu alguma coisa) não apagar a
+  // fatura que o dono já subiu e já corrigiu à mão. A ligação é pela coluna
+  // `mes`, e cada lado some sem levar o outro.
+  //
+  // `fatura_categoria_memoria` é a razão de a aba sobreviver ao segundo mês: a
+  // correção do dono é gravada por ESTABELECIMENTO, não por compra, e no mês
+  // seguinte o mesmo estabelecimento já vai sozinho para onde ele mandou. Sem
+  // ela, ele recategoriza as mesmas ~70 compras todo mês e abandona a aba.
+  // Fica fora de `fatura_compra` (e sem FK para ela) porque a memória tem de
+  // sobreviver à remoção da fatura de onde a correção nasceu.
+  //
+  // Dinheiro em centavos inteiros (BIGINT), como no resto do projeto.
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS fatura_cartao (
+      id SERIAL PRIMARY KEY,
+      mes DATE NOT NULL UNIQUE,
+      referencia DATE NOT NULL,
+      total_centavos BIGINT NOT NULL,
+      despesas_centavos BIGINT NOT NULL,
+      residuo_centavos BIGINT NOT NULL,
+      s3_key TEXT,
+      created_by TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS fatura_compra (
+      id SERIAL PRIMARY KEY,
+      fatura_id INTEGER NOT NULL REFERENCES fatura_cartao(id) ON DELETE CASCADE,
+      data DATE NOT NULL,
+      estabelecimento TEXT NOT NULL,
+      estabelecimento_chave TEXT NOT NULL,
+      parcela TEXT,
+      valor_centavos BIGINT NOT NULL,
+      internacional BOOLEAN NOT NULL DEFAULT FALSE,
+      categoria TEXT NOT NULL,
+      origem_categoria TEXT NOT NULL CHECK (origem_categoria IN ('memoria','ia','manual','nao_identificado'))
+    );
+    CREATE TABLE IF NOT EXISTS fatura_categoria_memoria (
+      estabelecimento_chave TEXT PRIMARY KEY,
+      categoria TEXT NOT NULL,
+      definido_por TEXT,
+      definido_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS fatura_compra_fatura_idx ON fatura_compra (fatura_id);
+  `).catch(() => {})
 }
 
 export default sql

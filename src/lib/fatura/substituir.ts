@@ -50,6 +50,24 @@ export function comprasParaComparativo(
 }
 
 /**
+ * O que o BPO lançou na linha "Cartão de Crédito" do mês, em centavos
+ * POSITIVOS (o lançamento chega negativo: é saída).
+ *
+ * É o número com que o total da fatura é comparado — diferente não bloqueia,
+ * avisa, porque um estorno de anuidade faz o pago diferir do comprado sem que
+ * nada esteja errado. Soma TODAS as linhas de cartão pelo mesmo motivo que
+ * `substituirCartao`: se houvesse duas, comparar com uma só acusaria uma
+ * diferença que não existe.
+ *
+ * Zero quando o mês não tem essa linha — e aí a fatura não substitui nada.
+ */
+export function totalLancadoNoCartao(sistema: LancamentoSistema[]): number {
+  return Math.abs(
+    sistema.filter(l => ehCategoriaCartao(l.categoria)).reduce((s, l) => s + l.centavos, 0)
+  )
+}
+
+/**
  * Troca o lançamento "Cartão de Crédito" pelas compras da fatura.
  *
  * O TOTAL DO MÊS NÃO PODE MUDAR. É a invariante desta função, e ela é mantida

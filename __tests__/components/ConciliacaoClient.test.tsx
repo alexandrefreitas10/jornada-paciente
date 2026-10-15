@@ -158,6 +158,81 @@ const LEITURA_GRAVADA: ResultadoMes['leitura'] = {
   itau: { naoEntendidas: 0, conferenciaSaldo: FECHA },
 }
 
+// ── Fatura do cartão ──────────────────────────────────────────
+// Números inventados, mas com a MESMA aritmética das faturas reais: as compras
+// somam mais que o pagamento, e a diferença é um crédito que aparece na fatura
+// seguinte. É o caso que faz a tela parecer errada para quem não sabe (o total
+// de Despesas cai, o de Receitas sobe) e que ela por isso tem de explicar.
+
+const NAO_IDENTIFICADO = 'Cartão de crédito (não identificado)'
+const AJUSTES = 'Cartão — créditos e ajustes'
+
+const compra = (
+  id: number,
+  data: string,
+  estabelecimento: string,
+  centavos: number,
+  categoria: string,
+  origem: 'memoria' | 'ia' | 'manual' | 'nao_identificado',
+  parcela: string | null = null,
+) => ({ id, data, estabelecimento, parcela, centavos, categoria, origem, internacional: false })
+
+const COMPRAS = [
+  compra(1, '2026-08-28', 'FACEBK*INVENTADO', 1110000, 'Serviços contratados', 'memoria'),
+  compra(2, '2026-09-03', 'MP*APIONEIRA', 1200000, 'Serviços contratados', 'ia', '2/5'),
+  compra(3, '2026-09-10', 'DESCRITOR SEM NOME', 222412, NAO_IDENTIFICADO, 'nao_identificado'),
+]
+
+/** Compras 25.324,12; pago (e lançado pelo BPO) 25.302,62; identificado
+ *  23.100,00 — 91%. A diferença de 21,50 é o crédito. */
+const FATURA = {
+  mes: '2026-09',
+  referencia: '2026-09',
+  totalFatura: 2530262,
+  despesasDeclaradas: 2532412,
+  residuo: 0,
+  somaCompras: 2532412,
+  identificado: 2310000,
+  lancado: 2530262,
+  categorias: ['Aluguel', 'Serviços contratados', 'Salários', NAO_IDENTIFICADO],
+  criadoEm: '2026-10-15T12:00:00.000Z',
+  criadoPor: 'Bruno',
+  compras: COMPRAS,
+}
+
+/** O mês como está hoje: a fatura ainda não foi enviada e o cartão é UMA linha
+ *  opaca de R$ 25.302,62. */
+const SETEMBRO_FECHADO = {
+  ...SETEMBRO,
+  comparativo: {
+    ...SETEMBRO.comparativo,
+    despesas: [...SETEMBRO.comparativo.despesas, categoria('Cartão de Crédito', -2530262, -2000000)],
+  },
+  fatura: null,
+}
+
+/** O mesmo mês com a fatura aberta: a linha do cartão sai, as categorias das
+ *  compras entram, e o crédito de 21,50 vira uma linha em Receitas. */
+const SETEMBRO_ABERTO = {
+  ...SETEMBRO,
+  comparativo: {
+    mesAnterior: '2026-08',
+    receitas: [...SETEMBRO.comparativo.receitas, categoria(AJUSTES, 2150, 0)],
+    despesas: [
+      categoria('Serviços contratados', -2560000, -200000),
+      categoria('Aluguel', -800000, -500000),
+      categoria(NAO_IDENTIFICADO, -222412, 0),
+      categoria('Salários', -2000000, -2100000),
+    ],
+  },
+  fatura: FATURA,
+}
+
+const comFatura = (mudancas: Partial<typeof FATURA>) => ({
+  ...SETEMBRO_ABERTO,
+  fatura: { ...FATURA, ...mudancas },
+})
+
 interface Resposta {
   ok?: boolean
   status?: number
@@ -167,6 +242,8 @@ interface Resposta {
 let fetchMock: jest.Mock
 let respostaDoMes: Resposta
 let respostaDoPost: Resposta | (() => Promise<Resposta>)
+/** A resposta das rotas da fatura (POST, PATCH e DELETE de `.../fatura`). */
+let respostaDaFatura: Resposta | (() => Promise<Resposta>)
 
 function resolver(r: Resposta) {
   return { ok: r.ok ?? true, status: r.status ?? 200, json: async () => r.body }
@@ -175,7 +252,14 @@ function resolver(r: Resposta) {
 beforeEach(() => {
   respostaDoMes = { body: SETEMBRO }
   respostaDoPost = { body: { ...SETEMBRO, leitura: LEITURA } }
+  respostaDaFatura = { body: SETEMBRO_ABERTO }
   fetchMock = jest.fn(async (url: string, init?: RequestInit) => {
+    // Antes do teste de método: as rotas da fatura usam POST, PATCH e DELETE na
+    // mesma URL, e um POST de fatura não é o envio dos quatro arquivos.
+    if (url.includes('/fatura')) {
+      const r = typeof respostaDaFatura === 'function' ? await respostaDaFatura() : respostaDaFatura
+      return resolver(r)
+    }
     if (init?.method === 'POST') {
       const r = typeof respostaDoPost === 'function' ? await respostaDoPost() : respostaDoPost
       return resolver(r)
@@ -218,6 +302,26 @@ const trocarMes = (valor: string) =>
   fireEvent.change(screen.getByLabelText(/mês de referência/i), { target: { value: valor } })
 const bloco = (nome: 'Unicred' | 'Itaú') =>
   screen.getByRole('heading', { name: nome }).closest('section') as HTMLElement
+
+// ── Fatura do cartão ──────────────────────────────────────────
+const custos = () => userEvent.click(screen.getByRole('button', { name: 'Custos' }))
+const cartao = () =>
+  screen.getByRole('heading', { name: /fatura do cart/i }).closest('section') as HTMLElement
+/** Espera o cartão terminar de redesenhar depois de uma ação. */
+const esperarCartao = async (texto: RegExp) => {
+  await waitFor(() => expect(cartao()).toHaveTextContent(texto))
+  return cartao()
+}
+const botaoFatura = () => within(cartao()).getByRole('button', { name: /enviar a fatura|lendo a fatura/i })
+/** O seletor de categoria da compra sem nome legível (a "não identificada"). */
+const seletorDaCompra = () => within(cartao()).getByLabelText(/categoria de DESCRITOR SEM NOME/i)
+const chamadasDaFatura = (metodo: string) =>
+  fetchMock.mock.calls.filter(c => String(c[0]).includes('/fatura') && (c[1]?.method ?? 'GET') === metodo)
+
+async function enviarFatura() {
+  await userEvent.upload(within(cartao()).getByLabelText(/pdf da fatura/i), arquivo('fatura.pdf'))
+  await userEvent.click(botaoFatura())
+}
 
 describe('ConciliacaoClient', () => {
   it('mostra os quatro campos de arquivo, rotulados', async () => {
@@ -590,6 +694,198 @@ describe('ConciliacaoClient', () => {
     trocarMes('2026-07')
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Unicred' })).not.toBeInTheDocument())
     expect(screen.getByText(/ainda não foi enviada/i)).toBeInTheDocument()
+  })
+
+  // ── Fatura do cartão ──────────────────────────────────────────
+  // Por que estes testes existem: "Cartão de Crédito — R$ 25.302,62" é 13% do
+  // que a clínica gasta, numa linha que não diz nada. A fatura abre essa linha,
+  // e tudo o que pode dar errado na abertura é pior que a linha fechada — uma
+  // categoria menor do que a verdade parece informação.
+
+  it('mês sem fatura convida a enviar, e o cartão continua numa linha só', async () => {
+    respostaDoMes = { body: SETEMBRO_FECHADO }
+    await abrir()
+    await custos()
+
+    const c = cartao()
+    expect(c).toHaveTextContent(/envie o pdf da fatura/i)
+    // O tamanho da linha que ele vai abrir, para ele saber se vale a pena.
+    expect(c).toHaveTextContent('R$ 25.302,62')
+    expect(within(c).getByLabelText(/pdf da fatura/i)).toHaveAttribute('type', 'file')
+    // Sem fatura, nada de lista de compras nem de porcentagem.
+    expect(within(c).queryByRole('table', { name: /compras da fatura/i })).not.toBeInTheDocument()
+    expect(c).not.toHaveTextContent(/identificado/i)
+
+    expect(screen.getByRole('table', { name: /despesas/i })).toHaveTextContent('Cartão de Crédito')
+  })
+
+  it('enviar a fatura mostra quanto dela foi identificado e tira a linha do cartão', async () => {
+    respostaDoMes = { body: SETEMBRO_FECHADO }
+    respostaDaFatura = { body: SETEMBRO_ABERTO }
+    await abrir()
+    await custos()
+    await enviarFatura()
+
+    const c = await esperarCartao(/91% identificado/i)
+    // "R$ 23.100,00 de R$ 25.324,12 em compras — 91% identificado"
+    expect(c).toHaveTextContent('R$ 23.100,00')
+    expect(c).toHaveTextContent('R$ 25.324,12')
+
+    const compras = within(c).getByRole('table', { name: /compras da fatura/i })
+    expect(compras).toHaveTextContent('MP*APIONEIRA')
+    expect(compras).toHaveTextContent('R$ 12.000,00')
+    expect(compras).toHaveTextContent('2/5')
+
+    // A linha opaca saiu do Custos e as categorias das compras entraram.
+    const despesas = screen.getByRole('table', { name: /despesas/i })
+    expect(within(despesas).queryByRole('button', { name: 'Cartão de Crédito' })).not.toBeInTheDocument()
+    expect(within(despesas).getByRole('button', { name: NAO_IDENTIFICADO })).toBeInTheDocument()
+
+    expect(chamadasDaFatura('POST')).toHaveLength(1)
+    expect(chamadasDaFatura('POST')[0][0]).toBe('/api/conciliacao/2026-09/fatura')
+  })
+
+  it('diz em voz alta por que abrir a fatura baixa as Despesas e sobe as Receitas', async () => {
+    // As compras somam mais que o pagamento (um estorno que só aparece na
+    // fatura seguinte). Sem esta frase, o dono vê o total de Despesas cair e
+    // lê como bug.
+    respostaDoMes = { body: SETEMBRO_ABERTO }
+    await abrir()
+    await custos()
+
+    const c = cartao()
+    expect(c).toHaveTextContent('R$ 21,50')
+    expect(c).toHaveTextContent(/receitas/i)
+    expect(c).toHaveTextContent(/o resultado do mês não muda/i)
+  })
+
+  it('resíduo diferente de zero aparece como erro e a fatura não entra no Custos', async () => {
+    const recusa =
+      'A leitura desta fatura não fecha: as 70 compras lidas somam R$ 25.000,00, mas a fatura declara ' +
+      'R$ 25.324,12 em DESPESAS/DÉBITOS — sobram -R$ 324,12 sem explicação. A fatura NÃO foi gravada.'
+    respostaDoMes = { body: SETEMBRO_FECHADO }
+    respostaDaFatura = { ok: false, status: 400, body: { error: recusa } }
+    await abrir()
+    await custos()
+    await enviarFatura()
+
+    const alerta = await within(cartao()).findByRole('alert')
+    expect(alerta).toHaveTextContent(recusa)
+    // E o Custos continua como estava: a linha opaca, não uma abertura pela metade.
+    expect(screen.getByRole('table', { name: /despesas/i })).toHaveTextContent('Cartão de Crédito')
+    expect(within(cartao()).queryByRole('table', { name: /compras da fatura/i })).not.toBeInTheDocument()
+  })
+
+  it('não dispara dois envios de fatura com dois cliques', async () => {
+    let liberar: (() => void) | null = null
+    respostaDaFatura = () =>
+      new Promise<Resposta>(resolve => {
+        liberar = () => resolve({ body: SETEMBRO_ABERTO })
+      })
+    respostaDoMes = { body: SETEMBRO_FECHADO }
+    await abrir()
+    await custos()
+    await enviarFatura()
+
+    expect(botaoFatura()).toBeDisabled()
+    await userEvent.click(botaoFatura())
+    expect(chamadasDaFatura('POST')).toHaveLength(1)
+
+    liberar!()
+    await esperarCartao(/91% identificado/i)
+  })
+
+  it('trocar a categoria chama o PATCH da compra e atualiza a linha', async () => {
+    respostaDoMes = { body: SETEMBRO_ABERTO }
+    await abrir()
+    await custos()
+
+    // O valor do seletor, não o texto da linha: as opções do seletor estão
+    // todas no DOM, e procurar "Aluguel" como texto passaria sem nada mudar.
+    expect(seletorDaCompra()).toHaveValue(NAO_IDENTIFICADO)
+
+    // A resposta do PATCH é o mês inteiro remontado: a categoria mudou e o
+    // identificado subiu. A tela não recalcula dinheiro.
+    respostaDaFatura = {
+      body: comFatura({
+        identificado: 2532412,
+        compras: [COMPRAS[0], COMPRAS[1], { ...COMPRAS[2], categoria: 'Aluguel', origem: 'manual' }],
+      }),
+    }
+
+    await userEvent.selectOptions(seletorDaCompra(), 'Aluguel')
+
+    const patches = chamadasDaFatura('PATCH')
+    expect(patches).toHaveLength(1)
+    expect(patches[0][0]).toBe('/api/conciliacao/2026-09/fatura/3')
+    expect(JSON.parse(String(patches[0][1]?.body))).toEqual({ categoria: 'Aluguel' })
+
+    await waitFor(() => expect(seletorDaCompra()).toHaveValue('Aluguel'))
+    expect(cartao()).toHaveTextContent(/100% identificado/i)
+  })
+
+  it('PATCH que falha não deixa a tela mostrando categoria que não foi gravada', async () => {
+    respostaDoMes = { body: SETEMBRO_ABERTO }
+    await abrir()
+    await custos()
+
+    respostaDaFatura = { ok: false, status: 400, body: { error: '"Aluguel" não é uma categoria usada em 2026-09.' } }
+    await userEvent.selectOptions(seletorDaCompra(), 'Aluguel')
+
+    const alerta = await within(cartao()).findByRole('alert')
+    expect(alerta).toHaveTextContent(/não é uma categoria usada/i)
+    // O seletor volta ao que o banco tem: nada foi gravado.
+    expect(seletorDaCompra()).toHaveValue(NAO_IDENTIFICADO)
+  })
+
+  it('remover a fatura traz a linha "Cartão de Crédito" de volta', async () => {
+    respostaDoMes = { body: SETEMBRO_ABERTO }
+    await abrir()
+    await custos()
+    expect(within(screen.getByRole('table', { name: /despesas/i })).queryByRole('button', { name: 'Cartão de Crédito' })).not.toBeInTheDocument()
+
+    respostaDaFatura = { body: SETEMBRO_FECHADO }
+    // Dois passos: remover apaga a leitura e as correções daquele mês, e um
+    // clique torto não pode fazer isso.
+    await userEvent.click(within(cartao()).getByRole('button', { name: /remover a fatura/i }))
+    await userEvent.click(within(cartao()).getByRole('button', { name: /confirmar/i }))
+
+    const apagadas = chamadasDaFatura('DELETE')
+    expect(apagadas).toHaveLength(1)
+    expect(apagadas[0][0]).toBe('/api/conciliacao/2026-09/fatura')
+
+    await waitFor(() =>
+      expect(within(screen.getByRole('table', { name: /despesas/i })).getByRole('button', { name: 'Cartão de Crédito' })).toBeInTheDocument()
+    )
+    expect(cartao()).toHaveTextContent(/envie o pdf da fatura/i)
+  })
+
+  it('fatura gravada que ainda não abriu o Custos diz isso, em vez de parecer que abriu', async () => {
+    // O comparativo abre os dois meses ou nenhum: com a fatura de agosto
+    // faltando, setembro continua com a linha opaca. A fatura está no banco e
+    // a lista aparece — dizer só isso faria o dono achar que o Custos abriu.
+    respostaDoMes = { body: { ...SETEMBRO_FECHADO, fatura: FATURA } }
+    await abrir()
+    await custos()
+
+    const aviso = within(cartao()).getByRole('alert')
+    expect(aviso).toHaveTextContent(/ainda não entraram no Custos/i)
+    expect(aviso).toHaveTextContent('R$ 25.302,62')
+    expect(aviso).toHaveTextContent('08/2026')
+    expect(screen.getByRole('table', { name: /despesas/i })).toHaveTextContent('Cartão de Crédito')
+  })
+
+  it('avisa quando o total da fatura não é o que o BPO lançou, sem deixar de usá-la', async () => {
+    respostaDoMes = { body: comFatura({ totalFatura: 2000000 }) }
+    await abrir()
+    await custos()
+
+    const aviso = within(cartao()).getByRole('alert')
+    expect(aviso).toHaveTextContent('R$ 20.000,00')
+    expect(aviso).toHaveTextContent('R$ 25.302,62')
+    expect(aviso).toHaveTextContent(/confira se .*fatura paga neste mês/i)
+    // Avisa, não bloqueia: as compras continuam na tela e no Custos.
+    expect(within(cartao()).getByRole('table', { name: /compras da fatura/i })).toBeInTheDocument()
   })
 
   it('diz quando a lista de meses não carrega', async () => {
