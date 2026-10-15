@@ -45,7 +45,7 @@ const ID_DE_TRANSACAO = (token: string) => token.length >= 6 && /\d/.test(token)
  * Além de normalizar, derruba o último token quando ele parece id de transação.
  * MEDIDO nas duas faturas reais: 141 compras, 91 nomes crus distintos, e o
  * descritor do cartão cola um id no fim do nome do mesmo anunciante 19 vezes
- * ("FACEBK*D8VBD4NJX4", "FACEBK*7LGVB42KX4", ...). Sem o corte, a memória
+ * ("ANUNCIO*K1QWE8ZP2M", "ANUNCIO*R4TYU7HN5B", ...). Sem o corte, a memória
  * erraria justamente quem mais repete; com ele, 91 nomes caem para 73 chaves.
  *
  * O piso de 6 caracteres é o que impede o corte de comer "LOJA 2" e "LOJA 3",
@@ -54,7 +54,11 @@ const ID_DE_TRANSACAO = (token: string) => token.length >= 6 && /\d/.test(token)
  */
 export function chaveEstabelecimento(nome: string): string {
   const tokens = normalizar(nome).split(' ').filter(Boolean)
-  if (tokens.length > 1 && ID_DE_TRANSACAO(tokens[tokens.length - 1])) tokens.pop()
+  // Em laço, para a função ser IDEMPOTENTE: esta chave é a chave primária de
+  // uma tabela que guarda as correções do dono, e `porChave` reindexa mapas já
+  // indexados. Se aplicar duas vezes desse outro resultado, a correção dele é
+  // procurada numa chave que não existe e simplesmente some — calado.
+  while (tokens.length > 1 && ID_DE_TRANSACAO(tokens[tokens.length - 1])) tokens.pop()
   return tokens.join(' ')
 }
 

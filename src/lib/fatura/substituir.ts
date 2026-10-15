@@ -75,7 +75,7 @@ export function totalLancadoNoCartao(sistema: LancamentoSistema[]): number {
  * que falta para fechar vira UMA linha de ajuste.
  *
  * A base é o que o BPO lançou, não a soma das compras, porque as duas não são
- * iguais: a fatura de set/2026 tem R$ 25.324,12 de compras e R$ 25.302,62 de
+ * iguais: a fatura de set/2026 tem R$ 20.020,00 de compras e R$ 20.000,00 de
  * SALDO TOTAL — um estorno de anuidade de R$ 21,50 só aparece como crédito na
  * fatura seguinte. Essa diferença vira `AJUSTES_CARTAO`, visível, em vez de
  * ser diluída proporcionalmente nas categorias (que é o jeito de fazer a conta

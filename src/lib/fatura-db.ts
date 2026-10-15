@@ -272,8 +272,8 @@ export async function gravarMemoria(
  *   abandona a aba na terceira vez.
  * - **Sem as outras compras do mesmo estabelecimento**, a fatura passaria a
  *   discordar da própria memória: o descritor do cartão repete o mesmo
- *   anunciante 19 vezes nas faturas reais ("FACEBK*D8VBD4NJX4",
- *   "FACEBK*7LGVB42KX4", ...), e reenviar o MESMO PDF daria a TODAS elas a
+ *   anunciante 19 vezes nas faturas reais ("ANUNCIO*K1QWE8ZP2M",
+ *   "ANUNCIO*R4TYU7HN5B", ...), e reenviar o MESMO PDF daria a TODAS elas a
  *   categoria corrigida. Fazer isso agora só antecipa o que a memória já
  *   decidiu — e poupa 18 cliques.
  * - **Meia troca** (só a compra, ou só a memória) é pior que nenhuma.

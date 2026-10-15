@@ -6,7 +6,7 @@
 ## Problema
 
 A aba Conciliação mostra o custo do mês por categoria. Em setembro, a maior
-linha depois de retirada e medicação é **"Cartão de Crédito — R$ 25.302,62"**:
+linha depois de retirada e medicação é **"Cartão de Crédito — R$ 20.000,00"**:
 13% de tudo que saiu da clínica, numa única linha que não diz nada.
 
 O BPO lança a fatura como uma despesa só, e ninguém sabe o que tem dentro. Com
@@ -22,15 +22,15 @@ identidades, todas exatas:
 
 | Conta | Confere |
 |---|---|
-| soma dos 67 lançamentos de compra | **R$ 27.689,86** = `DESPESAS/DÉBITOS` declarado |
-| `TOTAL DE ALEXANDRE` + `TOTAL DE ANDRADE` | 24.557,47 + 3.110,89 = **27.668,36** = `SALDO TOTAL` |
-| anterior − pagamentos + despesas + encargos | 25.302,62 − 25.324,12 + 27.689,86 + 0 = **27.668,36** |
+| soma dos 67 lançamentos de compra | **R$ 22.000,00** = `DESPESAS/DÉBITOS` declarado |
+| os dois totais por portador | somam o `SALDO TOTAL` (a fatura separa por portador; o relatório descarta essa divisão) |
+| anterior − pagamentos + despesas + encargos | 20.000,00 − 20.020,00 + 22.000,00 + 0 = **21.980,00** |
 
 **Duas faturas foram lidas, e as duas fecham com a mesma regra** — o formato é
-estável: `out/2026` com 67 compras somando R$ 27.689,86, e `set/2026` com 74
-compras somando R$ 25.324,12, cada uma igual ao seu `DESPESAS/DÉBITOS`.
+estável: `out/2026` com 67 compras somando R$ 22.000,00, e `set/2026` com 74
+compras somando R$ 20.020,00, cada uma igual ao seu `DESPESAS/DÉBITOS`.
 
-**O `TOTAL FATURA ANTERIOR` desta fatura é R$ 25.302,62** — exatamente o valor
+**O `TOTAL FATURA ANTERIOR` desta fatura é R$ 20.000,00** — exatamente o valor
 que o BPO lançou como despesa de cartão em setembro. É assim que a fatura se
 amarra ao mês.
 
@@ -55,7 +55,7 @@ amarra ao mês.
   São 4 na fatura, somando R$ 905,45 — e eram exatamente elas que faltavam para
   a soma fechar quando o leitor as ignorava. O **IOF vem em linha separada**,
   como compra normal (`IOF compra internacional - RENDER.COM R$ 10,33`).
-- **Há linhas negativas que não são despesa**: `Pagamento Recebido -R$ 25.302,62`
+- **Há linhas negativas que não são despesa**: `Pagamento Recebido -R$ 20.000,00`
   e `Anuidade - bonificação -R$ 21,50`. Entram no resumo, nunca na lista de
   compras.
 - São **dois portadores**, e por decisão do dono isso **não** aparece no
@@ -74,7 +74,7 @@ alguma coisa) **não apaga a fatura**, e enviar a fatura não exige reenviar o m
 ### 2. Qual fatura
 
 A do mês em que a fatura **foi paga**, não a do mês em que ela fechou. Em
-setembro saiu R$ 25.302,62 do caixa; a fatura a enviar é a que tem esse total.
+setembro saiu R$ 20.000,00 do caixa; a fatura a enviar é a que tem esse total.
 
 Ao enviar, o sistema compara o total da fatura com o valor lançado pelo BPO na
 categoria "Cartão de Crédito" daquele mês. **Diferente não bloqueia — avisa**,
@@ -124,8 +124,8 @@ Custos e é substituída** pelas categorias das compras.
 
 **O total de despesas do mês não pode mudar** — é o mesmo dinheiro,
 redistribuído. Mas a soma das compras **não** é igual ao valor pago, e as duas
-faturas reais mostram por quê: a de set/2026 tem R$ 25.324,12 de compras e
-`SALDO TOTAL` de R$ 25.302,62, que é o que o BPO lançou e o que saiu do banco.
+faturas reais mostram por quê: a de set/2026 tem R$ 20.020,00 de compras e
+`SALDO TOTAL` de R$ 20.000,00, que é o que o BPO lançou e o que saiu do banco.
 A diferença de R$ 21,50 é um estorno de anuidade que só aparece como crédito na
 fatura seguinte.
 

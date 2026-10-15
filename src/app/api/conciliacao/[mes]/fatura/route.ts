@@ -36,7 +36,7 @@ type Params = { params: Promise<{ mes: string }> }
 
 const motivo = (err: unknown) => (err instanceof Error ? err.message : String(err))
 
-/** Centavos → "R$ 25.302,62". Só para a mensagem de erro: a tela tem o seu
+/** Centavos → "R$ 1.234,56". Só para a mensagem de erro: a tela tem o seu
  *  próprio formatador, e aqui o número precisa estar na frase que o dono lê. */
 const reais = (centavos: number) =>
   `${centavos < 0 ? '-' : ''}R$ ${(Math.abs(centavos) / 100).toLocaleString('pt-BR', {

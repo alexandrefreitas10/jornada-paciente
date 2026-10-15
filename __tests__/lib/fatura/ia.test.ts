@@ -39,22 +39,22 @@ describe('sugerirCategorias', () => {
   })
 
   it('devolve a sugestão indexada pela chave do estabelecimento', async () => {
-    const c = clienteQue(async () => resposta('{"FACEBK*D8VBD4NJX4":"Marketing","PADARIA EXEMPLO":"Alimentação"}'))
-    const m = await sugerirCategorias(['FACEBK*D8VBD4NJX4', 'PADARIA EXEMPLO'], CATEGORIAS, c.cliente)
-    expect(m.get(chaveEstabelecimento('FACEBK*D8VBD4NJX4'))).toBe('Marketing')
+    const c = clienteQue(async () => resposta('{"ANUNCIO*K1QWE8ZP2M":"Marketing","PADARIA EXEMPLO":"Alimentação"}'))
+    const m = await sugerirCategorias(['ANUNCIO*K1QWE8ZP2M', 'PADARIA EXEMPLO'], CATEGORIAS, c.cliente)
+    expect(m.get(chaveEstabelecimento('ANUNCIO*K1QWE8ZP2M'))).toBe('Marketing')
     expect(m.get(chaveEstabelecimento('PADARIA EXEMPLO'))).toBe('Alimentação')
   })
 
   it('pergunta uma vez por estabelecimento, não por compra', async () => {
-    const c = clienteQue(async () => resposta('{"FACEBK*D8VBD4NJX4":"Marketing"}'))
+    const c = clienteQue(async () => resposta('{"ANUNCIO*K1QWE8ZP2M":"Marketing"}'))
     const m = await sugerirCategorias(
-      ['FACEBK*D8VBD4NJX4', 'FACEBK*7LGVB42KX4', 'FACEBK*3J3BN5SJX4'],
+      ['ANUNCIO*K1QWE8ZP2M', 'ANUNCIO*R4TYU7HN5B', 'ANUNCIO*V9XCZ2LK6D'],
       CATEGORIAS,
       c.cliente,
     )
     expect(c.chamadas).toBe(1)
     expect(m.size).toBe(1)
-    expect(m.get('facebk')).toBe('Marketing')
+    expect(m.get('anuncio')).toBe('Marketing')
   })
 
   it('categoria fora da lista não vira sugestão', async () => {

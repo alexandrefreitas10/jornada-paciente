@@ -178,7 +178,7 @@ const compra = (
 ) => ({ id, data, estabelecimento, parcela, centavos, categoria, origem, internacional: false })
 
 const COMPRAS = [
-  compra(1, '2026-08-28', 'FACEBK*INVENTADO', 1110000, 'Serviços contratados', 'memoria'),
+  compra(1, '2026-08-28', 'ANUNCIO*INVENTADO', 1110000, 'Serviços contratados', 'memoria'),
   compra(2, '2026-09-03', 'MP*APIONEIRA', 1200000, 'Serviços contratados', 'ia', '2/5'),
   compra(3, '2026-09-10', 'DESCRITOR SEM NOME', 222412, NAO_IDENTIFICADO, 'nao_identificado'),
 ]

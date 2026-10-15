@@ -121,13 +121,16 @@ export async function sugerirCategorias(
   const saida = new Map<string, string | null>()
   for (const chave of representante.keys()) saida.set(chave, null)
 
-  const validas = new Map(categorias.map(c => [c.trim().toLowerCase(), c]))
+  // Sem acento também: o modelo responde "alimentacao" com frequência, e
+  // descartar a resposta certa por causa do acento custa uma sugestão à toa.
+  const semAcento = (t: string) => t.normalize('NFD').replace(/\p{M}/gu, '').trim().toLowerCase()
+  const validas = new Map(categorias.map(c => [semAcento(c), c]))
   for (const [nome, valor] of Object.entries(objeto)) {
     const chave = chaveEstabelecimento(nome)
     // Nome que ninguém perguntou (modelo inventou uma linha) é descartado.
     if (!saida.has(chave)) continue
     if (typeof valor !== 'string') continue
-    const categoria = validas.get(valor.trim().toLowerCase())
+    const categoria = validas.get(semAcento(valor))
     if (!categoria || categoria === NAO_IDENTIFICADO) continue
     saida.set(chave, categoria)
   }

@@ -255,8 +255,8 @@ resíduo. Precisa de `NODE_OPTIONS=--experimental-vm-modules` por causa do `unpd
 
 | arquivo | referência | compras | soma | resíduo |
 |---|---|---|---|---|
-| `fatura.pdf` | 2026-10 | **67** | **R$ 27.689,86** | **0** |
-| `fatura (1).pdf` | 2026-09 | **74** | **R$ 25.324,12** | **0** |
+| `fatura.pdf` | 2026-10 | **67** | **R$ 22.000,00** | **0** |
+| `fatura (1).pdf` | 2026-09 | **74** | **R$ 20.020,00** | **0** |
 
 **Se qualquer resíduo for diferente de zero, pare e reporte** — é o leitor que
 está errado. Apague o teste temporário depois.
@@ -351,7 +351,7 @@ export const AJUSTES_CARTAO = 'Cartão — créditos e ajustes'
  * Troca o lançamento "Cartão de Crédito" pelas compras da fatura.
  *
  * O total do mês NÃO pode mudar. Mas a soma das compras não é igual ao valor
- * pago: a fatura de set/2026 tem R$ 25.324,12 de compras e R$ 25.302,62 de
+ * pago: a fatura de set/2026 tem R$ 20.020,00 de compras e R$ 20.000,00 de
  * saldo, porque um estorno de anuidade só aparece na fatura seguinte. A
  * diferença vira uma linha explícita, em vez de ser diluída nas categorias.
  */
@@ -450,6 +450,6 @@ git add -A src __tests__ && git commit -m "feat(fatura): banco, rotas e tela da 
 - `npm run build`.
 - Merge em `master` e push.
 - Em produção: subir `fatura (1).pdf` (ref. set/2026) no mês 2026-09 e conferir
-  que a linha "Cartão de Crédito" de R$ 25.302,62 some, que as categorias somam
+  que a linha "Cartão de Crédito" de R$ 20.000,00 some, que as categorias somam
   o mesmo total de despesas de antes, e que aparece a linha de ajuste de
   −R$ 21,50.

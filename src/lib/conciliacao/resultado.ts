@@ -114,17 +114,26 @@ export function montarResultado(entrada: {
   // mês atual é só ganho.
   const comprasAtual = entrada.compras ?? []
   const comprasAnterior = entrada.anterior?.compras ?? []
+  const sistemaAnterior = entrada.anterior?.sistema ?? []
+
+  // O teste é "a troca ACONTECEU", não "tem compras": `substituirCartao` não
+  // faz nada quando o mês não tem lançamento de "Cartão de Crédito", então um
+  // mês com fatura enviada pode continuar fechado. Decidir por
+  // `compras.length` abriria só um dos lados — e o lado fechado mostraria a
+  // categoria do cartão caindo 100%, que é exatamente a mentira que esta regra
+  // existe para impedir. Quando nada muda, `substituirCartao` devolve o MESMO
+  // array, então a comparação por referência é exata.
+  const trocado = substituirCartao(entrada.sistema, comprasAtual)
+  const trocadoAnterior = substituirCartao(sistemaAnterior, comprasAnterior)
   const abrirCartao = entrada.anterior
-    ? comprasAtual.length > 0 && comprasAnterior.length > 0
-    : comprasAtual.length > 0
+    ? trocado !== entrada.sistema && trocadoAnterior !== sistemaAnterior
+    : trocado !== entrada.sistema
 
   // Só o comparativo troca a linha do cartão pelas compras. A conciliação
   // continua com os lançamentos como o BPO os fez: no extrato o cartão saiu
   // num débito único, e 60 compras contra um débito seriam 60 divergências.
-  const sistema = abrirCartao ? substituirCartao(entrada.sistema, comprasAtual) : entrada.sistema
-  const anterior = abrirCartao
-    ? substituirCartao(entrada.anterior?.sistema ?? [], comprasAnterior)
-    : entrada.anterior?.sistema ?? []
+  const sistema = abrirCartao ? trocado : entrada.sistema
+  const anterior = abrirCartao ? trocadoAnterior : sistemaAnterior
 
   const categorias = compararCategorias(sistema, anterior)
   const comFornecedores = (linhas: LinhaComparativo[]): CategoriaComparativo[] =>

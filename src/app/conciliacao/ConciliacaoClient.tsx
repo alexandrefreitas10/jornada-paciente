@@ -605,14 +605,15 @@ type AcaoFatura = 'envio' | 'remocao' | number | null
  *
  * Três coisas que esta tela PRECISA dizer, e por quê:
  *
- * 1. **Quanto da fatura foi identificado** ("R$ 23.100,00 de R$ 25.324,12 —
+ * 1. **Quanto da fatura foi identificado** ("R$ 23.100,00 de R$ 20.020,00 —
  *    91%"). Sem isso o dono não sabe se vale a pena abrir a lista; com isso ele
  *    decide em dois segundos.
- * 2. **Que abrir a fatura baixa o total de Despesas e sobe o de Receitas.** As
- *    compras somam mais que o pagamento (estorno que só aparece na fatura
- *    seguinte), e a diferença vira a linha de créditos e ajustes, em Receitas.
- *    Quem não sabe disso lê a queda nas Despesas como bug — então a tela diz,
- *    com os números, que o resultado do mês não muda.
+ * 2. **Que abrir a fatura sobe o total de Despesas E o de Receitas, no mesmo
+ *    valor.** As compras somam mais que o pagamento (estorno que só aparece na
+ *    fatura seguinte): as categorias que entram somam mais que a linha opaca
+ *    que saiu, e a diferença vira a linha de créditos e ajustes, em Receitas.
+ *    Quem não sabe disso lê os dois totais subindo como bug — então a tela diz,
+ *    com os números, que o RESULTADO do mês é que não muda.
  * 3. **Que uma fatura cujo resíduo não é zero NÃO está sendo usada.** Uma
  *    abertura incompleta faz uma categoria parecer menor do que é, e isso é
  *    pior que a linha opaca, porque parece informação.
@@ -778,9 +779,9 @@ function CartaoFatura({
             <>
               As compras somam {reais(fatura.somaCompras)} e o pagamento foi de {reais(fatura.lancado)}: a diferença
               de {reais(ajuste)} é crédito (um estorno que só aparece na fatura seguinte) e entra no Custos como
-              &ldquo;{AJUSTES_CARTAO}&rdquo;, em <strong>Receitas</strong>. Por isso abrir a fatura baixa o total de
-              Despesas em {reais(ajuste)} e sobe o de Receitas no mesmo valor: <strong>o resultado do mês não muda</strong>
-              . Não é erro.
+              &ldquo;{AJUSTES_CARTAO}&rdquo;, em <strong>Receitas</strong>. Por isso abrir a fatura{' '}
+              <strong>sobe</strong> o total de Despesas em {reais(ajuste)} (as compras somam mais que a linha do cartão
+              que saiu) e sobe o de Receitas no mesmo valor: <strong>o resultado do mês não muda</strong>. Não é erro.
             </>
           ) : (
             <>

@@ -20,6 +20,17 @@ const compra = (estabelecimento: string, centavos = 10000): CompraCartao => ({
 
 const CATEGORIAS = ['Alimentação', 'Marketing', 'Material de consumo']
 
+describe('chaveEstabelecimento é idempotente', () => {
+  it('aplicar duas vezes dá o mesmo resultado', () => {
+    // A chave é a chave primária da tabela que guarda as correções do dono, e
+    // `porChave` reindexa mapas já indexados. Se a segunda aplicação mudasse
+    // o valor, a correção dele seria procurada numa chave inexistente.
+    for (const nome of ['ABC 123456 789012', 'ANUNCIO*K1QWE8ZP2M', 'LOJA 2', 'MP*APIONEIRA', 'SO 999999']) {
+      expect(chaveEstabelecimento(chaveEstabelecimento(nome))).toBe(chaveEstabelecimento(nome))
+    }
+  })
+})
+
 describe('chaveEstabelecimento', () => {
   it('ignora pontuação, espaço e caixa: é o mesmo lugar', () => {
     expect(chaveEstabelecimento('MP*APIONEIRA')).toBe(chaveEstabelecimento('MP* APIONEIRA'))
@@ -30,13 +41,13 @@ describe('chaveEstabelecimento', () => {
     // Na fatura real um único anunciante aparece com 19 nomes crus diferentes,
     // todos variando só neste sufixo. Sem o corte, a memória nunca acertaria
     // justamente o estabelecimento que mais repete.
-    const a = chaveEstabelecimento('FACEBK*D8VBD4NJX4')
-    expect(chaveEstabelecimento('FACEBK*7LGVB42KX4')).toBe(a)
-    expect(chaveEstabelecimento('FACEBK*527385EJX4')).toBe(a)
-    expect(a).toBe('facebk')
+    const a = chaveEstabelecimento('ANUNCIO*K1QWE8ZP2M')
+    expect(chaveEstabelecimento('ANUNCIO*R4TYU7HN5B')).toBe(a)
+    expect(chaveEstabelecimento('ANUNCIO*527385EJX4')).toBe(a)
+    expect(a).toBe('anuncio')
 
-    expect(chaveEstabelecimento('GOOGLE ADS5768340496')).toBe('google')
-    expect(chaveEstabelecimento('GOOGLE ADS1111111111')).toBe('google')
+    expect(chaveEstabelecimento('BUSCADOR ADS1234567890')).toBe('buscador')
+    expect(chaveEstabelecimento('BUSCADOR ADS1111111111')).toBe('buscador')
   })
 
   it('NÃO derruba token curto com número: LOJA 2 e LOJA 3 são lojas diferentes', () => {
@@ -99,8 +110,8 @@ describe('enquadrar', () => {
   })
 
   it('a IA preenche o que a memória não sabe', () => {
-    const ia = new Map([[chaveEstabelecimento('FACEBK*D8VBD4NJX4'), 'Marketing']])
-    const [r] = enquadrar([compra('FACEBK*D8VBD4NJX4')], new Map(), ia, CATEGORIAS)
+    const ia = new Map([[chaveEstabelecimento('ANUNCIO*K1QWE8ZP2M'), 'Marketing']])
+    const [r] = enquadrar([compra('ANUNCIO*K1QWE8ZP2M')], new Map(), ia, CATEGORIAS)
     expect(r).toMatchObject({ categoria: 'Marketing', origem: 'ia' })
   })
 
@@ -147,8 +158,8 @@ describe('enquadrar', () => {
 
   it('todas as variações do mesmo anunciante herdam a única correção do dono', () => {
     // é isto que faz o dono não recategorizar 19 linhas todo mês
-    const memoria = new Map([[chaveEstabelecimento('FACEBK*D8VBD4NJX4'), 'Marketing']])
-    const compras = ['FACEBK*D8VBD4NJX4', 'FACEBK*7LGVB42KX4', 'FACEBK*3J3BN5SJX4'].map(n => compra(n))
+    const memoria = new Map([[chaveEstabelecimento('ANUNCIO*K1QWE8ZP2M'), 'Marketing']])
+    const compras = ['ANUNCIO*K1QWE8ZP2M', 'ANUNCIO*R4TYU7HN5B', 'ANUNCIO*V9XCZ2LK6D'].map(n => compra(n))
     expect(enquadrar(compras, memoria, new Map(), CATEGORIAS).map(r => r.categoria))
       .toEqual(['Marketing', 'Marketing', 'Marketing'])
   })

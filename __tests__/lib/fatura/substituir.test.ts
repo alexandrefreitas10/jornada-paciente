@@ -271,6 +271,31 @@ describe('montarResultado com a fatura aberta', () => {
     expect(despesa(r, 'Alimentação')).toBeUndefined()
   })
 
+  it('mês atual SEM linha de cartão e anterior com fatura: nenhum dos dois abre', () => {
+    // O furo: "tem compras" não é o mesmo que "foi aberto". Se o anterior
+    // abrisse sozinho, a categoria do cartão apareceria caindo 100% — gasto
+    // real parecendo ter sumido.
+    const setembroSemCartao = setembro.filter(l => l.categoria !== CATEGORIA_CARTAO)
+    const r = montar({
+      sistema: setembroSemCartao,
+      anterior: { mes: '2026-08', sistema: agosto, compras: comprasAgosto },
+    })
+
+    expect(despesa(r, 'Alimentação')).toBeUndefined()
+    expect(despesa(r, CATEGORIA_CARTAO)?.anterior).toBe(-2000000)
+  })
+
+  it('mês anterior SEM linha de cartão e atual com fatura: nenhum dos dois abre', () => {
+    const agostoSemCartao = agosto.filter(l => l.categoria !== CATEGORIA_CARTAO)
+    const r = montar({
+      anterior: { mes: '2026-08', sistema: agostoSemCartao, compras: comprasAgosto },
+    })
+
+    // Sem a guarda, "Marketing" nasceria em setembro com alta sem base.
+    expect(despesa(r, 'Marketing')).toBeUndefined()
+    expect(despesa(r, CATEGORIA_CARTAO)?.atual).toBe(-PAGO)
+  })
+
   it('sem mês anterior gravado, o mês atual é aberto: não há comparação para distorcer', () => {
     const r = montar({ anterior: null })
 
