@@ -1,7 +1,11 @@
 import sql, { initSchema } from '@/lib/db'
-import { mesValido } from './conciliacao/periodo'
-import type { LancamentoExtratoBanco } from './conciliacao/resultado'
+import { mesAnterior, mesValido } from './conciliacao/periodo'
+import { montarResultado, type LancamentoExtratoBanco, type ResultadoMes } from './conciliacao/resultado'
 import type { Banco, ConferenciaSaldo, LancamentoSistema } from './conciliacao/tipos'
+import { comprasDoComparativo, lerFaturaDoMes, type FaturaGravada } from './fatura-db'
+import { comprasParaComparativo, totalLancadoNoCartao } from './fatura/substituir'
+import { categoriasDisponiveis } from './fatura/enquadrar'
+import { somaDasCompras, somaIdentificada, type FaturaDaTela } from './fatura/tela'
 
 // Gravação e leitura de um mês de conciliação. Só servidor.
 //
@@ -342,4 +346,94 @@ export async function listarMeses(): Promise<MesEnviado[]> {
     criadoEm: new Date(l.created_at).toISOString(),
     criadoPor: l.created_by,
   }))
+}
+
+/** O que a aba mostra de um mês GRAVADO: o resultado, quem enviou, e a fatura
+ *  do cartão do mês quando existe. */
+export interface MesMontado extends ResultadoMes {
+  enviadoEm: string
+  enviadoPor: string | null
+  /** `null` quando o dono ainda não subiu a fatura daquele mês — o estado
+   *  normal, e a tela convida a enviar. */
+  fatura: FaturaDaTela | null
+}
+
+/**
+ * Monta o que a aba mostra a partir do que está no banco.
+ *
+ * **Existe para haver UM caminho.** Quatro ações levam ao mesmo mês já gravado
+ * — reabrir o mês, subir a fatura, trocar a categoria de uma compra, remover a
+ * fatura — e cada uma que montasse a resposta por conta própria poderia esquecer
+ * de passar as compras (ou de passar as do mês anterior) e mostrar números
+ * diferentes para o mesmo mês. Aqui isso não é possível: as compras entram
+ * sempre pela porta de `comprasDoComparativo`, que recusa fatura cujo resíduo
+ * não é zero.
+ *
+ * `null` quando o mês não foi enviado. A `leitura` vem reduzida aos quatro
+ * descartes que o banco guarda — ver a rota do mês.
+ */
+export async function montarMesGravado(mes: string): Promise<MesMontado | null> {
+  const gravado = await lerMes(mes)
+  if (!gravado) return null
+
+  const anteriorMes = mesAnterior(mes)
+  const [anteriorSistema, fatura, comprasAnterior] = await Promise.all([
+    lerSistemaDoMes(anteriorMes),
+    lerFaturaDoMes(mes),
+    comprasDoComparativo(anteriorMes),
+  ])
+
+  // A MESMA porta que `comprasDoComparativo` usa, aqui com a fatura que já
+  // está na mão (ela também vai inteira para a tela, e lê-la duas vezes só
+  // daria a chance de as duas leituras discordarem).
+  const compras = comprasParaComparativo(fatura, fatura?.compras ?? [])
+
+  const d = gravado.descartes
+  const resultado = montarResultado({
+    mes,
+    sistema: gravado.sistema,
+    extrato: gravado.extrato,
+    anterior: anteriorSistema
+      ? { mes: anteriorMes, sistema: anteriorSistema, compras: comprasAnterior }
+      : null,
+    compras,
+    leitura: d
+      ? {
+          recebidas: { semValor: d.semValorRecebidas },
+          pagas: { semValor: d.semValorPagas },
+          unicred: { naoEntendidas: d.naoEntendidasUnicred, conferenciaSaldo: gravado.conferencias.unicred },
+          itau: { naoEntendidas: d.naoEntendidasItau, conferenciaSaldo: gravado.conferencias.itau },
+        }
+      : null,
+  })
+
+  return {
+    ...resultado,
+    enviadoEm: gravado.criadoEm,
+    enviadoPor: gravado.criadoPor,
+    fatura: fatura ? paraTela(fatura, gravado.sistema) : null,
+  }
+}
+
+/**
+ * A fatura como a tela a recebe. As somas e a lista de categorias são
+ * calculadas AQUI, sobre os lançamentos ORIGINAIS do mês: depois da
+ * substituição a linha "Cartão de Crédito" já não está no comparativo, e a tela
+ * não teria de onde tirar nem o valor lançado nem as categorias do seletor.
+ */
+function paraTela(fatura: FaturaGravada, sistema: LancamentoSistema[]): FaturaDaTela {
+  return {
+    mes: fatura.mes,
+    referencia: fatura.referencia,
+    totalFatura: fatura.totalFatura,
+    despesasDeclaradas: fatura.despesasDeclaradas,
+    residuo: fatura.residuo,
+    somaCompras: somaDasCompras(fatura.compras),
+    identificado: somaIdentificada(fatura.compras),
+    lancado: totalLancadoNoCartao(sistema),
+    categorias: categoriasDisponiveis(sistema.map(l => l.categoria)),
+    criadoEm: fatura.criadoEm,
+    criadoPor: fatura.criadoPor,
+    compras: fatura.compras,
+  }
 }

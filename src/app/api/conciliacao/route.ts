@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { logAudit } from '@/lib/audit'
 import { canConciliacaoSession } from '@/lib/authz'
-import { lerSistemaDoMes, listarMeses, salvarMes, type ChavesS3 } from '@/lib/conciliacao-db'
+import { listarMeses, montarMesGravado, salvarMes, type ChavesS3 } from '@/lib/conciliacao-db'
 import { lerExtratoItau } from '@/lib/conciliacao/extrato-itau'
 import { lerExtratoUnicred } from '@/lib/conciliacao/extrato-unicred'
 import { linhasDoPdf } from '@/lib/conciliacao/pdf'
-import { conferirPeriodo, dentroDoMes, mesAnterior, mesValido } from '@/lib/conciliacao/periodo'
+import { conferirPeriodo, dentroDoMes, mesValido } from '@/lib/conciliacao/periodo'
 import { lerPlanilha } from '@/lib/conciliacao/planilha'
 import {
   montarResultado,
@@ -253,31 +253,36 @@ export async function POST(req: NextRequest) {
         `${subiram.length}/4 arquivos no S3 (${subiram.join(', ') || 'nenhum'})`,
     })
 
-    // O mês anterior é só para o comparativo, e ele vem DEPOIS da gravação. Se
-    // esta leitura falhar, o mês já está gravado: responder 500 ("tente de
-    // novo") mandaria o dono reenviar algo que já entrou. Então o comparativo
-    // fica de fora e o resto da resposta vai igual.
-    const anteriorMes = mesAnterior(mes)
-    let anteriorSistema: Awaited<ReturnType<typeof lerSistemaDoMes>> = null
+    // Só o envio conhece estas contagens (os arquivos estão na mão); o banco
+    // guarda apenas os quatro descartes que acendem o aviso.
+    const leitura = {
+      recebidas: contarPlanilha(recebidas, foraRecebidas),
+      pagas: contarPlanilha(pagas, foraPagas),
+      unicred: contarExtrato(unicred, foraExtrato.unicred),
+      itau: contarExtrato(itau, foraExtrato.itau),
+    } satisfies Leitura
+
+    // A resposta é montada a partir do que acabou de ser gravado, pelo MESMO
+    // caminho da releitura do mês: é o que garante que reenviar o mês não
+    // "fecha" a fatura do cartão que já estava subida — ela continua lá (não há
+    // FK), e o comparativo volta com as compras dentro. Montar aqui com os
+    // dados em memória mostraria a linha opaca "Cartão de Crédito" de volta até
+    // o dono recarregar a página.
+    //
+    // Se esta leitura falhar, o mês JÁ está gravado: responder 500 ("tente de
+    // novo") mandaria o dono reenviar algo que já entrou. Então a resposta cai
+    // para o que está na memória — sem comparativo do mês anterior e sem a
+    // fatura, que é a mesma degradação que havia antes.
     try {
-      anteriorSistema = await lerSistemaDoMes(anteriorMes)
+      const montado = await montarMesGravado(mes)
+      if (montado) return NextResponse.json({ ...montado, leitura })
+      console.error('[conciliacao] mês não encontrado logo depois de gravar:', mes)
     } catch (err) {
-      console.error('[conciliacao] leitura do mês anterior falhou depois de gravar:', anteriorMes, motivo(err))
+      console.error('[conciliacao] remontagem depois de gravar falhou:', mes, motivo(err))
     }
 
     return NextResponse.json(
-      montarResultado({
-        mes,
-        sistema,
-        extrato: movimentos,
-        anterior: anteriorSistema ? { mes: anteriorMes, sistema: anteriorSistema } : null,
-        leitura: {
-          recebidas: contarPlanilha(recebidas, foraRecebidas),
-          pagas: contarPlanilha(pagas, foraPagas),
-          unicred: contarExtrato(unicred, foraExtrato.unicred),
-          itau: contarExtrato(itau, foraExtrato.itau),
-        } satisfies Leitura,
-      })
+      montarResultado({ mes, sistema, extrato: movimentos, anterior: null, leitura })
     )
   } catch (err) {
     if (err instanceof ErroDeEnvio) {

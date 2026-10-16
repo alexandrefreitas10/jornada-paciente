@@ -6,6 +6,9 @@ import type { ResultadoConciliacao } from '@/lib/conciliacao/conciliar'
 import { mesValido } from '@/lib/conciliacao/periodo'
 import type { CategoriaComparativo, Leitura, LeituraPlanilha, ResultadoMes } from '@/lib/conciliacao/resultado'
 import type { Banco, ConferenciaSaldo } from '@/lib/conciliacao/tipos'
+import { ehCategoriaCartao, NAO_IDENTIFICADO } from '@/lib/fatura/enquadrar'
+import { AJUSTES_CARTAO } from '@/lib/fatura/substituir'
+import type { FaturaDaTela } from '@/lib/fatura/tela'
 
 // A aba Conciliação: uma vez por mês entram quatro arquivos e saem duas
 // respostas — o que o BPO lançou e o banco não tem, e o que o banco tem e o
@@ -23,8 +26,13 @@ interface MesEnviado {
   criadoPor: string | null
 }
 
-/** O que a rota do mês devolve: o resultado, mais quem enviou (só na releitura). */
-type Resultado = ResultadoMes & { enviadoEm?: string; enviadoPor?: string | null }
+/** O que a rota do mês devolve: o resultado, quem enviou (só na releitura) e a
+ *  fatura do cartão do mês quando o dono já a subiu. */
+type Resultado = ResultadoMes & {
+  enviadoEm?: string
+  enviadoPor?: string | null
+  fatura?: FaturaDaTela | null
+}
 
 // `accept` é só conforto no seletor de arquivo: quem valida o conteúdo é o
 // servidor, que lê os quatro e recusa nomeando o arquivo que não deu para ler.
@@ -78,6 +86,14 @@ function resultadoValido(corpo: unknown): corpo is Resultado {
   if (typeof r.mes !== 'string' || !Array.isArray(r.bancos)) return false
   if (!r.bancos.every(b => b && Array.isArray(b.soNoSistema) && Array.isArray(b.soNoExtrato))) return false
   if (!r.comparativo || !Array.isArray(r.comparativo.receitas) || !Array.isArray(r.comparativo.despesas)) return false
+  // A fatura é opcional (mês sem fatura é o normal), mas quando vem tem de ter
+  // a lista de compras e a de categorias: as duas são percorridas com `.map`.
+  const f = (corpo as { fatura?: unknown }).fatura
+  if (f !== undefined && f !== null) {
+    const fat = f as Partial<FaturaDaTela>
+    if (!Array.isArray(fat.compras) || !Array.isArray(fat.categorias)) return false
+    if (typeof fat.somaCompras !== 'number' || typeof fat.identificado !== 'number') return false
+  }
   const l = r.leitura
   return !l || !!(l.recebidas && l.pagas && l.unicred && l.itau)
 }
@@ -571,6 +587,316 @@ function BlocoCategorias({
   )
 }
 
+// ── Fatura do cartão ──────────────────────────────────────────
+
+/** A linha opaca "Cartão de Crédito" do mês, em centavos POSITIVOS, ou 0 quando
+ *  ela não existe. É o tamanho do que a fatura vai abrir — e é o que diz ao
+ *  dono se vale a pena ir buscar o PDF. */
+function lancadoNoCartao(despesas: CategoriaComparativo[]): number {
+  return Math.abs(despesas.filter(d => ehCategoriaCartao(d.chave)).reduce((s, d) => s + d.atual, 0))
+}
+
+/** Qual ação da fatura está em voo: o envio, a remoção, ou o id da compra cuja
+ *  categoria está sendo gravada. `null` = nenhuma. */
+type AcaoFatura = 'envio' | 'remocao' | number | null
+
+/**
+ * A fatura do cartão dentro do Custos.
+ *
+ * Três coisas que esta tela PRECISA dizer, e por quê:
+ *
+ * 1. **Quanto da fatura foi identificado** ("R$ 23.100,00 de R$ 20.020,00 —
+ *    91%"). Sem isso o dono não sabe se vale a pena abrir a lista; com isso ele
+ *    decide em dois segundos.
+ * 2. **Que abrir a fatura sobe o total de Despesas E o de Receitas, no mesmo
+ *    valor.** As compras somam mais que o pagamento (estorno que só aparece na
+ *    fatura seguinte): as categorias que entram somam mais que a linha opaca
+ *    que saiu, e a diferença vira a linha de créditos e ajustes, em Receitas.
+ *    Quem não sabe disso lê os dois totais subindo como bug — então a tela diz,
+ *    com os números, que o RESULTADO do mês é que não muda.
+ * 3. **Que uma fatura cujo resíduo não é zero NÃO está sendo usada.** Uma
+ *    abertura incompleta faz uma categoria parecer menor do que é, e isso é
+ *    pior que a linha opaca, porque parece informação.
+ *
+ * Só a categoria é editável. Valor, data e estabelecimento vêm da fatura: se
+ * estiverem errados, o errado é a leitura, e o lugar de consertar é o leitor.
+ */
+function CartaoFatura({
+  fatura,
+  lancadoFechado,
+  mesAnterior,
+  arquivo,
+  escolher,
+  inputRef,
+  enviar,
+  remover,
+  trocar,
+  acao,
+  erro,
+}: {
+  fatura: FaturaDaTela | null
+  /** A linha "Cartão de Crédito" que AINDA está no comparativo, em centavos
+   *  positivos. Zero quando a fatura já a substituiu (ou quando o mês não tem
+   *  essa linha) — é por ela que a tela sabe se a fatura entrou no Custos de
+   *  verdade, em vez de supor que entrou por estar gravada. */
+  lancadoFechado: number
+  /** AAAA-MM comparado, ou `null` no primeiro mês. */
+  mesAnterior: string | null
+  arquivo: File | null
+  escolher: (f: File | null) => void
+  inputRef: (el: HTMLInputElement | null) => void
+  enviar: () => void
+  remover: () => void
+  trocar: (compraId: number, categoria: string) => void
+  acao: AcaoFatura
+  erro: string | null
+}) {
+  const [confirmando, setConfirmando] = useState(false)
+
+  const alerta = erro && (
+    <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3 whitespace-pre-line">
+      {erro}
+    </p>
+  )
+
+  if (!fatura) {
+    return (
+      <section className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+        <h2 className="text-base font-semibold text-gray-800">Fatura do cartão</h2>
+        <p className="text-sm text-gray-600">
+          {lancadoFechado > 0 ? (
+            <>
+              O cartão aparece aqui numa linha só, de <strong>{reais(lancadoFechado)}</strong>, que não diz o que tem
+              dentro. Envie o PDF da fatura paga neste mês para abrir essa linha nas categorias de verdade.
+            </>
+          ) : (
+            <>
+              Este mês não tem lançamento na categoria &ldquo;Cartão de Crédito&rdquo;. Envie o PDF da fatura paga
+              neste mês se quiser a leitura guardada — sem essa linha não há valor para substituir no Custos.
+            </>
+          )}
+        </p>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-1">
+            <label htmlFor="fatura-arquivo" className="text-xs font-medium text-gray-600">
+              PDF da fatura (.pdf)
+            </label>
+            <input
+              id="fatura-arquivo"
+              ref={inputRef}
+              type="file"
+              accept=".pdf,application/pdf"
+              onChange={e => escolher(e.target.files?.[0] ?? null)}
+              className="block w-full text-xs text-gray-600 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border file:border-gray-300 file:bg-gray-50 file:text-xs file:text-gray-700"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={enviar}
+            disabled={!arquivo || acao !== null}
+            className="px-3 py-1.5 rounded-lg text-sm font-medium bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
+          >
+            {acao === 'envio' ? 'Lendo a fatura...' : 'Enviar a fatura'}
+          </button>
+        </div>
+        <p className="text-xs text-gray-500">
+          A fatura vai à parte dos quatro arquivos: reenviar o mês não apaga a fatura, e enviar a fatura não exige
+          reenviar o mês.
+        </p>
+        {alerta}
+      </section>
+    )
+  }
+
+  // As opções de CADA linha são as categorias do mês mais, se faltar, a
+  // categoria daquela compra. A memória do dono não é filtrada por mês (se o
+  // BPO renomear uma categoria, a correção dele continua valendo), e um
+  // `select` controlado cujo valor não está entre as opções apareceria vazio.
+  // Por LINHA, e não uma lista só: oferecer a categoria de fora do mês de uma
+  // compra às outras ofereceria uma escolha que o servidor recusa — a troca
+  // grava na memória, que vale para todos os meses seguintes.
+  const opcoesDe = (categoria: string) =>
+    fatura.categorias.includes(categoria) ? fatura.categorias : [...fatura.categorias, categoria]
+  const pctIdentificado =
+    fatura.somaCompras > 0 ? Math.round((fatura.identificado / fatura.somaCompras) * 100) : 0
+  /** Positivo = crédito, e vai para Receitas. Ver `substituirCartao`. */
+  const ajuste = fatura.somaCompras - fatura.lancado
+  const ocupado = acao !== null
+
+  return (
+    <section className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <h2 className="text-base font-semibold text-gray-800">Fatura do cartão</h2>
+        <span className="text-xs text-gray-500">
+          ref. {mesBr(fatura.referencia)} · {plural(fatura.compras.length, 'compra', 'compras')}
+        </span>
+      </div>
+
+      {/* Três motivos de a fatura estar gravada e NÃO estar abrindo o Custos.
+          Dizer qual é não é detalhe: o cartão é 13% do mês, e "a fatura está
+          lá" sem o efeito é a única coisa pior que a linha opaca. */}
+      {fatura.residuo !== 0 ? (
+        <p role="alert" className="text-sm text-red-800 bg-red-50 border border-red-200 rounded-lg p-3">
+          <strong>A leitura desta fatura não fecha:</strong> sobram {reaisComSinal(fatura.residuo)} entre as compras
+          lidas e o total que a própria fatura declara. Ela <strong>não está sendo usada no Custos</strong> — uma
+          abertura incompleta faria uma categoria parecer menor do que é. Remova e envie o PDF completo.
+        </p>
+      ) : lancadoFechado > 0 ? (
+        <p role="alert" className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
+          <strong>As compras abaixo ainda não entraram no Custos:</strong> a linha &ldquo;Cartão de Crédito&rdquo; de{' '}
+          {reais(lancadoFechado)} continua lá. O comparativo abre <strong>os dois meses ou nenhum</strong> — envie
+          também a fatura de {mesAnterior ? mesBr(mesAnterior) : 'mês anterior'}, senão toda categoria do cartão
+          apareceria como se tivesse nascido neste mês, com alta de 100%.
+        </p>
+      ) : fatura.lancado === 0 ? (
+        <p className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-2">
+          Este mês não tem lançamento na categoria &ldquo;Cartão de Crédito&rdquo;: a leitura está guardada, mas não
+          substitui nada no Custos — não haveria de onde tirar o valor, e pôr as compras do mesmo jeito contaria a
+          fatura duas vezes.
+        </p>
+      ) : null}
+
+      <p className="text-sm text-gray-700">
+        <strong>{reais(fatura.identificado)}</strong> de {reais(fatura.somaCompras)} em compras —{' '}
+        {pctIdentificado}% identificado.
+        {fatura.identificado < fatura.somaCompras && (
+          <> O resto está em &ldquo;{NAO_IDENTIFICADO}&rdquo; até alguém escolher a categoria abaixo.</>
+        )}
+      </p>
+
+      {fatura.lancado > 0 && fatura.totalFatura !== fatura.lancado && (
+        <p role="alert" className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
+          A fatura declara {reais(fatura.totalFatura)} de saldo total, e o BPO lançou {reais(fatura.lancado)} em
+          &ldquo;Cartão de Crédito&rdquo; neste mês — diferença de {reaisComSinal(fatura.totalFatura - fatura.lancado)}.
+          Confira se esta é a fatura paga neste mês. A fatura continua sendo usada, com o valor do BPO como total:
+          um estorno de anuidade faz o pago diferir do comprado sem que nada esteja errado.
+        </p>
+      )}
+
+      {fatura.lancado > 0 && ajuste !== 0 && (
+        <p className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-2">
+          {ajuste > 0 ? (
+            <>
+              As compras somam {reais(fatura.somaCompras)} e o pagamento foi de {reais(fatura.lancado)}: a diferença
+              de {reais(ajuste)} é crédito (um estorno que só aparece na fatura seguinte) e entra no Custos como
+              &ldquo;{AJUSTES_CARTAO}&rdquo;, em <strong>Receitas</strong>. Por isso abrir a fatura{' '}
+              <strong>sobe</strong> o total de Despesas em {reais(ajuste)} (as compras somam mais que a linha do cartão
+              que saiu) e sobe o de Receitas no mesmo valor: <strong>o resultado do mês não muda</strong>. Não é erro.
+            </>
+          ) : (
+            <>
+              A fatura cobrou {reais(-ajuste)} além das compras lidas (encargos, por exemplo). Esse valor entra no
+              Custos como &ldquo;{AJUSTES_CARTAO}&rdquo;, em <strong>Despesas</strong>, em vez de ser diluído nas
+              categorias: <strong>o resultado do mês não muda</strong>.
+            </>
+          )}
+        </p>
+      )}
+
+      <div className="overflow-x-auto">
+        <table aria-label="Compras da fatura" className="w-full min-w-[32rem] text-xs select-text">
+          <thead>
+            <tr className="border-b border-gray-200">
+              <th className={TH}>Data</th>
+              <th className={TH}>Estabelecimento</th>
+              <th className={`${TH} text-right`}>Valor</th>
+              <th className={TH}>Categoria</th>
+            </tr>
+          </thead>
+          <tbody>
+            {fatura.compras.map(c => {
+              const extras = [c.parcela ? `parcela ${c.parcela}` : '', c.internacional ? 'internacional' : '']
+                .filter(Boolean)
+                .join(' · ')
+              return (
+                <tr key={c.id} className="border-b border-gray-50 last:border-0">
+                  <td className={`${TD} whitespace-nowrap`}>{dia(c.data)}</td>
+                  <td className={`${TD} break-words`}>
+                    {c.estabelecimento || '—'}
+                    {extras && <span className="text-gray-400"> · {extras}</span>}
+                  </td>
+                  <td className={`${TD} text-right whitespace-nowrap font-medium text-gray-900`}>
+                    {reais(c.centavos)}
+                  </td>
+                  <td className={TD}>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <select
+                        aria-label={`Categoria de ${c.estabelecimento || 'compra sem nome'}`}
+                        value={c.categoria}
+                        disabled={ocupado}
+                        onChange={e => trocar(c.id, e.target.value)}
+                        className="border border-gray-300 rounded-lg px-1.5 py-1 text-xs max-w-[14rem] focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:opacity-60"
+                      >
+                        {opcoesDe(c.categoria).map(o => (
+                          <option key={o} value={o}>
+                            {o}
+                          </option>
+                        ))}
+                      </select>
+                      {acao === c.id && <span className="text-gray-500">gravando...</span>}
+                      {/* De onde veio a categoria. "Sua escolha" é a que não se
+                          repete: ela já está gravada para o mês que vem. */}
+                      {acao !== c.id && c.origem === 'manual' && <span className="text-violet-700">sua escolha</span>}
+                      {acao !== c.id && c.origem === 'memoria' && <span className="text-gray-400">lembrada</span>}
+                      {acao !== c.id && c.origem === 'ia' && <span className="text-gray-400">sugerida</span>}
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="text-xs text-gray-500">
+        Trocar a categoria vale para todas as compras do mesmo estabelecimento nesta fatura — o descritor do cartão
+        repete o mesmo lugar muitas vezes — e também para os meses seguintes: o estabelecimento fica gravado e, no
+        mês que vem, vai sozinho para onde você mandou.
+      </p>
+
+      {alerta}
+
+      <div className="flex items-center gap-3 flex-wrap border-t border-gray-100 pt-3">
+        {confirmando ? (
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                setConfirmando(false)
+                remover()
+              }}
+              disabled={ocupado}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+            >
+              {acao === 'remocao' ? 'Removendo...' : 'Confirmar a remoção'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmando(false)}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50"
+            >
+              Cancelar
+            </button>
+            <p className="text-xs text-gray-500">
+              A leitura e as categorias desta fatura saem, e a linha &ldquo;Cartão de Crédito&rdquo; volta. O que você
+              ensinou sobre cada estabelecimento continua gravado.
+            </p>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirmando(true)}
+            disabled={ocupado}
+            className="px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            Remover a fatura
+          </button>
+        )}
+      </div>
+    </section>
+  )
+}
+
 // ── A aba ─────────────────────────────────────────────────────
 
 export function ConciliacaoClient() {
@@ -585,6 +911,9 @@ export function ConciliacaoClient() {
   const [enviando, setEnviando] = useState(false)
   const [erroEnvio, setErroEnvio] = useState<string | null>(null)
   const [aberta, setAberta] = useState<string | null>(null)
+  const [faturaArquivo, setFaturaArquivo] = useState<File | null>(null)
+  const [acaoFatura, setAcaoFatura] = useState<AcaoFatura>(null)
+  const [erroFatura, setErroFatura] = useState<string | null>(null)
 
   const inputs = useRef<Partial<Record<Campo, HTMLInputElement | null>>>({})
   /** Os meses que já têm conciliação gravada. Em ref, e não só no estado,
@@ -598,11 +927,16 @@ export function ConciliacaoClient() {
    *  veriam `enviando` ainda falso (o estado só muda no próximo render) e
    *  gravariam o mês duas vezes. */
   const enviandoAgora = useRef(false)
+  const inputFatura = useRef<HTMLInputElement | null>(null)
+  /** A mesma trava, para as três ações da fatura: dois cliques no mesmo tique
+   *  no "Enviar a fatura" subiriam o PDF duas vezes. */
+  const faturaOcupada = useRef(false)
 
   const carregarMes = useCallback(async (m: string) => {
     const id = ++pedido.current
     setErroMes(null)
     setAberta(null)
+    setErroFatura(null)
     // Mês nunca enviado: não há o que buscar, e 404 não é erro para mostrar em
     // vermelho — é o estado normal de quem acabou de escolher o mês.
     if (!mesValido(m) || !enviados.current.has(m)) {
@@ -674,7 +1008,93 @@ export function ConciliacaoClient() {
   function trocarMes(valor: string) {
     setMes(valor)
     setErroEnvio(null)
+    // O PDF escolhido é de um mês: levá-lo para outro mês subiria a fatura de
+    // setembro como se fosse a de outubro.
+    limparArquivoDaFatura()
     carregarMes(valor)
+  }
+
+  function limparArquivoDaFatura() {
+    setFaturaArquivo(null)
+    if (inputFatura.current) inputFatura.current.value = ''
+  }
+
+  /**
+   * As três ações da fatura (enviar, trocar a categoria de uma compra, remover)
+   * terminam igual: o servidor devolve o MÊS INTEIRO remontado do banco e a
+   * tela só troca o resultado.
+   *
+   * É de propósito que nada seja atualizado antes da resposta. Trocar a
+   * categoria na tela e só depois tentar gravar deixaria, numa falha, a
+   * categoria errada na frente do dono como se estivesse salva — e é desta
+   * tela que ele tira o custo do mês.
+   */
+  async function acaoDaFatura(qual: Exclude<AcaoFatura, null>, url: string, init: RequestInit, generico: string) {
+    if (faturaOcupada.current) return false
+    faturaOcupada.current = true
+    setAcaoFatura(qual)
+    setErroFatura(null)
+    try {
+      const res = await fetch(url, init)
+      const corpo: unknown = await res.json().catch(() => null)
+      if (!res.ok) {
+        setErroFatura(motivoDo(corpo) || generico)
+        return false
+      }
+      if (!resultadoValido(corpo)) {
+        setErroFatura('A ação foi aceita, mas a resposta veio fora do formato. Recarregue a página.')
+        return false
+      }
+      // Um GET de mês em voo não pode sobrescrever o que a ação devolveu.
+      pedido.current++
+      setResultado(corpo)
+      return true
+    } catch {
+      setErroFatura(generico)
+      return false
+    } finally {
+      faturaOcupada.current = false
+      setAcaoFatura(null)
+    }
+  }
+
+  async function enviarFatura() {
+    // O mês é o do resultado na tela, fixado aqui: é o mês a que a fatura vai
+    // pertencer, e ele não pode mudar no meio do envio.
+    if (!faturaArquivo || !resultado) return
+    const form = new FormData()
+    form.append('fatura', faturaArquivo)
+    const ok = await acaoDaFatura(
+      'envio',
+      `/api/conciliacao/${resultado.mes}/fatura`,
+      { method: 'POST', body: form },
+      'Não foi possível enviar a fatura. Tente de novo.'
+    )
+    if (ok) limparArquivoDaFatura()
+  }
+
+  async function removerFatura() {
+    if (!resultado) return
+    await acaoDaFatura(
+      'remocao',
+      `/api/conciliacao/${resultado.mes}/fatura`,
+      { method: 'DELETE' },
+      'Não foi possível remover a fatura. Tente de novo.'
+    )
+  }
+
+  async function trocarCategoriaDaCompra(compraId: number, categoria: string) {
+    if (!resultado) return
+    await acaoDaFatura(
+      compraId,
+      `/api/conciliacao/${resultado.mes}/fatura/${compraId}`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ categoria }),
+      },
+      'Não foi possível gravar a categoria. Tente de novo.'
+    )
   }
 
   const faltando = CAMPOS.filter(c => !arquivos[c.campo]).map(c => c.rotulo)
@@ -886,6 +1306,27 @@ export function ConciliacaoClient() {
                   deste mês.
                 </p>
               )}
+              {/* Antes das categorias: é a fatura que explica por que o total
+                  de Despesas abaixo é menor (e o de Receitas maior) do que
+                  antes de ela ser enviada. */}
+              <CartaoFatura
+                fatura={resultado.fatura ?? null}
+                lancadoFechado={lancadoNoCartao(resultado.comparativo.despesas)}
+                mesAnterior={resultado.comparativo.mesAnterior}
+                arquivo={faturaArquivo}
+                escolher={f => {
+                  setFaturaArquivo(f)
+                  setErroFatura(null)
+                }}
+                inputRef={el => {
+                  inputFatura.current = el
+                }}
+                enviar={enviarFatura}
+                remover={removerFatura}
+                trocar={trocarCategoriaDaCompra}
+                acao={acaoFatura}
+                erro={erroFatura}
+              />
               <BlocoCategorias
                 titulo="Despesas"
                 linhas={resultado.comparativo.despesas}
