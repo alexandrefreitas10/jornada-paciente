@@ -693,6 +693,54 @@ async function runMigrations() {
     );
     CREATE INDEX IF NOT EXISTS fatura_compra_fatura_idx ON fatura_compra (fatura_id);
   `).catch(() => {})
+
+  // Aba Fotos. `patient_files` exige paciente e apaga em cascata com ele, então
+  // foto de quem não tem card precisa de lugar próprio — mexer naquela tabela
+  // afetaria todas as abas do card.
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS foto_pessoas (
+      id SERIAL PRIMARY KEY,
+      nome TEXT NOT NULL,
+      chave_nome TEXT NOT NULL UNIQUE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      created_by TEXT
+    )
+  `).catch(() => {})
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS fotos_avulsas (
+      id SERIAL PRIMARY KEY,
+      pessoa_id INTEGER NOT NULL REFERENCES foto_pessoas(id) ON DELETE CASCADE,
+      s3_key TEXT NOT NULL,
+      original_name TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      created_by TEXT,
+      deleted_at TIMESTAMPTZ
+    )
+  `).catch(() => {})
+  // O CHECK garante que a montagem é de um paciente OU de uma pasta, nunca dos
+  // dois nem de nenhum: origem ambígua é o tipo de dado que depois ninguém sabe
+  // consertar. O `nome` é cópia proposital, não join — a galeria tem de
+  // continuar legível se o card do paciente for arquivado.
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS antes_depois (
+      id SERIAL PRIMARY KEY,
+      patient_id INTEGER REFERENCES patients(id) ON DELETE CASCADE,
+      pessoa_id INTEGER REFERENCES foto_pessoas(id) ON DELETE CASCADE,
+      nome TEXT NOT NULL,
+      identidade TEXT NOT NULL,
+      s3_key TEXT NOT NULL,
+      s3_key_thumb TEXT NOT NULL,
+      data_antes TIMESTAMPTZ,
+      data_depois TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      created_by TEXT,
+      deleted_at TIMESTAMPTZ,
+      CONSTRAINT antes_depois_uma_origem CHECK ((patient_id IS NULL) <> (pessoa_id IS NULL))
+    )
+  `).catch(() => {})
+  await sql.unsafe(`
+    CREATE INDEX IF NOT EXISTS antes_depois_created_at_idx ON antes_depois (created_at DESC)
+  `).catch(() => {})
 }
 
 export default sql

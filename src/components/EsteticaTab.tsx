@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, Component, type ReactNode, type ErrorInfo } from 'react'
+import { baixarBlob, gerarMontagem, salvarMontagem } from '@/lib/montagem-canvas'
 
 class RenderErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
   constructor(props: { children: ReactNode }) {
@@ -203,6 +204,16 @@ export function EsteticaTab({ patientId, readOnly = false }: { patientId: number
   const [finalCrops, setFinalCrops] = useState<[CropRect,CropRect]>([{...FULL_CROP},{...FULL_CROP}])
   const [comparing, setComparing] = useState<FileRecord[]>([])
 
+  // Montagem guardada na aba Fotos. Enquanto `montagemId` for null o próximo
+  // clique grava; depois disso o clique só baixa de novo, porque é a MESMA
+  // montagem e não uma nova. Mudar o enquadramento zera o id (ver zerarMontagem).
+  const [montagemId, setMontagemId] = useState<number | null>(null)
+  const [salvandoMontagem, setSalvandoMontagem] = useState(false)
+  const [erroMontagem, setErroMontagem] = useState<string | null>(null)
+  // O PNG já gerado fica aqui para o "tentar de novo" repetir só o POST: o dono
+  // já está com o arquivo na mão, não faz sentido desenhar e baixar outra vez.
+  const montagemPendente = useRef<{ png: Blob; thumb: Blob; dataAntes: string; dataDepois: string } | null>(null)
+
   // Modal de sessão
   const [sessionModal, setSessionModal] = useState<{ session: AestheticSession; num: number } | null>(null)
   const [sessionObs, setSessionObs] = useState('')
@@ -402,19 +413,55 @@ export function EsteticaTab({ patientId, readOnly = false }: { patientId: number
     setCropPhase(false)
   }
 
+  // Esquece a montagem já guardada: o próximo clique volta a gravar. Usado ao
+  // fechar e ao voltar para o enquadramento, porque recorte diferente é outra
+  // montagem — e não uma segunda cópia da mesma.
+  function zerarMontagem() {
+    setMontagemId(null)
+    setErroMontagem(null)
+    montagemPendente.current = null
+  }
+
   function exitAll() {
     setComparing([]); setSelected([]); setCompareMode(false)
     setCropPhase(false); setCropPics([])
     setCropRects([{...FULL_CROP},{...FULL_CROP}])
     setFinalCrops([{...FULL_CROP},{...FULL_CROP}])
+    zerarMontagem()
+  }
+
+  // Sobe a montagem já gerada. Nunca lança: o download já aconteceu e falhar
+  // aqui não pode parecer falha de geração — só vira o aviso de "não guardado".
+  async function enviarMontagem(dados: { png: Blob; thumb: Blob; dataAntes: string; dataDepois: string }) {
+    setSalvandoMontagem(true)
+    setErroMontagem(null)
+    try {
+      const id = await salvarMontagem({
+        png: dados.png, thumb: dados.thumb,
+        identidade: 'estetica',
+        patientId,
+        dataAntes: dados.dataAntes, dataDepois: dados.dataDepois,
+      })
+      setMontagemId(id)
+      montagemPendente.current = null
+    } catch {
+      montagemPendente.current = dados
+      setErroMontagem('Baixado, mas não foi guardado na aba Fotos.')
+    } finally {
+      setSalvandoMontagem(false)
+    }
   }
 
   async function handleDownloadComparison() {
     const [a, b] = comparing
     const [cA, cB] = finalCrops
 
+    // Baixa pela rota-proxy do paciente (mesma origem) e só resolve no
+    // `onload`: `gerarMontagem` não confere se a imagem carregou, e altura zero
+    // viraria uma montagem de dimensão `Infinity`. O `onerror` recusando é a
+    // garantia — a mesma que o código antigo tinha aqui.
     const loadFromApi = async (id: number): Promise<HTMLImageElement> => {
-      const res = await fetch(`/api/patients/${patientId}/files/${id}/download?proxy=1`)
+      const res = await fetch(proxySrc(patientId, id))
       const blob = await res.blob()
       const blobUrl = URL.createObjectURL(blob)
       return new Promise((resolve, reject) => {
@@ -423,43 +470,21 @@ export function EsteticaTab({ patientId, readOnly = false }: { patientId: number
         img.onerror = reject; img.src = blobUrl
       })
     }
-    const loadFromUrl = (url: string): Promise<HTMLImageElement> =>
-      new Promise((resolve, reject) => {
-        const img = new Image(); img.onload = () => resolve(img); img.onerror = reject; img.src = url
-      })
 
     try {
-      const [imgA, imgB, logoImg] = await Promise.all([
-        loadFromApi(a.id), loadFromApi(b.id), loadFromUrl('/logo-it.png'),
-      ])
-      const GAP = 16; const LABEL_H = 60; const PADDING = 24; const LOGO_H = 80; const LOGO_GAP = 12
-      const effWA = imgA.naturalWidth * cA.w; const effHA = imgA.naturalHeight * cA.h
-      const effWB = imgB.naturalWidth * cB.w; const effHB = imgB.naturalHeight * cB.h
-      const maxH = Math.max(effHA, effHB)
-      const wA = effWA * (maxH / effHA); const wB = effWB * (maxH / effHB)
-      const totalW = wA + wB + GAP + PADDING * 2
-      const logoW = logoImg.naturalWidth * (LOGO_H / logoImg.naturalHeight)
-      const totalH = PADDING + LOGO_H + LOGO_GAP + LABEL_H + maxH + 50 + PADDING
-      const canvas = document.createElement('canvas')
-      canvas.width = totalW; canvas.height = totalH
-      const ctx = canvas.getContext('2d')!
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, totalW, totalH)
-      ctx.drawImage(logoImg, (totalW - logoW) / 2, PADDING, logoW, LOGO_H)
-      const contentTop = PADDING + LOGO_H + LOGO_GAP
-      ctx.fillStyle = '#374151'; ctx.font = 'bold 40px sans-serif'; ctx.textAlign = 'center'
-      ctx.fillText('ANTES', PADDING + wA / 2, contentTop + 44)
-      ctx.fillText('DEPOIS', PADDING + wA + GAP + wB / 2, contentTop + 44)
-      ctx.drawImage(imgA, cA.x*imgA.naturalWidth, cA.y*imgA.naturalHeight, effWA, effHA, PADDING, contentTop+LABEL_H, wA, maxH)
-      ctx.drawImage(imgB, cB.x*imgB.naturalWidth, cB.y*imgB.naturalHeight, effWB, effHB, PADDING+wA+GAP, contentTop+LABEL_H, wB, maxH)
-      ctx.fillStyle = '#6b7280'; ctx.font = '28px sans-serif'
-      ctx.fillText(fmtDate(a.created_at), PADDING+wA/2, contentTop+LABEL_H+maxH+40)
-      ctx.fillText(fmtDate(b.created_at), PADDING+wA+GAP+wB/2, contentTop+LABEL_H+maxH+40)
-      canvas.toBlob(blob => {
-        if (!blob) return
-        const url = URL.createObjectURL(blob)
-        const link = document.createElement('a'); link.href = url; link.download = 'comparacao-estetica.png'; link.click()
-        URL.revokeObjectURL(url)
-      }, 'image/png')
+      const [imgA, imgB] = await Promise.all([loadFromApi(a.id), loadFromApi(b.id)])
+      // Identidade do Instituto (logo pequena, fontes e espaçamentos próprios).
+      // A geometria mora em `montagem.ts` e está travada por teste.
+      const { png, thumb } = await gerarMontagem({
+        identidade: 'estetica',
+        antes: { img: imgA, recorte: cA, data: a.created_at },
+        depois: { img: imgB, recorte: cB, data: b.created_at },
+      })
+      // Baixa PRIMEIRO: o que o dono precisa no momento é o arquivo na mão.
+      baixarBlob(png, 'comparacao-estetica.png')
+      if (montagemId === null) {
+        await enviarMontagem({ png, thumb, dataAntes: a.created_at, dataDepois: b.created_at })
+      }
     } catch {
       alert('Não foi possível gerar a imagem. Tente novamente.')
     }
@@ -496,12 +521,28 @@ export function EsteticaTab({ patientId, readOnly = false }: { patientId: number
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-gray-700">Comparação — Antes e Depois</h3>
           <div className="flex gap-2">
-            <button onClick={() => { setCropPhase(true); setCropPics(comparing); setCropRects(finalCrops); setComparing([]) }}
+            <button onClick={() => { setCropPhase(true); setCropPics(comparing); setCropRects(finalCrops); setComparing([]); zerarMontagem() }}
               className="text-sm text-gray-500 px-3 py-1.5 border border-gray-200 rounded-lg">✂️ Ajustar recorte</button>
-            <button onClick={handleDownloadComparison} className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700">⬇️ Baixar montagem</button>
+            <button onClick={handleDownloadComparison} disabled={salvandoMontagem} className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-60">
+              {salvandoMontagem ? 'Salvando...' : '⬇️ Baixar e salvar em Fotos'}
+            </button>
             <button onClick={exitAll} className="text-sm text-gray-500 px-3 py-1.5 border border-gray-200 rounded-lg">✕ Fechar</button>
           </div>
         </div>
+        {erroMontagem && (
+          <div className="flex items-center justify-between gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+            <span>{erroMontagem} A imagem já está no seu computador.</span>
+            <button
+              onClick={() => { const p = montagemPendente.current; if (p) enviarMontagem(p) }}
+              disabled={salvandoMontagem}
+              className="shrink-0 px-2.5 py-1 border border-amber-300 rounded-lg font-medium hover:bg-amber-100 disabled:opacity-60">
+              {salvandoMontagem ? 'Salvando...' : 'Tentar guardar de novo'}
+            </button>
+          </div>
+        )}
+        {montagemId !== null && !erroMontagem && (
+          <p className="text-xs text-green-600">✓ Guardado na aba Fotos.</p>
+        )}
         <div className="grid grid-cols-2 gap-4">
           <CroppedPreview url={comparing[0].url} fallback={proxySrc(patientId, comparing[0].id)} crop={finalCrops[0]} label="Antes" />
           <CroppedPreview url={comparing[1].url} fallback={proxySrc(patientId, comparing[1].id)} crop={finalCrops[1]} label="Depois" />

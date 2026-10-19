@@ -3,6 +3,8 @@
 import { useState, useRef } from 'react'
 import { NotesSection } from './NotesSection'
 import { DeletedItemsButton } from './DeletedItemsButton'
+import { CropEditor, FULL_CROP, type CropRect } from './CropEditor'
+import { baixarBlob, gerarMontagem, salvarMontagem } from '@/lib/montagem-canvas'
 
 interface FileRecord {
   id: number
@@ -13,138 +15,11 @@ interface FileRecord {
   created_by?: string | null
 }
 
-interface CropRect { x: number; y: number; w: number; h: number }
-const FULL_CROP: CropRect = { x: 0, y: 0, w: 1, h: 1 }
-
 // URL estável (mesma origem) que gera uma URL assinada FRESCA a cada request.
 // Ao contrário de f.url (assinada no carregamento da página, expira em 15 min),
 // esta nunca expira — usada para abrir e como fallback quando a miniatura vence.
 const proxyDownload = (patientId: number, fileId: number) =>
   `/api/patients/${patientId}/files/${fileId}/download?proxy=1`
-
-// ── Crop editor ──────────────────────────────────────────────────────────────
-
-function CropEditor({ url, label, crop, onChange, fallback }: {
-  url: string
-  label: string
-  crop: CropRect
-  onChange: (r: CropRect) => void
-  fallback?: string
-}) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const drag = useRef<{
-    type: 'move' | 'tl' | 'tr' | 'bl' | 'br'
-    startMx: number; startMy: number
-    startCrop: CropRect
-  } | null>(null)
-
-  function toRel(e: React.MouseEvent) {
-    const r = containerRef.current!.getBoundingClientRect()
-    return { rx: (e.clientX - r.left) / r.width, ry: (e.clientY - r.top) / r.height }
-  }
-
-  function startDrag(e: React.MouseEvent, type: NonNullable<typeof drag.current>['type']) {
-    e.preventDefault()
-    const { rx, ry } = toRel(e)
-    drag.current = { type, startMx: rx, startMy: ry, startCrop: { ...crop } }
-  }
-
-  function onMouseMove(e: React.MouseEvent) {
-    if (!drag.current) return
-    const { rx, ry } = toRel(e)
-    const { type, startMx, startMy, startCrop: sc } = drag.current
-    const dx = rx - startMx
-    const dy = ry - startMy
-    const MIN = 0.08
-    let { x, y, w, h } = sc
-
-    if (type === 'move') {
-      x = Math.max(0, Math.min(1 - w, sc.x + dx))
-      y = Math.max(0, Math.min(1 - h, sc.y + dy))
-    } else if (type === 'tl') {
-      x = Math.max(0, Math.min(sc.x + sc.w - MIN, sc.x + dx))
-      y = Math.max(0, Math.min(sc.y + sc.h - MIN, sc.y + dy))
-      w = sc.x + sc.w - x; h = sc.y + sc.h - y
-    } else if (type === 'tr') {
-      y = Math.max(0, Math.min(sc.y + sc.h - MIN, sc.y + dy))
-      h = sc.y + sc.h - y
-      w = Math.min(1 - sc.x, Math.max(MIN, sc.w + dx))
-    } else if (type === 'bl') {
-      x = Math.max(0, Math.min(sc.x + sc.w - MIN, sc.x + dx))
-      w = sc.x + sc.w - x
-      h = Math.min(1 - sc.y, Math.max(MIN, sc.h + dy))
-    } else {
-      w = Math.min(1 - sc.x, Math.max(MIN, sc.w + dx))
-      h = Math.min(1 - sc.y, Math.max(MIN, sc.h + dy))
-    }
-
-    onChange({ x, y, w, h })
-  }
-
-  function onMouseUp() { drag.current = null }
-
-  const handle = (cursor: string, pos: React.CSSProperties): React.CSSProperties => ({
-    position: 'absolute', width: 14, height: 14,
-    background: 'white', border: '2px solid #7c3aed', borderRadius: 2,
-    cursor, ...pos,
-  })
-
-  return (
-    <div className="space-y-1 select-none">
-      <p className="text-xs font-semibold text-center text-gray-500 uppercase tracking-wide">{label}</p>
-      <div
-        ref={containerRef}
-        className="relative rounded-xl overflow-hidden border border-gray-200"
-        onMouseMove={onMouseMove}
-        onMouseUp={onMouseUp}
-        onMouseLeave={onMouseUp}
-      >
-        <img src={url} alt="" onError={fallback ? e => { if (!e.currentTarget.src.endsWith(fallback)) e.currentTarget.src = fallback } : undefined} className="w-full block pointer-events-none" draggable={false} />
-
-        {/* Overlay escuro fora da seleção */}
-        <div style={{
-          position: 'absolute', inset: 0, pointerEvents: 'none',
-          background: `linear-gradient(rgba(0,0,0,0.45),rgba(0,0,0,0.45))`,
-          clipPath: `polygon(
-            0% 0%, 100% 0%, 100% 100%, 0% 100%,
-            0% 0%,
-            ${crop.x * 100}% ${crop.y * 100}%,
-            ${crop.x * 100}% ${(crop.y + crop.h) * 100}%,
-            ${(crop.x + crop.w) * 100}% ${(crop.y + crop.h) * 100}%,
-            ${(crop.x + crop.w) * 100}% ${crop.y * 100}%,
-            ${crop.x * 100}% ${crop.y * 100}%
-          )`,
-        }} />
-
-        {/* Caixa de recorte */}
-        <div
-          style={{
-            position: 'absolute',
-            left: `${crop.x * 100}%`, top: `${crop.y * 100}%`,
-            width: `${crop.w * 100}%`, height: `${crop.h * 100}%`,
-            border: '2px solid white', cursor: 'move', boxSizing: 'border-box',
-          }}
-          onMouseDown={(e) => startDrag(e, 'move')}
-        >
-          {/* Linhas de terços */}
-          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-            {[33.33, 66.66].map(p => (
-              <div key={`h${p}`} style={{ position: 'absolute', left: 0, right: 0, top: `${p}%`, borderTop: '1px solid rgba(255,255,255,0.3)' }} />
-            ))}
-            {[33.33, 66.66].map(p => (
-              <div key={`v${p}`} style={{ position: 'absolute', top: 0, bottom: 0, left: `${p}%`, borderLeft: '1px solid rgba(255,255,255,0.3)' }} />
-            ))}
-          </div>
-          {/* Handles */}
-          <div style={handle('nw-resize', { top: -7, left: -7 })} onMouseDown={(e) => { e.stopPropagation(); startDrag(e, 'tl') }} />
-          <div style={handle('ne-resize', { top: -7, right: -7 })} onMouseDown={(e) => { e.stopPropagation(); startDrag(e, 'tr') }} />
-          <div style={handle('sw-resize', { bottom: -7, left: -7 })} onMouseDown={(e) => { e.stopPropagation(); startDrag(e, 'bl') }} />
-          <div style={handle('se-resize', { bottom: -7, right: -7 })} onMouseDown={(e) => { e.stopPropagation(); startDrag(e, 'br') }} />
-        </div>
-      </div>
-    </div>
-  )
-}
 
 // ── Imagem cortada (preview) ─────────────────────────────────────────────────
 
@@ -189,6 +64,16 @@ export function FilesTab({ patientId, fileType, initialFiles, readOnly = false }
   // Comparação final
   const [comparing, setComparing] = useState<FileRecord[]>([])
   const [finalCrops, setFinalCrops] = useState<[CropRect, CropRect]>([{ ...FULL_CROP }, { ...FULL_CROP }])
+
+  // Montagem guardada na aba Fotos. Enquanto `montagemId` for null o próximo
+  // clique grava; depois disso o clique só baixa de novo, porque é a MESMA
+  // montagem e não uma nova. Mudar o enquadramento zera o id (ver zerarMontagem).
+  const [montagemId, setMontagemId] = useState<number | null>(null)
+  const [salvandoMontagem, setSalvandoMontagem] = useState(false)
+  const [erroMontagem, setErroMontagem] = useState<string | null>(null)
+  // O PNG já gerado fica aqui para o "tentar de novo" só repetir o POST: ele não
+  // deve desenhar nem baixar outra vez, o dono já está com o arquivo na mão.
+  const montagemPendente = useRef<{ png: Blob; thumb: Blob; dataAntes: string; dataDepois: string } | null>(null)
 
   const isPhoto = fileType === 'photo'
   const accept = isPhoto ? 'image/*' : 'image/*,application/pdf,.doc,.docx,.xls,.xlsx'
@@ -252,17 +137,54 @@ export function FilesTab({ patientId, fileType, initialFiles, readOnly = false }
     setCropPhase(false)
   }
 
+  // Esquece a montagem já guardada: o próximo clique volta a gravar. Usado ao
+  // fechar e ao voltar para o enquadramento, porque recorte diferente é outra
+  // montagem — e não uma segunda cópia da mesma.
+  function zerarMontagem() {
+    setMontagemId(null)
+    setErroMontagem(null)
+    montagemPendente.current = null
+  }
+
   function exitAll() {
     setComparing([]); setSelected([]); setCompareMode(false)
     setCropPhase(false); setCropPics([])
     setCropRects([{ ...FULL_CROP }, { ...FULL_CROP }])
     setFinalCrops([{ ...FULL_CROP }, { ...FULL_CROP }])
+    zerarMontagem()
+  }
+
+  // Só o POST. Separado do clique porque o "tentar de novo" repete apenas esta
+  // parte: a imagem já foi desenhada e já foi baixada.
+  async function guardarEmFotos(dados: NonNullable<typeof montagemPendente.current>) {
+    setSalvandoMontagem(true)
+    setErroMontagem(null)
+    try {
+      const id = await salvarMontagem({
+        png: dados.png,
+        thumb: dados.thumb,
+        identidade: 'fotos',
+        patientId,
+        dataAntes: dados.dataAntes,
+        dataDepois: dados.dataDepois,
+      })
+      setMontagemId(id)
+      montagemPendente.current = null
+    } catch (err) {
+      montagemPendente.current = dados
+      setErroMontagem(err instanceof Error ? err.message : 'Erro desconhecido')
+    } finally {
+      setSalvandoMontagem(false)
+    }
   }
 
   async function handleDownloadComparison() {
     const [a, b] = comparing
     const [cA, cB] = finalCrops
 
+    // O carregamento fica aqui, e não no módulo de montagem, porque a rota é a
+    // do paciente: `?proxy=1` faz stream do S3 pela PRÓPRIA origem, senão a
+    // imagem suja o canvas e o `toBlob` passa a lançar erro de segurança.
     const loadImageFromApi = async (id: number): Promise<HTMLImageElement> => {
       const res = await fetch(`/api/patients/${patientId}/files/${id}/download?proxy=1`)
       const blob = await res.blob()
@@ -275,85 +197,32 @@ export function FilesTab({ patientId, fileType, initialFiles, readOnly = false }
       })
     }
 
-    const loadImageFromUrl = (url: string): Promise<HTMLImageElement> =>
-      new Promise((resolve, reject) => {
-        const img = new Image()
-        img.onload = () => resolve(img)
-        img.onerror = reject
-        img.src = url
-      })
-
     try {
-      const [imgA, imgB, logoImg] = await Promise.all([
+      const [imgA, imgB] = await Promise.all([
         loadImageFromApi(a.id),
         loadImageFromApi(b.id),
-        loadImageFromUrl('/logo-dra.png'),
       ])
 
-      const GAP = 20
-      const LABEL_H = 80
-      const PADDING = 40
-      const LOGO_H = 400
-      const LOGO_GAP = 16
+      // `gerarMontagem` não confere se a imagem carregou: altura zero divide por
+      // zero e sai como Infinity, falhando lá dentro, longe daqui. A garantia é
+      // de quem chama — e cair no catch abaixo dá a mensagem que o dono entende.
+      if (!imgA.naturalWidth || !imgA.naturalHeight || !imgB.naturalWidth || !imgB.naturalHeight) {
+        throw new Error('Imagem não carregou')
+      }
 
-      // Dimensões efetivas após crop
-      const effWA = imgA.naturalWidth * cA.w
-      const effHA = imgA.naturalHeight * cA.h
-      const effWB = imgB.naturalWidth * cB.w
-      const effHB = imgB.naturalHeight * cB.h
+      const { png, thumb } = await gerarMontagem({
+        identidade: 'fotos',
+        antes: { img: imgA, recorte: cA, data: a.created_at },
+        depois: { img: imgB, recorte: cB, data: b.created_at },
+      })
 
-      const maxH = Math.max(effHA, effHB)
-      const wA = effWA * (maxH / effHA)
-      const wB = effWB * (maxH / effHB)
+      // Baixa PRIMEIRO. Se o POST falhar depois, o dono já está com a imagem na
+      // mão, que é o que ele precisa no momento.
+      baixarBlob(png, 'comparacao-antes-depois.png')
 
-      const totalW = wA + wB + GAP + PADDING * 2
-      const logoW = logoImg.naturalWidth * (LOGO_H / logoImg.naturalHeight)
-      const totalH = LOGO_H + LOGO_GAP + LABEL_H + maxH + PADDING * 2 + 24
-
-      const canvas = document.createElement('canvas')
-      canvas.width = totalW
-      canvas.height = totalH
-      const ctx = canvas.getContext('2d')!
-
-      ctx.fillStyle = '#ffffff'
-      ctx.fillRect(0, 0, totalW, totalH)
-
-      ctx.drawImage(logoImg, (totalW - logoW) / 2, PADDING, logoW, LOGO_H)
-
-      const contentTop = PADDING + LOGO_H + LOGO_GAP
-
-      ctx.fillStyle = '#374151'
-      ctx.font = 'bold 48px sans-serif'
-      ctx.textAlign = 'center'
-      ctx.fillText('ANTES', PADDING + wA / 2, contentTop + 56)
-      ctx.fillText('DEPOIS', PADDING + wA + GAP + wB / 2, contentTop + 56)
-
-      // Fotos com recorte aplicado
-      ctx.drawImage(
-        imgA,
-        cA.x * imgA.naturalWidth, cA.y * imgA.naturalHeight, effWA, effHA,
-        PADDING, contentTop + LABEL_H, wA, maxH
-      )
-      ctx.drawImage(
-        imgB,
-        cB.x * imgB.naturalWidth, cB.y * imgB.naturalHeight, effWB, effHB,
-        PADDING + wA + GAP, contentTop + LABEL_H, wB, maxH
-      )
-
-      ctx.fillStyle = '#374151'
-      ctx.font = 'bold 36px sans-serif'
-      ctx.fillText(formatDate(a.created_at), PADDING + wA / 2, contentTop + LABEL_H + maxH + 50)
-      ctx.fillText(formatDate(b.created_at), PADDING + wA + GAP + wB / 2, contentTop + LABEL_H + maxH + 50)
-
-      canvas.toBlob(blob => {
-        if (!blob) return
-        const url = URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        link.href = url
-        link.download = 'comparacao-antes-depois.png'
-        link.click()
-        URL.revokeObjectURL(url)
-      }, 'image/png')
+      if (montagemId === null) {
+        await guardarEmFotos({ png, thumb, dataAntes: a.created_at, dataDepois: b.created_at })
+      }
     } catch {
       alert('Não foi possível gerar a imagem. Tente novamente.')
     }
@@ -411,16 +280,17 @@ export function FilesTab({ patientId, fileType, initialFiles, readOnly = false }
           <h3 className="text-sm font-semibold text-gray-700">Comparação — Antes e Depois</h3>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => { setCropPhase(true); setCropPics(comparing); setCropRects(finalCrops); setComparing([]) }}
+              onClick={() => { setCropPhase(true); setCropPics(comparing); setCropRects(finalCrops); setComparing([]); zerarMontagem() }}
               className="text-sm text-gray-500 hover:text-gray-800 px-3 py-1.5 border border-gray-200 rounded-lg transition-colors"
             >
               ✂️ Ajustar recorte
             </button>
             <button
               onClick={handleDownloadComparison}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 transition-colors"
+              disabled={salvandoMontagem}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              ⬇️ Baixar montagem
+              {salvandoMontagem ? '💾 Salvando...' : '💾 Baixar e salvar em Fotos'}
             </button>
             <button
               onClick={exitAll}
@@ -430,6 +300,26 @@ export function FilesTab({ patientId, fileType, initialFiles, readOnly = false }
             </button>
           </div>
         </div>
+
+        {montagemId !== null && !erroMontagem && (
+          <p className="text-xs text-green-700">✓ Guardado na aba Fotos.</p>
+        )}
+
+        {erroMontagem && (
+          <div className="flex items-center gap-3 flex-wrap p-3 bg-amber-50 border border-amber-200 rounded-lg">
+            <p className="text-sm text-amber-800">
+              Baixado, mas não foi guardado na aba Fotos: {erroMontagem}
+            </p>
+            <button
+              onClick={() => { if (montagemPendente.current) guardarEmFotos(montagemPendente.current) }}
+              disabled={salvandoMontagem}
+              className="px-3 py-1.5 border border-amber-300 text-amber-900 text-sm font-medium rounded-lg hover:bg-amber-100 disabled:opacity-50 transition-colors"
+            >
+              Tentar de novo
+            </button>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           {comparing.map((f, i) => (
             <div key={f.id} className="space-y-1">

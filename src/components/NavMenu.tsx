@@ -18,6 +18,8 @@ export function NavMenu({ userName, isAdmin, canEstoque, canConciliacao }: Props
     ...(isAdmin ? [{ href: '/usuarios', label: 'Usuários' }] : []),
     { href: '/termos', label: 'Termos' },
     { href: '/implantes', label: 'Implantes' },
+    // Sem condição de permissão: a aba Fotos é da equipe inteira (decisão do dono).
+    { href: '/fotos', label: 'Fotos' },
     { href: '/relatorios', label: 'Relatórios' },
     // Treino é da equipe inteira; a base de conhecimento (o gabarito) é só do admin.
     { href: '/treinamento', label: 'Treinamento' },
