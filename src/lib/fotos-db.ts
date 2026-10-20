@@ -183,6 +183,18 @@ export async function listarMontagens(): Promise<Montagem[]> {
   `
 }
 
+/** As montagens de um paciente, mais recente primeiro. Devolve as colunas
+ *  inteiras; quem monta o `PortalData` escolhe o que vai para o navegador do
+ *  paciente — e manda bem menos que isto. */
+export async function listarMontagensDoPaciente(patientId: number): Promise<Montagem[]> {
+  await initSchema()
+  return sql<Montagem[]>`
+    SELECT * FROM antes_depois
+    WHERE patient_id = ${patientId} AND deleted_at IS NULL
+    ORDER BY created_at DESC
+  `
+}
+
 export async function acharMontagem(id: number): Promise<Montagem | null> {
   await initSchema()
   const [row] = await sql<Montagem[]>`

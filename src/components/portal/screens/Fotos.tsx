@@ -17,6 +17,17 @@ const proxySrc = (patientId: number, fileId: number) =>
 const downloadHref = (patientId: number, fileId: number) =>
   `/api/patients/${patientId}/files/${fileId}/download`
 
+// A montagem do paciente mora sob /api/patients/<id dele>, que e o unico
+// prefixo que o middleware libera para a sessao do portal. `thumb` na lista
+// (ele abre isso no celular, muitas vezes no 4G), `proxy` para ver inteira, e
+// sem parametro para baixar com nome de arquivo.
+const montagemThumb = (patientId: number, id: number) =>
+  `/api/patients/${patientId}/montagens/${id}/imagem?thumb=1`
+const montagemInteira = (patientId: number, id: number) =>
+  `/api/patients/${patientId}/montagens/${id}/imagem?proxy=1`
+const montagemDownload = (patientId: number, id: number) =>
+  `/api/patients/${patientId}/montagens/${id}/imagem`
+
 function dayKey(iso: string): string {
   try { const d = new Date(iso); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` } catch { return iso }
 }
@@ -99,6 +110,8 @@ const ghostBtn: React.CSSProperties = { background: C.white, color: C.soft, font
 
 export function Fotos({ data, onBack }: { data: PortalData; onBack: () => void }) {
   const [lightbox, setLightbox] = React.useState<PortalFile | null>(null)
+  // Só o id: a montagem aberta é pedida ao servidor pela URL, não guardada aqui.
+  const [montagem, setMontagem] = React.useState<number | null>(null)
   const [step, setStep] = React.useState<'gallery' | 'select' | 'crop'>('gallery')
   const [selected, setSelected] = React.useState<number[]>([])
   const [crops, setCrops] = React.useState<[CropRect, CropRect]>([{ ...FULL_CROP }, { ...FULL_CROP }])
@@ -228,6 +241,39 @@ export function Fotos({ data, onBack }: { data: PortalData; onBack: () => void }
   return (
     <div className="pt-view">
       <ScreenHeader title="Minhas fotos" subtitle="Registros da sua evolução" onBack={onBack} />
+
+      {/* Fica FORA do "nenhuma foto ainda": a montagem é o que o paciente mais
+          quer ver, e some junto com as fotos seria o pior lugar para esconder.
+          A ordem vem do servidor (mais recente primeiro) e não é reordenada
+          aqui — duas ordens para a mesma lista divergem no dia em que uma mudar. */}
+      {data.montagens.length > 0 && (
+        <div style={{ padding: '0 20px 18px' }}>
+          <div style={{ fontFamily: serif, fontSize: 15, color: C.graphiteStrong, marginBottom: 10 }}>
+            Seu antes e depois
+          </div>
+          <div style={{ display: 'grid', gap: 12 }}>
+            {data.montagens.map((m) => (
+              <div key={m.id}>
+                <button onClick={() => setMontagem(m.id)} className="pt-press" style={{
+                  cursor: 'pointer', padding: 0, border: 'none', background: C.white, width: '100%',
+                  borderRadius: 12, overflow: 'hidden', boxShadow: shadowCard, display: 'block',
+                }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={montagemThumb(data.patientId, m.id)} alt="Antes e depois"
+                    style={{ width: '100%', display: 'block' }} />
+                </button>
+                {(m.dataAntes || m.dataDepois) && (
+                  <div style={{ fontSize: 12, color: C.graphite, marginTop: 6, textAlign: 'center' }}>
+                    {m.dataAntes ? fmtDateTime(m.dataAntes) : ''}
+                    {m.dataAntes && m.dataDepois ? ' → ' : ''}
+                    {m.dataDepois ? fmtDateTime(m.dataDepois) : ''}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {data.photos.length === 0 ? (
         <EmptyState>Nenhuma foto ainda. Suas fotos de evolução aparecerão aqui.</EmptyState>
       ) : (
@@ -262,6 +308,17 @@ export function Fotos({ data, onBack }: { data: PortalData; onBack: () => void }
             ))}
           </div>
         </>
+      )}
+
+      {montagem != null && (
+        <div onClick={() => setMontagem(null)} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,.85)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={montagemInteira(data.patientId, montagem)} alt="Antes e depois" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '100%', maxHeight: '78%', objectFit: 'contain', borderRadius: 12 }} />
+          <a href={montagemDownload(data.patientId, montagem)} onClick={(e) => e.stopPropagation()} target="_blank" rel="noreferrer" style={{ marginTop: 18, background: C.gold, color: '#fff', fontWeight: 700, fontSize: 14, padding: '11px 20px', borderRadius: 999, display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
+            <IconDownload size={17} color="#fff" sw={1.7} /> Baixar
+          </a>
+          <span style={{ color: 'rgba(255,255,255,.7)', fontSize: 12, marginTop: 12 }}>Toque fora para fechar</span>
+        </div>
       )}
 
       {lightbox && (

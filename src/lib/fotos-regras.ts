@@ -112,3 +112,31 @@ export function origemDaMontagem(entrada: { patientId?: unknown; pessoaId?: unkn
     ? { patientId: paciente, pessoaId: null }
     : { patientId: null, pessoaId: pessoa as number }
 }
+
+/** O mínimo que a regra precisa olhar: serve para qualquer linha de
+ *  `antes_depois`, sem arrastar o resto das colunas para cá. */
+interface DonoDaMontagem { patient_id: number | null; pessoa_id: number | null }
+
+/**
+ * A montagem é deste paciente?
+ *
+ * Existe separada da rota porque é a única coisa que impede um paciente de ver
+ * o corpo de outro: no portal o id da montagem vai na URL e é editável, e sem
+ * esta checagem trocar o número mostraria a montagem de outra pessoa.
+ *
+ * Montagem de pasta sem card (`pessoa_id` preenchido, `patient_id` nulo) nunca
+ * pertence a um paciente, então é inalcançável por este caminho — e é por isso
+ * que a comparação é com `patient_id`, não "tem dono".
+ *
+ * Devolve um type guard para quem chama não precisar repetir a checagem de
+ * nulo: uma segunda checagem logo abaixo é exatamente o tipo de coisa que
+ * alguém "simplifica" removendo a errada.
+ */
+export function podeVerMontagem<T extends DonoDaMontagem>(
+  montagem: T | null,
+  patientId: number,
+): montagem is T {
+  if (!montagem) return false
+  if (!Number.isInteger(patientId) || patientId <= 0) return false
+  return montagem.patient_id === patientId
+}

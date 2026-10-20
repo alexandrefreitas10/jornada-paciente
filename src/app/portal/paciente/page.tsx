@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { getPatient } from '@/lib/patients'
 import { listMeasurements } from '@/lib/measurements'
 import { listPatientFiles } from '@/lib/patient-files'
+import { listarMontagensDoPaciente } from '@/lib/fotos-db'
 import { listPatientTerms } from '@/lib/patient-terms'
 import { listTabNotes } from '@/lib/tab-notes'
 import { listMovementsByPatient } from '@/lib/stock'
@@ -28,7 +29,7 @@ export default async function PortalPatientPage() {
 
   if (!(await hasAnsweredNps(patientId))) redirect('/portal/paciente/nps')
 
-  const [patient, measurements, photos, bioimpedances, exams, diets, prescriptions, prescricaoNotes, medications, terms, sessions] = await Promise.all([
+  const [patient, measurements, photos, bioimpedances, exams, diets, prescriptions, prescricaoNotes, medications, terms, sessions, montagens] = await Promise.all([
     getPatient(patientId),
     listMeasurements(patientId),
     listPatientFiles(patientId, 'photo'),
@@ -48,6 +49,9 @@ export default async function PortalPatientPage() {
       GROUP BY s.id
       ORDER BY s.created_at DESC
     `.catch(() => []),
+    // `.catch` como as vizinhas: uma montagem que não carrega não pode derrubar
+    // o portal inteiro do paciente.
+    listarMontagensDoPaciente(patientId).catch(() => []),
   ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -79,6 +83,15 @@ export default async function PortalPatientPage() {
     tasksTotal: ALL_TASK_KEYS.length,
     hasEstetica: sessions.length > 0,
     photos: pPhotos,
+    // Normaliza a data aqui, na fronteira: o postgres.js devolve `Date` em
+    // coluna TIMESTAMPTZ e o tipo do portal declara `string` (ver o AVISO no
+    // topo de `src/lib/fotos-db.ts`). Convertendo neste ponto, o tipo passa a
+    // dizer a verdade para a tela, que nunca mais precisa saber disso.
+    montagens: montagens.map(m => ({
+      id: m.id,
+      dataAntes: m.data_antes ? new Date(m.data_antes).toISOString() : null,
+      dataDepois: m.data_depois ? new Date(m.data_depois).toISOString() : null,
+    })),
     exams: pExams,
     bioimpedances: pBio,
     diets: pDiets,

@@ -48,6 +48,16 @@ export interface PortalMeasurement {
   waist_circumference: number | null
 }
 
+/** Uma montagem antes-e-depois do paciente. Leva SÓ o que a tela mostra: o id
+ *  (para pedir a imagem) e as duas datas. Chave do S3, nome gravado, autor e
+ *  identidade visual são dados internos da clínica e não viajam para o
+ *  navegador do paciente. */
+export interface PortalMontagem {
+  id: number
+  dataAntes: string | null
+  dataDepois: string | null
+}
+
 export interface PortalData {
   patientId: number
   name: string
@@ -60,6 +70,8 @@ export interface PortalData {
   tasksTotal: number
   hasEstetica: boolean
   photos: PortalFile[]
+  /** Mais recente primeiro — a ordem vem do servidor. */
+  montagens: PortalMontagem[]
   exams: PortalFile[]
   bioimpedances: PortalFile[]
   diets: PortalFile[]
