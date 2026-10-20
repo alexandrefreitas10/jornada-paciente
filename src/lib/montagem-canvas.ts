@@ -185,9 +185,40 @@ export async function salvarMontagem(entrada: {
   fd.append('dataAntes', entrada.dataAntes)
   fd.append('dataDepois', entrada.dataDepois)
 
-  const res = await fetch('/api/fotos/montagens', { method: 'POST', body: fd })
+  // Avisa o servidor de que ESTA montagem não foi guardada, qualquer que tenha
+  // sido o motivo — inclusive os que o servidor não tem como perceber sozinho
+  // (rede caindo, aba fechada no meio do envio, resposta que nunca volta).
+  // Melhor-esforço: se o aviso também falhar, segue em frente. A tarja na tela
+  // continua sendo o que o dono vê; isto é para o registro não sumir quando ele
+  // não estiver olhando.
+  const avisarFalha = (motivo: string) => {
+    try {
+      void fetch('/api/fotos/montagens/falha', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          motivo,
+          patientId: entrada.patientId ?? null,
+          pessoaId: entrada.pessoaId ?? null,
+          identidade: entrada.identidade,
+          bytes: entrada.imagem.size,
+        }),
+        keepalive: true, // sobrevive à navegação para o próximo paciente
+      }).catch(() => {})
+    } catch {}
+  }
+
+  let res: Response
+  try {
+    res = await fetch('/api/fotos/montagens', { method: 'POST', body: fd })
+  } catch (err) {
+    avisarFalha(`requisição não completou: ${err instanceof Error ? err.message : String(err)}`)
+    throw new Error('Não foi possível guardar na aba Fotos')
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
+    const motivo = body.error || `resposta ${res.status}`
+    avisarFalha(motivo)
     throw new Error(body.error || 'Não foi possível guardar na aba Fotos')
   }
   const row = await res.json()

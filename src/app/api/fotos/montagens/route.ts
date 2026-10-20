@@ -6,6 +6,7 @@ import { ErroDeRegra, origemDaMontagem } from '@/lib/fotos-regras'
 import { ehIdentidade } from '@/lib/montagem'
 import { getPatient } from '@/lib/patients'
 import { deleteFile, uploadFile } from '@/lib/s3'
+import { logSystemError } from '@/lib/system-errors'
 import { tipoDeImagemDosBytes } from '@/lib/tipos-de-imagem'
 
 // A checagem de sessão é repetida em toda rota desta aba por defesa em
@@ -30,6 +31,21 @@ export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
+  // Toda recusa é REGISTRADA, não só devolvida. Uma montagem que não grava some
+  // calada: o dono já baixou a imagem e segue para o próximo paciente, então a
+  // tarja de aviso na tela passa despercebida e, quando ele nota a falta na
+  // galeria, não sobrou rastro nenhum de qual foi nem por quê. Foi exatamente
+  // o que aconteceu no primeiro dia de uso, com 6 montagens perdidas e nenhuma
+  // pista. O `context` leva só ids e tamanhos — nunca nome de paciente.
+  const recusa = async (motivo: string, status: number, contexto: Record<string, unknown> = {}) => {
+    await logSystemError('fotos.montagem.recusada', motivo, {
+      status,
+      usuario: session.user?.name ?? null,
+      ...contexto,
+    })
+    return NextResponse.json({ error: motivo }, { status })
+  }
+
   // Corpo malformado ou truncado (conexão caindo no meio do upload de dezenas
   // de MB) faz o `formData()` lançar; sem isto é 500 vazio na cara de quem só
   // perdeu sinal.
@@ -38,7 +54,7 @@ export async function POST(req: NextRequest) {
     formData = await req.formData()
   } catch (err) {
     console.error('Erro ao ler o formulário da montagem:', err)
-    return NextResponse.json({ error: 'Não foi possível ler a imagem enviada' }, { status: 400 })
+    return recusa('Não foi possível ler a imagem enviada', 400, { etapa: 'formData' })
   }
 
   const imagem = formData.get('imagem')
@@ -52,9 +68,13 @@ export async function POST(req: NextRequest) {
   // 500 não tratado. `Blob` em vez de `File` porque é a classe base — serve
   // tanto para o `File` que o runtime entrega hoje quanto para um `Blob` puro.
   if (!(imagem instanceof Blob) || !(thumb instanceof Blob)) {
-    return NextResponse.json({ error: 'Imagem não enviada' }, { status: 400 })
+    return recusa('Imagem não enviada', 400, {
+      etapa: 'campos',
+      imagemEhBlob: imagem instanceof Blob,
+      thumbEhBlob: thumb instanceof Blob,
+    })
   }
-  if (!ehIdentidade(identidade)) return NextResponse.json({ error: 'Identidade inválida' }, { status: 400 })
+  if (!ehIdentidade(identidade)) return recusa('Identidade inválida', 400, { etapa: 'identidade' })
 
   // As datas são as de criação das duas fotos de origem, e vêm do `FormData`
   // como texto. Uma data impossível só estouraria lá embaixo, no serializador
@@ -68,7 +88,7 @@ export async function POST(req: NextRequest) {
   const antesIso = dataOuErro(dataAntes)
   const depoisIso = dataOuErro(dataDepois)
   if (antesIso === false || depoisIso === false) {
-    return NextResponse.json({ error: 'Data da foto inválida' }, { status: 400 })
+    return recusa('Data da foto inválida', 400, { etapa: 'datas' })
   }
 
   // Toda validação acontece ANTES do upload — formato do id aqui, existência
@@ -86,10 +106,13 @@ export async function POST(req: NextRequest) {
     // transformaria erro de outra natureza em 400 com mensagem enganosa. Por
     // isso também só a mensagem do nosso `ErroDeRegra` vai para a tela.
     if (err instanceof ErroDeRegra) {
-      return NextResponse.json({ error: err.message }, { status: 400 })
+      return recusa(err.message, 400, { etapa: 'origem' })
     }
     console.error('Erro ao ler a origem da montagem:', err)
-    return NextResponse.json({ error: 'Origem inválida' }, { status: 400 })
+    return recusa('Origem inválida', 400, {
+      etapa: 'origem',
+      erro: err instanceof Error ? err.message : String(err),
+    })
   }
 
   const bytesImagem = Buffer.from(await imagem.arrayBuffer())
@@ -113,10 +136,10 @@ export async function POST(req: NextRequest) {
   // assinaturas e é a mesma função que guarda o upload da foto solta — manter
   // uma segunda cópia das constantes aqui era lógica duplicada que divergiria.
   if (tipoDeImagemDosBytes(bytesImagem) !== 'image/jpeg') {
-    return NextResponse.json({ error: 'A montagem enviada não é um JPEG' }, { status: 400 })
+    return recusa('A montagem enviada não é um JPEG', 400, { etapa: 'bytes', bytes: bytesImagem.length })
   }
   if (tipoDeImagemDosBytes(bytesThumb) !== 'image/jpeg') {
-    return NextResponse.json({ error: 'A miniatura enviada não é um JPEG' }, { status: 400 })
+    return recusa('A miniatura enviada não é um JPEG', 400, { etapa: 'bytes-thumb', bytes: bytesThumb.length })
   }
 
   // Existência, e não só formato: `origemDaMontagem` valida a FORMA do id, mas
@@ -145,6 +168,13 @@ export async function POST(req: NextRequest) {
     // carrega bucket, chave e endpoint. Se a imagem subiu e a miniatura não,
     // apagar o que entrou para não deixar órfão.
     console.error('S3 upload error:', err)
+    await logSystemError('fotos.montagem.recusada', 'Falha ao subir a imagem para o S3', {
+      status: 500,
+      etapa: 's3',
+      usuario: session.user?.name ?? null,
+      bytes: bytesImagem.length,
+      erro: err instanceof Error ? err.message : String(err),
+    })
     await Promise.all([
       deleteFile(s3Key).catch(e => console.error('Erro ao apagar montagem órfã do S3:', e)),
       deleteFile(s3KeyThumb).catch(() => {}),
@@ -180,8 +210,16 @@ export async function POST(req: NextRequest) {
     // de tabela, de constraint e host/porta num `ECONNREFUSED`, e chamaria
     // incidente de infraestrutura de "culpa do cliente".
     if (err instanceof ErroDeRegra) {
-      return NextResponse.json({ error: err.message }, { status: 400 })
+      return recusa(err.message, 400, { etapa: 'gravacao', patientId: origem.patientId, pessoaId: origem.pessoaId })
     }
+    await logSystemError('fotos.montagem.recusada', 'Falha ao gravar a montagem', {
+      status: 500,
+      etapa: 'gravacao',
+      usuario: session.user?.name ?? null,
+      patientId: origem.patientId,
+      pessoaId: origem.pessoaId,
+      erro: err instanceof Error ? err.message : String(err),
+    })
     return NextResponse.json(
       { error: 'Não foi possível guardar a montagem. Tente de novo.' },
       { status: 500 },
