@@ -57,7 +57,17 @@ export async function POST(req: NextRequest) {
     return recusa('Não foi possível ler a imagem enviada', 400, { etapa: 'formData' })
   }
 
-  const imagem = formData.get('imagem')
+  // Aceita os DOIS nomes do campo da imagem. O nome mudou de `png` para
+  // `imagem` quando a montagem passou a ser guardada em JPEG, e isso quebrou
+  // toda aba que já estava aberta: o sistema é uma página que não recarrega
+  // sozinha, então o navegador do dono continuou mandando `png` contra um
+  // servidor que só procurava `imagem`, e a montagem era recusada com "Imagem
+  // não enviada" — depois de ele já ter baixado o arquivo. Aconteceu de
+  // verdade, duas vezes, minutos depois do deploy.
+  //
+  // A lição vale além deste campo: trocar o nome de um campo é mudança
+  // incompatível, e aqui o cliente antigo pode ficar horas no ar.
+  const imagem = formData.get('imagem') ?? formData.get('png')
   const thumb = formData.get('thumb')
   const identidade = formData.get('identidade')
   const dataAntes = formData.get('dataAntes')
@@ -135,8 +145,17 @@ export async function POST(req: NextRequest) {
   // `tipoDeImagemDosBytes` (de `tipos-de-imagem.ts`) já sabe reconhecer as
   // assinaturas e é a mesma função que guarda o upload da foto solta — manter
   // uma segunda cópia das constantes aqui era lógica duplicada que divergiria.
-  if (tipoDeImagemDosBytes(bytesImagem) !== 'image/jpeg') {
-    return recusa('A montagem enviada não é um JPEG', 400, { etapa: 'bytes', bytes: bytesImagem.length })
+  // JPEG é o que o cliente de hoje manda. PNG é aceito porque o cliente
+  // ANTERIOR mandava PNG, e uma aba aberta antes do deploy continua mandando —
+  // recusá-la faria o dono perder a montagem que ele acabou de baixar. A
+  // extensão e o Content-Type seguem os BYTES, nunca uma suposição: guardar um
+  // PNG com nome .jpg faz o computador do dono abrir o arquivo errado.
+  const tipoDaImagem = tipoDeImagemDosBytes(bytesImagem)
+  if (tipoDaImagem !== 'image/jpeg' && tipoDaImagem !== 'image/png') {
+    return recusa('A montagem enviada não é uma imagem JPEG ou PNG', 400, {
+      etapa: 'bytes',
+      bytes: bytesImagem.length,
+    })
   }
   if (tipoDeImagemDosBytes(bytesThumb) !== 'image/jpeg') {
     return recusa('A miniatura enviada não é um JPEG', 400, { etapa: 'bytes-thumb', bytes: bytesThumb.length })
@@ -151,17 +170,18 @@ export async function POST(req: NextRequest) {
     ? await getPatient(origem.patientId)
     : await acharPessoa(origem.pessoaId)
   if (!existe) {
-    return NextResponse.json(
-      { error: origem.patientId != null ? 'Paciente não encontrado' : 'Pasta não encontrada' },
-      { status: 400 },
+    return recusa(
+      origem.patientId != null ? 'Paciente não encontrado' : 'Pasta não encontrada',
+      400,
+      { etapa: 'existencia', patientId: origem.patientId, pessoaId: origem.pessoaId },
     )
   }
 
   const base = `antes-depois/${randomUUID()}`
-  const s3Key = `${base}.jpg`
+  const s3Key = `${base}.${tipoDaImagem === 'image/png' ? 'png' : 'jpg'}`
   const s3KeyThumb = `${base}-thumb.jpg`
   try {
-    await uploadFile(s3Key, bytesImagem, 'image/jpeg')
+    await uploadFile(s3Key, bytesImagem, tipoDaImagem)
     await uploadFile(s3KeyThumb, bytesThumb, 'image/jpeg')
   } catch (err) {
     // Detalhe no log, nunca na tela: a mensagem da biblioteca vem em inglês e
