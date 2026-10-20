@@ -51,7 +51,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   // Padrão → baixar o PNG inteiro, com nome de arquivo legível. A regex troca
   // tudo que não é letra nem número por '-', então barra, ponto, CR e LF do
   // nome não chegam ao cabeçalho Content-Disposition nem viram caminho.
-  const nomeArquivo = `antes-depois-${montagem.nome.replace(/[^\p{L}\p{N}]+/gu, '-').toLowerCase()}.png`
+  // A extensão vem da CHAVE gravada, não fixa: as montagens guardadas antes de
+  // a gravação passar a usar JPEG são PNG, e entregar um .png chamando-o de
+  // .jpg (ou o contrário) faz o sistema operacional do dono abrir o arquivo
+  // errado — ou recusar abrir.
+  const extensao = montagem.s3_key.split('.').pop()?.toLowerCase() || 'jpg'
+  const nomeArquivo = `antes-depois-${montagem.nome.replace(/[^\p{L}\p{N}]+/gu, '-').toLowerCase()}.${extensao}`
   const url = await getSignedDownloadUrlWithFilename(montagem.s3_key, nomeArquivo)
   return NextResponse.redirect(url)
 }

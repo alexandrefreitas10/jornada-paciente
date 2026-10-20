@@ -183,7 +183,7 @@ export default function Montador({ pacientes, pessoas, pessoaInicial, onPronto, 
   const [erroMontagem, setErroMontagem] = useState<string | null>(null)
   // O PNG já gerado fica aqui para o "tentar de novo" repetir SÓ o POST: ele não
   // deve desenhar nem baixar outra vez, o dono já está com o arquivo na mão.
-  const montagemPendente = useRef<{ png: Blob; thumb: Blob; dataAntes: string; dataDepois: string } | null>(null)
+  const montagemPendente = useRef<{ imagem: Blob; thumb: Blob; dataAntes: string; dataDepois: string } | null>(null)
 
   // Carrega as fotos da origem escolhida. `cancelado` descarta a resposta de uma
   // origem que o dono já trocou — senão a lista antiga chega depois e aparece
@@ -302,7 +302,7 @@ export default function Montador({ pacientes, pessoas, pessoaInicial, onPronto, 
     setErroMontagem(null)
     try {
       const id = await salvarMontagem({
-        png: dados.png,
+        imagem: dados.imagem,
         thumb: dados.thumb,
         identidade: 'fotos',
         patientId: origem.tipo === 'paciente' ? origem.id : null,
@@ -375,7 +375,7 @@ export default function Montador({ pacientes, pessoas, pessoaInicial, onPronto, 
       const dataAntes = isoDaData(a.data) ?? ''
       const dataDepois = isoDaData(b.data) ?? ''
 
-      const { png, thumb } = await gerarMontagem({
+      const { png, guardada, thumb } = await gerarMontagem({
         identidade: 'fotos', // a identidade do Instituto só sai de dentro do card de Estética
         antes: { img: imgA, recorte: recorteA, data: dataAntes },
         depois: { img: imgB, recorte: recorteB, data: dataDepois },
@@ -386,7 +386,7 @@ export default function Montador({ pacientes, pessoas, pessoaInicial, onPronto, 
       baixarBlob(png, 'comparacao-antes-depois.png')
 
       if (montagemId === null) {
-        await guardarEmFotos({ png, thumb, dataAntes, dataDepois })
+        await guardarEmFotos({ imagem: guardada, thumb, dataAntes, dataDepois })
       }
     } catch {
       setErro('Não foi possível gerar a imagem. Tente de novo.')

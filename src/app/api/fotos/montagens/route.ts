@@ -12,8 +12,12 @@ import { tipoDeImagemDosBytes } from '@/lib/tipos-de-imagem'
 // profundidade: o `proxy.ts` global já manda sessão de portal para o login do
 // portal fora de `/api/patients/<id>`, mas a rota não confia nisso.
 
-// A montagem é um PNG em tamanho cheio, de dezenas de MB — o mesmo motivo pelo
-// qual a rota de arquivos do paciente declara este limite.
+// A montagem chega em JPEG de resolução cheia (alguns MB), não no PNG que o
+// dono baixa. O PNG da mesma imagem passa de 60 MB com foto de celular inteira,
+// e o limite de corpo deste projeto é 30 MB: acima dele o Next corta o corpo em
+// SILÊNCIO, o multipart chega truncado e a gravação falha depois de o download
+// já ter acontecido. Foi o que fez 7 de 14 montagens sumirem no primeiro dia de
+// uso. Ver `QUALIDADE_GUARDADA` em `src/lib/montagem-canvas.ts`.
 export const maxDuration = 120
 
 export async function GET() {
@@ -37,17 +41,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Não foi possível ler a imagem enviada' }, { status: 400 })
   }
 
-  const png = formData.get('png')
+  const imagem = formData.get('imagem')
   const thumb = formData.get('thumb')
   const identidade = formData.get('identidade')
   const dataAntes = formData.get('dataAntes')
   const dataDepois = formData.get('dataDepois')
 
   // `instanceof Blob` e não um cast `as File`: o cast engana o TypeScript e um
-  // campo de texto chamado `png` chegaria até `arrayBuffer()`, que estoura como
+  // campo de texto chamado `imagem` chegaria até `arrayBuffer()`, que estoura como
   // 500 não tratado. `Blob` em vez de `File` porque é a classe base — serve
   // tanto para o `File` que o runtime entrega hoje quanto para um `Blob` puro.
-  if (!(png instanceof Blob) || !(thumb instanceof Blob)) {
+  if (!(imagem instanceof Blob) || !(thumb instanceof Blob)) {
     return NextResponse.json({ error: 'Imagem não enviada' }, { status: 400 })
   }
   if (!ehIdentidade(identidade)) return NextResponse.json({ error: 'Identidade inválida' }, { status: 400 })
@@ -55,7 +59,7 @@ export async function POST(req: NextRequest) {
   // As datas são as de criação das duas fotos de origem, e vêm do `FormData`
   // como texto. Uma data impossível só estouraria lá embaixo, no serializador
   // do postgres.js (`new Date(x).toISOString()` lança `RangeError`) — depois de
-  // o PNG já ter subido, deixando dois arquivos órfãos no bucket. Por isso é
+  // a imagem já ter subido, deixando dois arquivos órfãos no bucket. Por isso é
   // conferida aqui, junto das outras validações, antes de qualquer upload.
   const dataOuErro = (valor: FormDataEntryValue | null): string | null | false => {
     if (typeof valor !== 'string' || !valor) return null
@@ -68,7 +72,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Toda validação acontece ANTES do upload — formato do id aqui, existência
-  // logo abaixo: um id que passasse daqui subiria o PNG para o S3 e só então
+  // logo abaixo: um id que passasse daqui subiria a imagem para o S3 e só então
   // falharia no INSERT, deixando arquivo órfão no bucket que ninguém mais
   // referencia.
   let origem
@@ -88,12 +92,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Origem inválida' }, { status: 400 })
   }
 
-  const bytesPng = Buffer.from(await png.arrayBuffer())
+  const bytesImagem = Buffer.from(await imagem.arrayBuffer())
   const bytesThumb = Buffer.from(await thumb.arrayBuffer())
 
   // Confere a assinatura dos bytes antes de subir. O tipo é gravado fixo logo
-  // abaixo (`image/png` e `image/jpeg`), mas os BYTES vêm do cliente: um login
-  // da equipe poderia postar um SVG no campo `png`, e SVG carrega script. Como
+  // abaixo (`image/jpeg` nos dois), mas os BYTES vêm do cliente: um login
+  // da equipe poderia postar um SVG no campo `imagem`, e SVG carrega script. Como
   // a miniatura é servida inline na origem do app, um navegador que adivinhasse
   // o tipo pelo conteúdo rodaria esse script com a sessão de quem está vendo a
   // galeria. A rota de imagem fecha o outro lado com `nosniff`; aqui a garantia
@@ -108,8 +112,8 @@ export async function POST(req: NextRequest) {
   // `tipoDeImagemDosBytes` (de `tipos-de-imagem.ts`) já sabe reconhecer as
   // assinaturas e é a mesma função que guarda o upload da foto solta — manter
   // uma segunda cópia das constantes aqui era lógica duplicada que divergiria.
-  if (tipoDeImagemDosBytes(bytesPng) !== 'image/png') {
-    return NextResponse.json({ error: 'A montagem enviada não é um PNG' }, { status: 400 })
+  if (tipoDeImagemDosBytes(bytesImagem) !== 'image/jpeg') {
+    return NextResponse.json({ error: 'A montagem enviada não é um JPEG' }, { status: 400 })
   }
   if (tipoDeImagemDosBytes(bytesThumb) !== 'image/jpeg') {
     return NextResponse.json({ error: 'A miniatura enviada não é um JPEG' }, { status: 400 })
@@ -131,14 +135,14 @@ export async function POST(req: NextRequest) {
   }
 
   const base = `antes-depois/${randomUUID()}`
-  const s3Key = `${base}.png`
+  const s3Key = `${base}.jpg`
   const s3KeyThumb = `${base}-thumb.jpg`
   try {
-    await uploadFile(s3Key, bytesPng, 'image/png')
+    await uploadFile(s3Key, bytesImagem, 'image/jpeg')
     await uploadFile(s3KeyThumb, bytesThumb, 'image/jpeg')
   } catch (err) {
     // Detalhe no log, nunca na tela: a mensagem da biblioteca vem em inglês e
-    // carrega bucket, chave e endpoint. Se o PNG subiu e a miniatura não,
+    // carrega bucket, chave e endpoint. Se a imagem subiu e a miniatura não,
     // apagar o que entrou para não deixar órfão.
     console.error('S3 upload error:', err)
     await Promise.all([

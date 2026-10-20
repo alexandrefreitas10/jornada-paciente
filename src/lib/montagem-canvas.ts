@@ -44,11 +44,41 @@ export interface FotoParaMontar {
 }
 
 export interface MontagemGerada {
+  /** O que o dono baixa no clique: PNG, sem perda, exatamente como sempre foi. */
   png: Blob
+  /** O que vai para a aba Fotos: a MESMA imagem em JPEG de resolução cheia.
+   *  Ver `QUALIDADE_GUARDADA` para o porquê de não ser o PNG. */
+  guardada: Blob
   thumb: Blob
   largura: number
   altura: number
 }
+
+/**
+ * Qualidade do JPEG guardado. Alta o bastante para ser indistinguível na tela e
+ * no WhatsApp, que recomprime tudo de qualquer jeito.
+ *
+ * POR QUE NÃO GUARDAR O PNG: PNG é sem perda, e a montagem é feita de duas
+ * fotos de celular lado a lado. MEDIDO no navegador, com as dimensões reais
+ * deste fluxo: foto inteira de 3024x4032 dá um PNG de 60 MB; recorte de 70%,
+ * 29,5 MB; de 50%, 17,6 MB. O limite de corpo de requisição deste projeto é 30
+ * MB (`proxyClientMaxBodySize` em `next.config.ts`), e ao passar dele o Next
+ * **corta o corpo em silêncio** — o multipart chega truncado, a leitura falha e
+ * a montagem não é gravada, depois de o download já ter acontecido. Foi
+ * exatamente isso que fez 7 de 14 montagens sumirem no primeiro dia de uso: o
+ * limite caía no meio do jeito de enquadrar do dono, então salvava quem tinha
+ * recorte fechado e perdia quem tinha recorte aberto.
+ *
+ * O mesmo canvas em JPEG dá ~4-6 MB. Guardar foto sem perda era o formato
+ * errado para a tarefa, não um limite pequeno demais.
+ */
+const QUALIDADE_GUARDADA = 0.92
+
+/** Teto de segurança para o que vai pela requisição, bem abaixo do limite de 30
+ *  MB. Se um dia o JPEG de qualidade alta passar disto (foto gigante), a
+ *  qualidade cai em degraus até caber, em vez de a montagem sumir calada. */
+const GUARDADA_MAX_BYTES = 20 * 1024 * 1024
+const QUALIDADES_DE_RECUO = [0.85, 0.75, 0.6]
 
 export async function gerarMontagem(entrada: {
   identidade: Identidade
@@ -101,6 +131,13 @@ export async function gerarMontagem(entrada: {
 
   const png = await paraBlob(canvas, 'image/png')
 
+  // A mesma imagem, em resolução cheia, no formato que cabe na requisição.
+  let guardada = await paraBlob(canvas, 'image/jpeg', QUALIDADE_GUARDADA)
+  for (const q of QUALIDADES_DE_RECUO) {
+    if (guardada.size <= GUARDADA_MAX_BYTES) break
+    guardada = await paraBlob(canvas, 'image/jpeg', q)
+  }
+
   const escala = Math.min(1, THUMB_MAX_W / layout.largura)
   const mini = document.createElement('canvas')
   mini.width = Math.max(1, Math.round(layout.largura * escala))
@@ -111,7 +148,7 @@ export async function gerarMontagem(entrada: {
   miniCtx.drawImage(canvas, 0, 0, mini.width, mini.height)
   const thumb = await paraBlob(mini, 'image/jpeg', 0.8)
 
-  return { png, thumb, largura: layout.largura, altura: layout.altura }
+  return { png, guardada, thumb, largura: layout.largura, altura: layout.altura }
 }
 
 /** Dispara o download no navegador. Separado de `gerarMontagem` porque a tela
@@ -129,7 +166,9 @@ export function baixarBlob(blob: Blob, nomeArquivo: string): void {
 /** Sobe a montagem para a aba Fotos. Devolve o id gravado; quem chama guarda o
  *  id para o segundo clique não gravar uma segunda cópia. */
 export async function salvarMontagem(entrada: {
-  png: Blob
+  /** A montagem em JPEG de resolução cheia (`guardada` de `gerarMontagem`), não
+   *  o PNG do download: ver `QUALIDADE_GUARDADA`. */
+  imagem: Blob
   thumb: Blob
   identidade: Identidade
   patientId?: number | null
@@ -138,7 +177,7 @@ export async function salvarMontagem(entrada: {
   dataDepois: string
 }): Promise<number> {
   const fd = new FormData()
-  fd.append('png', entrada.png, 'montagem.png')
+  fd.append('imagem', entrada.imagem, 'montagem.jpg')
   fd.append('thumb', entrada.thumb, 'montagem-thumb.jpg')
   fd.append('identidade', entrada.identidade)
   if (entrada.patientId != null) fd.append('patientId', String(entrada.patientId))

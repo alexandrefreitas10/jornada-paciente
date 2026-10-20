@@ -14,9 +14,7 @@ const FOTOS = [
 jest.mock('next/navigation', () => ({ useRouter: () => ({ refresh: jest.fn() }) }))
 
 jest.mock('@/lib/montagem-canvas', () => ({
-  gerarMontagem: jest.fn().mockResolvedValue({
-    png: new Blob(['png']), thumb: new Blob(['jpg']), largura: 100, altura: 100,
-  }),
+  gerarMontagem: jest.fn(),
   baixarBlob: jest.fn(),
   salvarMontagem: jest.fn().mockResolvedValue(42),
 }))
@@ -35,8 +33,19 @@ class ImagemFalsa {
   set src(_valor: string) { setTimeout(() => this.onload?.(), 0) }
 }
 
+// Blobs distinguíveis: o segundo teste exige que o PNG vá para o download e o
+// JPEG para o servidor, e não um no lugar do outro. O retorno é definido no
+// `beforeEach`, e não na fábrica do `jest.mock`, porque a fábrica roda no
+// import do módulo — antes de qualquer `const` deste arquivo existir.
+const PNG_BAIXADO = new Blob(['conteudo-png'], { type: 'image/png' })
+const JPEG_GUARDADO = new Blob(['conteudo-jpeg'], { type: 'image/jpeg' })
+
 beforeEach(() => {
   jest.clearAllMocks()
+  canvas.gerarMontagem.mockResolvedValue({
+    png: PNG_BAIXADO, guardada: JPEG_GUARDADO, thumb: new Blob(['thumb']), largura: 100, altura: 100,
+  })
+  canvas.salvarMontagem.mockResolvedValue(42)
   global.fetch = jest.fn(async () => ({
     ok: true,
     blob: async () => new Blob(['foto']),
@@ -68,3 +77,23 @@ it('dois cliques baixam duas vezes e gravam UMA', async () => {
 
   expect(canvas.salvarMontagem).toHaveBeenCalledTimes(1)
 }, 30_000)
+
+it('baixa o PNG e manda o JPEG para o servidor, nunca o contrário', async () => {
+  // O PNG da mesma montagem passa de 60 MB com foto de celular inteira, e o
+  // limite de corpo da requisição é 30 MB: acima dele o corpo é cortado em
+  // silêncio e a montagem não grava, depois de o download já ter acontecido.
+  // Foi o que fez 7 de 14 montagens sumirem no primeiro dia de uso.
+  const user = userEvent.setup({ delay: null })
+  render(<FilesTab patientId={1} fileType="photo" initialFiles={FOTOS} />)
+
+  await user.click(screen.getByRole('button', { name: /comparar fotos/i }))
+  await user.click(screen.getByAltText('a.jpg'))
+  await user.click(screen.getByAltText('b.jpg'))
+  await user.click(screen.getByRole('button', { name: /enquadrar e comparar/i }))
+  await user.click(screen.getByRole('button', { name: /confirmar enquadramento/i }))
+  await user.click(screen.getByRole('button', { name: /baixar/i }))
+
+  await waitFor(() => expect(canvas.salvarMontagem).toHaveBeenCalledTimes(1))
+  expect(canvas.salvarMontagem.mock.calls[0][0].imagem).toBe(JPEG_GUARDADO)
+  expect(canvas.baixarBlob.mock.calls[0][0]).toBe(PNG_BAIXADO)
+}, 30000)

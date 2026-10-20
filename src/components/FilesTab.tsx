@@ -73,7 +73,7 @@ export function FilesTab({ patientId, fileType, initialFiles, readOnly = false }
   const [erroMontagem, setErroMontagem] = useState<string | null>(null)
   // O PNG já gerado fica aqui para o "tentar de novo" só repetir o POST: ele não
   // deve desenhar nem baixar outra vez, o dono já está com o arquivo na mão.
-  const montagemPendente = useRef<{ png: Blob; thumb: Blob; dataAntes: string; dataDepois: string } | null>(null)
+  const montagemPendente = useRef<{ imagem: Blob; thumb: Blob; dataAntes: string; dataDepois: string } | null>(null)
 
   const isPhoto = fileType === 'photo'
   const accept = isPhoto ? 'image/*' : 'image/*,application/pdf,.doc,.docx,.xls,.xlsx'
@@ -161,7 +161,7 @@ export function FilesTab({ patientId, fileType, initialFiles, readOnly = false }
     setErroMontagem(null)
     try {
       const id = await salvarMontagem({
-        png: dados.png,
+        imagem: dados.imagem,
         thumb: dados.thumb,
         identidade: 'fotos',
         patientId,
@@ -210,7 +210,7 @@ export function FilesTab({ patientId, fileType, initialFiles, readOnly = false }
         throw new Error('Imagem não carregou')
       }
 
-      const { png, thumb } = await gerarMontagem({
+      const { png, guardada, thumb } = await gerarMontagem({
         identidade: 'fotos',
         antes: { img: imgA, recorte: cA, data: a.created_at },
         depois: { img: imgB, recorte: cB, data: b.created_at },
@@ -221,7 +221,7 @@ export function FilesTab({ patientId, fileType, initialFiles, readOnly = false }
       baixarBlob(png, 'comparacao-antes-depois.png')
 
       if (montagemId === null) {
-        await guardarEmFotos({ png, thumb, dataAntes: a.created_at, dataDepois: b.created_at })
+        await guardarEmFotos({ imagem: guardada, thumb, dataAntes: a.created_at, dataDepois: b.created_at })
       }
     } catch {
       alert('Não foi possível gerar a imagem. Tente novamente.')

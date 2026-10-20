@@ -212,7 +212,7 @@ export function EsteticaTab({ patientId, readOnly = false }: { patientId: number
   const [erroMontagem, setErroMontagem] = useState<string | null>(null)
   // O PNG já gerado fica aqui para o "tentar de novo" repetir só o POST: o dono
   // já está com o arquivo na mão, não faz sentido desenhar e baixar outra vez.
-  const montagemPendente = useRef<{ png: Blob; thumb: Blob; dataAntes: string; dataDepois: string } | null>(null)
+  const montagemPendente = useRef<{ imagem: Blob; thumb: Blob; dataAntes: string; dataDepois: string } | null>(null)
 
   // Modal de sessão
   const [sessionModal, setSessionModal] = useState<{ session: AestheticSession; num: number } | null>(null)
@@ -432,12 +432,12 @@ export function EsteticaTab({ patientId, readOnly = false }: { patientId: number
 
   // Sobe a montagem já gerada. Nunca lança: o download já aconteceu e falhar
   // aqui não pode parecer falha de geração — só vira o aviso de "não guardado".
-  async function enviarMontagem(dados: { png: Blob; thumb: Blob; dataAntes: string; dataDepois: string }) {
+  async function enviarMontagem(dados: { imagem: Blob; thumb: Blob; dataAntes: string; dataDepois: string }) {
     setSalvandoMontagem(true)
     setErroMontagem(null)
     try {
       const id = await salvarMontagem({
-        png: dados.png, thumb: dados.thumb,
+        imagem: dados.imagem, thumb: dados.thumb,
         identidade: 'estetica',
         patientId,
         dataAntes: dados.dataAntes, dataDepois: dados.dataDepois,
@@ -475,7 +475,7 @@ export function EsteticaTab({ patientId, readOnly = false }: { patientId: number
       const [imgA, imgB] = await Promise.all([loadFromApi(a.id), loadFromApi(b.id)])
       // Identidade do Instituto (logo pequena, fontes e espaçamentos próprios).
       // A geometria mora em `montagem.ts` e está travada por teste.
-      const { png, thumb } = await gerarMontagem({
+      const { png, guardada, thumb } = await gerarMontagem({
         identidade: 'estetica',
         antes: { img: imgA, recorte: cA, data: a.created_at },
         depois: { img: imgB, recorte: cB, data: b.created_at },
@@ -483,7 +483,7 @@ export function EsteticaTab({ patientId, readOnly = false }: { patientId: number
       // Baixa PRIMEIRO: o que o dono precisa no momento é o arquivo na mão.
       baixarBlob(png, 'comparacao-estetica.png')
       if (montagemId === null) {
-        await enviarMontagem({ png, thumb, dataAntes: a.created_at, dataDepois: b.created_at })
+        await enviarMontagem({ imagem: guardada, thumb, dataAntes: a.created_at, dataDepois: b.created_at })
       }
     } catch {
       alert('Não foi possível gerar a imagem. Tente novamente.')
