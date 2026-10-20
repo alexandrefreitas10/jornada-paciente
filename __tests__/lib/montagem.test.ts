@@ -1,4 +1,4 @@
-import { calcularLayout, RECORTE_CHEIO, type Identidade, type Recorte } from '@/lib/montagem'
+import { apelidoDeArquivo, calcularLayout, RECORTE_CHEIO, type Identidade, type Recorte } from '@/lib/montagem'
 
 // Fotos de proporções diferentes, com números que dão conta redonda: a conta
 // que importa (as duas saindo com a MESMA altura) fica legível na asserção.
@@ -106,5 +106,26 @@ describe('identidade "estetica" (card › Estética, logo do Instituto)', () => 
   it('mostra só a data, sem hora, como hoje', () => {
     expect(l.textos[2].texto).toBe('10/09/2026')
     expect(l.textos[3].texto).toBe('10/10/2026')
+  })
+})
+
+describe('apelidoDeArquivo', () => {
+  it('vira um nome de arquivo legível, sem acento', () => {
+    expect(apelidoDeArquivo('José Ângelo da Silva')).toBe('jose-angelo-da-silva')
+  })
+
+  it('junta pontuação e espaço repetido num traço só', () => {
+    expect(apelidoDeArquivo('  Ana   Paula (2) ')).toBe('ana-paula-2')
+  })
+
+  it('não começa nem termina em traço', () => {
+    expect(apelidoDeArquivo('...Ana...')).toBe('ana')
+  })
+
+  it('nome que não sobra nada vira sem-nome, não arquivo oculto', () => {
+    // Arquivo começando em ponto é oculto no Windows, e nome vazio deixaria o
+    // arquivo chamado só "comparacao-antes-depois-.png".
+    expect(apelidoDeArquivo('...')).toBe('sem-nome')
+    expect(apelidoDeArquivo('')).toBe('sem-nome')
   })
 })

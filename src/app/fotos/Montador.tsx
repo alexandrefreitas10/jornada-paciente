@@ -5,6 +5,7 @@ import { CropEditor, FULL_CROP, type CropRect } from '@/components/CropEditor'
 import { chaveNome } from '@/lib/implantes'
 import { ACCEPT_IMAGENS } from '@/lib/tipos-de-imagem'
 import { baixarBlob, gerarMontagem, salvarMontagem } from '@/lib/montagem-canvas'
+import { apelidoDeArquivo } from '@/lib/montagem'
 import type { FotoAvulsa, FotoPessoa, Montagem } from '@/lib/fotos-db'
 // As funções de data vêm da tela (e não copiadas para cá) para a aba inteira
 // formatar data do mesmo jeito, com o fuso de Brasília explícito. `MontadorProps`
@@ -383,7 +384,7 @@ export default function Montador({ pacientes, pessoas, pessoaInicial, onPronto, 
 
       // Baixa PRIMEIRO. Se o POST falhar depois, o dono já está com a imagem na
       // mão, que é o que ele precisa no momento.
-      baixarBlob(png, 'comparacao-antes-depois.png')
+      baixarBlob(png, `comparacao-antes-depois-${apelidoDeArquivo(origem?.nome ?? '')}.png`)
 
       if (montagemId === null) {
         await guardarEmFotos({ imagem: guardada, thumb, dataAntes, dataDepois })

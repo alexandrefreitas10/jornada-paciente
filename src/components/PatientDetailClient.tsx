@@ -207,7 +207,7 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
           <EvolutionTab patientId={patient.id} initialMeasurements={initialMeasurements} initialEvolutionPhotos={initialEvolutionPhotos} initialPrescriptions={initialPrescriptions} currentUserName={currentUserName} readOnly={readOnly} />
         )}
         {activeTab === 'photos' && (
-          <FilesTab patientId={patient.id} fileType="photo" initialFiles={initialPhotos} readOnly={readOnly} />
+          <FilesTab patientId={patient.id} patientName={patient.name} fileType="photo" initialFiles={initialPhotos} readOnly={readOnly} />
         )}
         {activeTab === 'bioimpedance' && (
           <FilesTab patientId={patient.id} fileType="bioimpedance" initialFiles={initialBioimpedances} readOnly={readOnly} />
@@ -228,7 +228,7 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
           <MedicationsTab patientId={patient.id} patientName={patient.name} readOnly={readOnly} />
         )}
         {activeTab === 'estetica' && (
-          <EsteticaTab patientId={patient.id} readOnly={readOnly} />
+          <EsteticaTab patientId={patient.id} patientName={patient.name} readOnly={readOnly} />
         )}
         {activeTab === 'ouvidoria' && (
           <OuvidoriaTab patientId={patient.id} />

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { acharMontagem } from '@/lib/fotos-db'
+import { apelidoDeArquivo } from '@/lib/montagem'
 import { idDeCaminho } from '@/lib/fotos-regras'
 import { getFileStream, getSignedDownloadUrlWithFilename } from '@/lib/s3'
 import { contentTypeSeguro } from '@/lib/tipos-de-imagem'
@@ -56,7 +57,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   // .jpg (ou o contrário) faz o sistema operacional do dono abrir o arquivo
   // errado — ou recusar abrir.
   const extensao = montagem.s3_key.split('.').pop()?.toLowerCase() || 'jpg'
-  const nomeArquivo = `antes-depois-${montagem.nome.replace(/[^\p{L}\p{N}]+/gu, '-').toLowerCase()}.${extensao}`
+  const nomeArquivo = `antes-depois-${apelidoDeArquivo(montagem.nome)}.${extensao}`
   const url = await getSignedDownloadUrlWithFilename(montagem.s3_key, nomeArquivo)
   return NextResponse.redirect(url)
 }

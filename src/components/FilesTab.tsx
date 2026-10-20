@@ -5,6 +5,7 @@ import { NotesSection } from './NotesSection'
 import { DeletedItemsButton } from './DeletedItemsButton'
 import { CropEditor, FULL_CROP, type CropRect } from './CropEditor'
 import { baixarBlob, gerarMontagem, salvarMontagem } from '@/lib/montagem-canvas'
+import { apelidoDeArquivo } from '@/lib/montagem'
 
 interface FileRecord {
   id: number
@@ -41,12 +42,16 @@ function CroppedPreview({ url, crop, alt, fallback }: { url: string; crop: CropR
 
 interface Props {
   patientId: number
+  /** Só para nomear o arquivo baixado da montagem: sem ele, todos os
+   *  antes-e-depois caem na pasta com o mesmo nome e o dono não sabe de quem
+   *  é qual (a imagem não escreve o nome e costuma cortar o rosto). */
+  patientName?: string
   fileType: 'photo' | 'bioimpedance' | 'diet' | 'prescricao'
   initialFiles: FileRecord[]
   readOnly?: boolean
 }
 
-export function FilesTab({ patientId, fileType, initialFiles, readOnly = false }: Props) {
+export function FilesTab({ patientId, patientName, fileType, initialFiles, readOnly = false }: Props) {
   const [files, setFiles] = useState<FileRecord[]>(initialFiles)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -218,7 +223,7 @@ export function FilesTab({ patientId, fileType, initialFiles, readOnly = false }
 
       // Baixa PRIMEIRO. Se o POST falhar depois, o dono já está com a imagem na
       // mão, que é o que ele precisa no momento.
-      baixarBlob(png, 'comparacao-antes-depois.png')
+      baixarBlob(png, `comparacao-antes-depois-${apelidoDeArquivo(patientName ?? '')}.png`)
 
       if (montagemId === null) {
         await guardarEmFotos({ imagem: guardada, thumb, dataAntes: a.created_at, dataDepois: b.created_at })

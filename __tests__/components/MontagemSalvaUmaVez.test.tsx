@@ -97,3 +97,21 @@ it('baixa o PNG e manda o JPEG para o servidor, nunca o contrário', async () =>
   expect(canvas.salvarMontagem.mock.calls[0][0].imagem).toBe(JPEG_GUARDADO)
   expect(canvas.baixarBlob.mock.calls[0][0]).toBe(PNG_BAIXADO)
 }, 30000)
+
+it('nomeia o arquivo baixado com o nome do paciente', async () => {
+  // A montagem não escreve o nome na imagem e costuma cortar o rosto. Sem o
+  // nome no arquivo, 14 downloads viram 14 arquivos indistinguíveis — foi o
+  // que aconteceu com o dono quando precisou saber quais refazer.
+  const user = userEvent.setup({ delay: null })
+  render(<FilesTab patientId={1} patientName="José Ângelo da Silva" fileType="photo" initialFiles={FOTOS} />)
+
+  await user.click(screen.getByRole('button', { name: /comparar fotos/i }))
+  await user.click(screen.getByAltText('a.jpg'))
+  await user.click(screen.getByAltText('b.jpg'))
+  await user.click(screen.getByRole('button', { name: /enquadrar e comparar/i }))
+  await user.click(screen.getByRole('button', { name: /confirmar enquadramento/i }))
+  await user.click(screen.getByRole('button', { name: /baixar/i }))
+
+  await waitFor(() => expect(canvas.baixarBlob).toHaveBeenCalled())
+  expect(canvas.baixarBlob.mock.calls[0][1]).toBe('comparacao-antes-depois-jose-angelo-da-silva.png')
+}, 30000)

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, Component, type ReactNode, type ErrorInfo } from 'react'
 import { baixarBlob, gerarMontagem, salvarMontagem } from '@/lib/montagem-canvas'
+import { apelidoDeArquivo } from '@/lib/montagem'
 
 class RenderErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
   constructor(props: { children: ReactNode }) {
@@ -163,7 +164,7 @@ function CroppedPreview({ url, crop, label, fallback }: { url: string; crop: Cro
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export function EsteticaTab({ patientId, readOnly = false }: { patientId: number; readOnly?: boolean }) {
+export function EsteticaTab({ patientId, patientName, readOnly = false }: { patientId: number; patientName?: string; readOnly?: boolean }) {
   const [sessions, setSessions] = useState<AestheticSession[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -481,7 +482,7 @@ export function EsteticaTab({ patientId, readOnly = false }: { patientId: number
         depois: { img: imgB, recorte: cB, data: b.created_at },
       })
       // Baixa PRIMEIRO: o que o dono precisa no momento é o arquivo na mão.
-      baixarBlob(png, 'comparacao-estetica.png')
+      baixarBlob(png, `comparacao-estetica-${apelidoDeArquivo(patientName ?? '')}.png`)
       if (montagemId === null) {
         await enviarMontagem({ imagem: guardada, thumb, dataAntes: a.created_at, dataDepois: b.created_at })
       }

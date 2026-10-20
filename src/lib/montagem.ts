@@ -10,6 +10,30 @@
 // logo grande, Estética é a do Instituto com logo pequena. Unificar mudaria a
 // imagem que o dono manda para o paciente.
 
+/**
+ * O pedaço do nome do arquivo que diz de quem é a montagem.
+ *
+ * Existe porque o dono descobriu, do pior jeito, que o arquivo baixado não o
+ * identificava: a montagem não escreve o nome na imagem e costuma cortar o
+ * rosto, então 14 arquivos chamados `comparacao-antes-depois (N).png` eram
+ * indistinguíveis entre si. Nome no arquivo resolve sem mexer na imagem — que
+ * é o que ele manda para o paciente.
+ *
+ * Tira acento de propósito: o cabeçalho `Content-Disposition` da rota de
+ * download percent-encoda caractere fora do ASCII, e o dono via
+ * `jos%C3%A9` no lugar de `josé`. Nome que não sobra nada vira `sem-nome`,
+ * porque arquivo começando em ponto é oculto no Windows.
+ */
+export function apelidoDeArquivo(nome: string): string {
+  const apelido = (nome ?? '')
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase()
+  return apelido || 'sem-nome'
+}
+
 /** Recorte em coordenadas relativas (0–1) sobre a imagem original. */
 export interface Recorte { x: number; y: number; w: number; h: number }
 
