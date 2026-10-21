@@ -29,11 +29,12 @@ export default async function PortalPatientPage() {
 
   if (!(await hasAnsweredNps(patientId))) redirect('/portal/paciente/nps')
 
-  const [patient, measurements, photos, bioimpedances, exams, diets, prescriptions, prescricaoNotes, medications, terms, sessions, montagens] = await Promise.all([
+  const [patient, measurements, photos, bioimpedances, tabelas, exams, diets, prescriptions, prescricaoNotes, medications, terms, sessions, montagens] = await Promise.all([
     getPatient(patientId),
     listMeasurements(patientId),
     listPatientFiles(patientId, 'photo'),
     listPatientFiles(patientId, 'bioimpedance'),
+    listPatientFiles(patientId, 'evolution'),
     listPatientFiles(patientId, 'exam'),
     listPatientFiles(patientId, 'diet'),
     listPatientFiles(patientId, 'prescricao'),
@@ -63,8 +64,8 @@ export default async function PortalPatientPage() {
       url: await getSignedDownloadUrl(f.s3_key), summary: f.summary,
     })))
 
-  const [pPhotos, pBio, pExams, pDiets, pPresc] = await Promise.all([
-    withUrls(photos), withUrls(bioimpedances), withUrls(exams), withUrls(diets), withUrls(prescriptions),
+  const [pPhotos, pBio, pTabelas, pExams, pDiets, pPresc] = await Promise.all([
+    withUrls(photos), withUrls(bioimpedances), withUrls(tabelas), withUrls(exams), withUrls(diets), withUrls(prescriptions),
   ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -83,6 +84,7 @@ export default async function PortalPatientPage() {
     tasksTotal: ALL_TASK_KEYS.length,
     hasEstetica: sessions.length > 0,
     photos: pPhotos,
+    tabelas: pTabelas,
     // Normaliza a data aqui, na fronteira: o postgres.js devolve `Date` em
     // coluna TIMESTAMPTZ e o tipo do portal declara `string` (ver o AVISO no
     // topo de `src/lib/fotos-db.ts`). Convertendo neste ponto, o tipo passa a

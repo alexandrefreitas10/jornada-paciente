@@ -1,7 +1,7 @@
 // Contrato de dados do Portal do Paciente (montado no servidor e passado ao PortalApp).
 
 export type Screen =
-  | 'home' | 'fotos' | 'exames' | 'bio'
+  | 'home' | 'fotos' | 'exames' | 'bio' | 'tabela'
   | 'dieta' | 'med' | 'termos' | 'estetica' | 'prescricoes' | 'perfil' | 'ouvidoria'
 
 export interface PortalFile {
@@ -70,6 +70,9 @@ export interface PortalData {
   tasksTotal: number
   hasEstetica: boolean
   photos: PortalFile[]
+  /** Fotos da tabela de papel do Instituto, enviadas pela aba Evolução do card.
+   *  Mais recente primeiro. */
+  tabelas: PortalFile[]
   /** Mais recente primeiro — a ordem vem do servidor. */
   montagens: PortalMontagem[]
   exams: PortalFile[]

@@ -52,6 +52,9 @@ export function Home({ data, go }: { data: PortalData; go: (s: Screen) => void }
         <QA label="Fotos" tone="gold" icon={<IconCamera color={C.goldIcon} />} onClick={() => go('fotos')} />
         <QA label="Exames" tone="gold" icon={<IconFlask color={C.goldIcon} />} onClick={() => go('exames')} />
         <QA label="Bioimpedância" tone="sage" icon={<IconBars color={C.sageText} />} onClick={() => go('bio')} />
+        {/* Só para quem tem tabela enviada, como o bloco de Estética: bloco que
+            abre uma tela vazia é promessa quebrada. */}
+        {data.tabelas.length > 0 && <QA label="Minha tabela" tone="sage" icon={<IconBars color={C.sageText} />} onClick={() => go('tabela')} />}
         <QA label="Dieta" tone="gold" icon={<IconLeaf color={C.goldIcon} />} onClick={() => go('dieta')} />
         <QA label="Medicações" tone="gold" icon={<IconCapsule color={C.goldIcon} />} onClick={() => go('med')} />
         <QA label="Prescrições" tone="gold" icon={<IconDoc color={C.goldIcon} />} onClick={() => go('prescricoes')} />

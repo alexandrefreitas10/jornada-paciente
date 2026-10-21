@@ -8,6 +8,7 @@ import { Home } from './screens/Home'
 import { Fotos } from './screens/Fotos'
 import { Exames } from './screens/Exames'
 import { Bio } from './screens/Bio'
+import { Tabela } from './screens/Tabela'
 import { Dieta } from './screens/Dieta'
 import { Med } from './screens/Med'
 import { Termos } from './screens/Termos'
@@ -64,6 +65,7 @@ export function PortalApp({ data, onLogout }: { data: PortalData; onLogout: () =
           {screen === 'fotos' && <Fotos data={data} onBack={back} />}
           {screen === 'exames' && <Exames data={data} onBack={back} />}
           {screen === 'bio' && <Bio data={data} onBack={back} />}
+          {screen === 'tabela' && <Tabela data={data} onBack={back} />}
           {screen === 'dieta' && <Dieta data={data} onBack={back} />}
           {screen === 'med' && <Med data={data} onBack={back} />}
           {screen === 'termos' && <Termos data={data} onBack={back} />}
