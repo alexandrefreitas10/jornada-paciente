@@ -3,8 +3,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { RelatorioUltimaSemana } from '@/components/RelatorioUltimaSemana'
 import { EmTratamento } from './EmTratamento'
+import { Estetica } from './Estetica'
 
-type Tab = 'cards' | 'itens' | 'semana' | 'inativos' | 'concluidos' | 'fotos' | 'resumo_paciente' | 'termos' | 'em_tratamento'
+type Tab = 'cards' | 'itens' | 'semana' | 'inativos' | 'concluidos' | 'fotos' | 'resumo_paciente' | 'termos' | 'em_tratamento' | 'estetica'
 
 interface PatientOption { id: number; name: string }
 
@@ -1043,6 +1044,7 @@ export function RelatoriosClient({ patients }: { patients: PatientOption[] }) {
   const tabs: { key: Tab; label: string }[] = [
     { key: 'resumo_paciente', label: '🗒️ Resumo do Paciente' },
     { key: 'em_tratamento', label: '💊 Em tratamento' },
+    { key: 'estetica', label: '✨ Estética' },
     { key: 'termos', label: '📝 Termos' },
     { key: 'cards', label: 'Cards criados' },
     { key: 'itens', label: 'Itens enviados' },
@@ -1075,6 +1077,7 @@ export function RelatoriosClient({ patients }: { patients: PatientOption[] }) {
 
       {tab === 'resumo_paciente' && <ResumoPaciente />}
       {tab === 'em_tratamento' && <EmTratamento />}
+      {tab === 'estetica' && <Estetica />}
       {tab === 'termos' && <TermosRelatorio />}
       {tab === 'cards' && <CardsCreated />}
       {tab === 'itens' && <ItensSent patients={patients} />}
