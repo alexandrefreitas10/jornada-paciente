@@ -52,6 +52,41 @@ export function chaveProcedimento(nome: string): string {
     .replace(/[^a-z0-9]+/g, '')
 }
 
+/**
+ * Nomes diferentes que a clínica usa para o MESMO procedimento, ditos pelo
+ * dono — a chave é a grafia a ser absorvida, o valor é o nome que a aba mostra.
+ *
+ * Isto existe porque a regra automática só junta o que é igual depois de tirar
+ * acento, caixa e pontuação; `Protocolo Blindagem` e `Blindagem Capilar` são
+ * palavras diferentes e nenhuma regra de texto tem como saber que são a mesma
+ * coisa. Quem sabe é quem atende. Adivinhar por semelhança é o erro que já
+ * duplicou card neste sistema, então a junção é declarada, nunca inferida.
+ *
+ * Para juntar mais um procedimento no futuro, acrescente uma linha aqui com a
+ * grafia a absorver e o nome que deve aparecer.
+ *
+ * `Criolipolise Dinâmica` fica de fora de propósito: o dono confirmou que é
+ * técnica diferente das outras duas.
+ */
+const MESMO_PROCEDIMENTO: Record<string, string> = {
+  protocoloblindagem: 'Blindagem Capilar',
+  criolipolise: 'Criolipólise de Placas',
+}
+
+/** Os nomes canônicos, indexados pela própria chave: quando um grupo é destino
+ *  de uma junção, é este nome que a aba mostra, e não a grafia mais usada —
+ *  senão o nome escolhido pelo dono perderia para a contagem. */
+const NOME_CANONICO = new Map(
+  Object.values(MESMO_PROCEDIMENTO).map(nome => [chaveProcedimento(nome), nome]),
+)
+
+/** A chave final do procedimento, já com as junções declaradas aplicadas. */
+export function chaveAgrupada(nome: string): string {
+  const bruta = chaveProcedimento(nome)
+  const canonico = MESMO_PROCEDIMENTO[bruta]
+  return canonico ? chaveProcedimento(canonico) : bruta
+}
+
 /** Fez todas as sessões contratadas? Sem meta (zero ou ausente) nunca
  *  finaliza: não se conclui o que não tem quantidade combinada. */
 export function ehFinalizado(s: { feitas: number; totalSessoes: number }): boolean {
@@ -81,7 +116,7 @@ export function agruparPorProcedimento(sessoes: SessaoEstetica[]): GrupoProcedim
   const grupos = new Map<string, { grafias: string[]; sessoes: SessaoEstetica[] }>()
 
   for (const s of sessoes) {
-    const chave = chaveProcedimento(s.procedimento)
+    const chave = chaveAgrupada(s.procedimento)
     // Procedimento sem nome legível não vira aba: uma aba sem título seria
     // impossível de escolher e juntaria registros sem relação entre si.
     if (!chave) continue
@@ -94,7 +129,7 @@ export function agruparPorProcedimento(sessoes: SessaoEstetica[]): GrupoProcedim
   return [...grupos.entries()]
     .map(([chave, { grafias, sessoes: doGrupo }]) => ({
       chave,
-      nome: grafiaMaisUsada(grafias),
+      nome: NOME_CANONICO.get(chave) ?? grafiaMaisUsada(grafias),
       pacientes: new Set(doGrupo.map(s => s.patientId)).size,
       emAberto: doGrupo.filter(s => !ehFinalizado(s)).sort(porNome),
       finalizados: doGrupo.filter(s => ehFinalizado(s)).sort(porNome),

@@ -92,9 +92,41 @@ describe('agruparPorProcedimento', () => {
     expect(grupos.map(g => g.nome)).toEqual(['Fortalize'])
   })
 
-  it('os 15 nomes que existem hoje viram 9 procedimentos', () => {
-    // Medido na produção em 23/10/2026. Se este número mudar sem alguém ter
-    // mexido na regra, é sinal de que a normalização mudou de comportamento.
+  it('junta os nomes diferentes que o dono declarou como o mesmo procedimento', () => {
+    const grupos = agruparPorProcedimento([
+      sessao({ id: 1, patientId: 1, procedimento: 'Blindagem Capilar' }),
+      sessao({ id: 2, patientId: 2, procedimento: 'Protocolo Blindagem ' }),
+      sessao({ id: 3, patientId: 3, procedimento: 'Criolipolise ' }),
+      sessao({ id: 4, patientId: 4, procedimento: 'Criolipólise de Placas' }),
+    ])
+    expect(grupos.map(g => g.nome)).toEqual(['Blindagem Capilar', 'Criolipólise de Placas'])
+    expect(grupos[0].pacientes).toBe(2)
+    expect(grupos[1].pacientes).toBe(2)
+  })
+
+  it('o nome declarado vence a grafia mais usada', () => {
+    // Senão a escolha do dono perderia para a contagem: aqui "Criolipolise"
+    // aparece mais, mas o nome que ele quer ver é o outro.
+    const grupos = agruparPorProcedimento([
+      sessao({ id: 1, patientId: 1, procedimento: 'Criolipolise' }),
+      sessao({ id: 2, patientId: 2, procedimento: 'Criolipolise ' }),
+      sessao({ id: 3, patientId: 3, procedimento: 'Criolipólise de Placas' }),
+    ])
+    expect(grupos[0].nome).toBe('Criolipólise de Placas')
+  })
+
+  it('Criolipolise Dinâmica continua separada: é técnica diferente', () => {
+    const grupos = agruparPorProcedimento([
+      sessao({ id: 1, patientId: 1, procedimento: 'Criolipolise ' }),
+      sessao({ id: 2, patientId: 2, procedimento: 'Criolipolise Dinâmica ' }),
+    ])
+    expect(grupos).toHaveLength(2)
+  })
+
+  it('os 15 nomes que existem hoje viram 7 procedimentos', () => {
+    // Medido na produção em 23/10/2026: 9 pela regra automática, menos as 2
+    // junções que o dono declarou em 26/10. Se este número mudar sem alguém
+    // ter mexido na regra, é sinal de que a normalização mudou sozinha.
     const reais = [
       'Blindagem Capilar', 'Blindagem Capilar ', 'Blindagem capilar ',
       'T-SCULPTOR', 'T-sculptor', 'T- SCULPTOR', 'T-SCULPTOR ',
@@ -105,7 +137,7 @@ describe('agruparPorProcedimento', () => {
     const grupos = agruparPorProcedimento(
       reais.map((procedimento, i) => sessao({ id: i + 1, patientId: i + 1, procedimento })),
     )
-    expect(grupos).toHaveLength(9)
+    expect(grupos).toHaveLength(7)
   })
 })
 
