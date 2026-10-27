@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { getPatient, updatePatient, deletePatient } from '@/lib/patients'
+import { ehTipoPaciente, podeMudarTipo, tipoDe } from '@/lib/tipo-paciente'
 import { logAudit } from '@/lib/audit'
 import { validarTelefone } from '@/lib/telefone'
 
@@ -30,6 +31,21 @@ export async function PUT(request: Request, { params }: Params) {
       if (!tel.ok) return NextResponse.json({ error: tel.motivo }, { status: 400 })
       digitos = tel.digitos
     }
+    // O card guarda todo o histórico do paciente da nutrologia. Virar
+    // "estética" esconderia evolução, exames, prescrições e termos da tela —
+    // o dono foi explícito de que isso nunca deve acontecer, então é trava, e
+    // não aviso. Checado no servidor e não só na tela: aba antiga do navegador
+    // não conhece a regra.
+    if (ehTipoPaciente(tipo)) {
+      const atual = await getPatient(Number(id))
+      if (atual && !podeMudarTipo(tipoDe((atual as { tipo?: string }).tipo), tipo)) {
+        return NextResponse.json(
+          { error: 'Paciente da nutrologia não vira só estética: o card guarda o histórico dele. A aba Estética já está disponível no card.' },
+          { status: 400 },
+        )
+      }
+    }
+
     await updatePatient(Number(id), { name, tipo, start_date: start_date ?? '', duration: duration ?? '', notes: notes ?? '', phone: digitos })
 
     const session = await auth()

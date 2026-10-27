@@ -32,6 +32,9 @@ export function PatientModal({ initial, onSave, onClose, title, telefoneObrigato
     initial ?? { name: '', tipo: TIPO_PADRAO, start_date: '', duration: '', notes: '', phone: '' }
   )
   const [loading, setLoading] = useState(false)
+  // Travado quando se está EDITANDO alguém que já é da nutrologia. No cadastro
+  // novo (`initial` ausente) a escolha é sempre livre.
+  const tipoTravado = !!initial && tipoDe(initial.tipo) === 'nutrologia'
   const [error, setError] = useState('')
 
   async function handleSubmit(e: React.FormEvent) {
@@ -83,16 +86,35 @@ export function PatientModal({ initial, onSave, onClose, title, telefoneObrigato
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de atendimento</label>
-            <select
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-400"
-              value={tipoDe(form.tipo)}
-              onChange={(e) => setForm({ ...form, tipo: e.target.value })}
-            >
-              {TIPOS_PACIENTE.map(t => <option key={t} value={t}>{ROTULO_TIPO[t]}</option>)}
-            </select>
-            <p className="text-xs text-gray-500 mt-1">
-              Estética mostra no card apenas Estética e Fotos — o resto é do tratamento da nutrologia.
-            </p>
+            {/* Paciente que JÁ é da nutrologia não tem a troca oferecida: o card
+                guarda o histórico dele, e virar "estética" o esconderia da tela.
+                O servidor também recusa — isto aqui é só para a pessoa não
+                tentar e levar um erro. O caminho contrário (estética virar
+                nutrologia) continua disponível: é o funil. */}
+            {tipoTravado ? (
+              <>
+                <div className="w-full border border-gray-200 bg-gray-50 text-gray-600 rounded-lg px-3 py-2">
+                  {ROTULO_TIPO.nutrologia}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  O card guarda todo o histórico deste paciente, então ele não passa a ser só estética.
+                  A aba Estética já está disponível aqui dentro.
+                </p>
+              </>
+            ) : (
+              <>
+                <select
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-400"
+                  value={tipoDe(form.tipo)}
+                  onChange={(e) => setForm({ ...form, tipo: e.target.value })}
+                >
+                  {TIPOS_PACIENTE.map(t => <option key={t} value={t}>{ROTULO_TIPO[t]}</option>)}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Estética mostra no card apenas Estética e Fotos — o resto é do tratamento da nutrologia.
+                </p>
+              </>
+            )}
           </div>
           {/* Início e duração são do tratamento da nutrologia: para quem só faz
               estética eles ficariam vazios para sempre, e as datas que importam

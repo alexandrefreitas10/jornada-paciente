@@ -250,6 +250,7 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
           title="Editar Paciente"
           initial={{
             name: patient.name,
+            tipo,
             // Formatado: "62999551207" cru no campo parece defeito. O
             // validarTelefone tira a formatação antes de gravar.
             phone: formatarTelefone(patient.phone),

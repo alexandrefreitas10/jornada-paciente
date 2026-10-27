@@ -50,3 +50,23 @@ export function podeVerAba(tipo: TipoPaciente, aba: string): boolean {
 export function abaInicial(tipo: TipoPaciente, padraoDaNutrologia: string): string {
   return tipo === 'estetica' ? 'estetica' : padraoDaNutrologia
 }
+
+/**
+ * Pode mudar de tipo?
+ *
+ * **Estética → nutrologia: sim.** É o funil: a cliente que veio da internet
+ * fazer depilação virou paciente da Dra. Francielle, e ganha o card completo
+ * sem perder nada do que já tinha.
+ *
+ * **Nutrologia → estética: NÃO.** O dono foi explícito: "um paciente que já
+ * tenho o card eu jamais vou passar só para a estética, pois no card fica todo
+ * o histórico desse paciente, o dia que ele quiser voltar eu preciso de todas
+ * essas informações". Trocar o tipo não apaga nada, mas esconde do card as
+ * abas de evolução, exames, prescrições e termos — anos de histórico somem da
+ * tela por um clique no lugar errado. A regra dele vira trava aqui, para não
+ * depender de ninguém lembrar.
+ */
+export function podeMudarTipo(atual: TipoPaciente, novo: TipoPaciente): boolean {
+  if (atual === novo) return true
+  return !(atual === 'nutrologia' && novo === 'estetica')
+}

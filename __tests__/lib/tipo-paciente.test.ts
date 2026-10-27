@@ -1,4 +1,4 @@
-import { abaInicial, ehTipoPaciente, podeVerAba, tipoDe } from '@/lib/tipo-paciente'
+import { abaInicial, ehTipoPaciente, podeMudarTipo, podeVerAba, tipoDe } from '@/lib/tipo-paciente'
 
 describe('tipoDe', () => {
   it('linha antiga, sem tipo gravado, é da nutrologia', () => {
@@ -48,5 +48,23 @@ describe('abaInicial', () => {
   it('não muda nada para a nutrologia', () => {
     expect(abaInicial('nutrologia', 'tasks')).toBe('tasks')
     expect(abaInicial('nutrologia', 'evolution')).toBe('evolution')
+  })
+})
+
+describe('podeMudarTipo', () => {
+  it('estética vira nutrologia: é o funil de quem veio da internet', () => {
+    expect(podeMudarTipo('estetica', 'nutrologia')).toBe(true)
+  })
+
+  it('nutrologia NÃO vira estética', () => {
+    // O card guarda todo o histórico do paciente; virar estética esconderia
+    // evolução, exames, prescrições e termos por um clique no lugar errado.
+    expect(podeMudarTipo('nutrologia', 'estetica')).toBe(false)
+  })
+
+  it('manter o mesmo tipo é sempre permitido', () => {
+    // Importante: salvar uma correção de nome não pode ser recusado.
+    expect(podeMudarTipo('nutrologia', 'nutrologia')).toBe(true)
+    expect(podeMudarTipo('estetica', 'estetica')).toBe(true)
   })
 })
