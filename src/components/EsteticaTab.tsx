@@ -192,6 +192,10 @@ export function EsteticaTab({ patientId, patientName, readOnly = false }: { pati
   const [formStart, setFormStart] = useState(today())
   const [formRegion, setFormRegion] = useState('')
   const [formSaving, setFormSaving] = useState(false)
+  // Procedimento sendo editado. O formulário é o MESMO da criação: ele é
+  // lançado antes de a paciente começar, quando região e datas ainda não se
+  // sabe, então editar tem exatamente os mesmos campos.
+  const [editandoId, setEditandoId] = useState<number | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
   const [formMeasurements, setFormMeasurements] = useState<Measurement[]>([])
 
@@ -321,12 +325,45 @@ export function EsteticaTab({ patientId, patientName, readOnly = false }: { pati
     }
   }
 
+  function abrirEdicao(s: AestheticSession) {
+    setEditandoId(s.id)
+    setFormError(null)
+    setAvisoProc(null)
+    setNovoProc('')
+    setFormName(s.procedure_name)
+    setFormTotal(String(s.total_sessions))
+    const temIntervalo = !!s.intervalo_valor && !!s.intervalo_unidade
+    setFormModo(temIntervalo ? 'intervalo' : 'semana')
+    setFormPorSemana(String(s.sessions_per_week || 1))
+    setFormIntervalo(String(s.intervalo_valor || 1))
+    setFormUnidade((temIntervalo ? s.intervalo_unidade : 'semanas') as UnidadeIntervalo)
+    setFormStart(String(s.start_date).slice(0, 10))
+    // A data gravada entra como "digitada à mão": é a que vale, e não pode ser
+    // sobrescrita pelo cálculo automático só por abrir a edição.
+    setFormFimManual(String(s.end_date).slice(0, 10))
+    setFormRegion(s.region ?? '')
+    setFormMeasurements([])
+    setShowForm(true)
+  }
+
+  function limparForm() {
+    setEditandoId(null)
+    setFormName(''); setNovoProc(''); setAvisoProc(null); setFormTotal('10')
+    setFormModo('semana'); setFormPorSemana('1'); setFormIntervalo('1'); setFormUnidade('semanas')
+    setFormFimManual(null); setFormStart(today()); setFormRegion(''); setFormMeasurements([])
+  }
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
     setFormSaving(true); setFormError(null)
     try {
-      const res = await fetch(`/api/patients/${patientId}/aesthetic-sessions`, {
-        method: 'POST',
+      const editando = editandoId != null
+      const res = await fetch(
+        editando
+          ? `/api/patients/${patientId}/aesthetic-sessions/${editandoId}`
+          : `/api/patients/${patientId}/aesthetic-sessions`,
+        {
+        method: editando ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           procedure_name: formName,
@@ -346,10 +383,27 @@ export function EsteticaTab({ patientId, patientName, readOnly = false }: { pati
         }),
       })
       if (!res.ok) throw new Error((await res.json()).error || 'Erro')
-      const newSession: AestheticSession = await res.json()
-      setSessions(prev => [newSession, ...prev])
+
+      if (editando) {
+        // O PATCH devolve só `ok`: atualiza a linha na tela pelo que foi
+        // enviado, sem recarregar a lista inteira e perder o que já está aberto.
+        setSessions(prev => prev.map(s => s.id === editandoId ? {
+          ...s,
+          procedure_name: formName,
+          total_sessions: Number(formTotal),
+          sessions_per_week: formModo === 'semana' ? (Number(formPorSemana) || 1) : 1,
+          intervalo_valor: formModo === 'intervalo' ? (Number(formIntervalo) || 1) : null,
+          intervalo_unidade: formModo === 'intervalo' ? formUnidade : null,
+          start_date: formStart,
+          end_date: endDate,
+          region: formRegion || null,
+        } : s))
+      } else {
+        const newSession: AestheticSession = await res.json()
+        setSessions(prev => [newSession, ...prev])
+      }
       setShowForm(false)
-      setFormName(''); setNovoProc(''); setAvisoProc(null); setFormTotal('10'); setFormModo('semana'); setFormPorSemana('1'); setFormIntervalo('1'); setFormUnidade('semanas'); setFormFimManual(null); setFormStart(today()); setFormRegion(''); setFormMeasurements([])
+      limparForm()
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Erro')
     } finally {
@@ -628,7 +682,7 @@ export function EsteticaTab({ patientId, patientName, readOnly = false }: { pati
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-gray-700">Procedimentos Estéticos</h2>
         {!readOnly && (
-          <button onClick={() => setShowForm(v => !v)}
+          <button onClick={() => { limparForm(); setShowForm(v => !v) }}
             className="px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-xl hover:bg-violet-700 transition-colors">
             CRIAR
           </button>
@@ -638,7 +692,7 @@ export function EsteticaTab({ patientId, patientName, readOnly = false }: { pati
       {/* Formulário de criação */}
       {showForm && (
         <form onSubmit={handleCreate} className="bg-gray-50 rounded-2xl border border-gray-200 p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-gray-700">Novo procedimento</h3>
+          <h3 className="text-sm font-semibold text-gray-700">{editandoId ? 'Editar procedimento' : 'Novo procedimento'}</h3>
           <div>
             <label className="text-xs font-medium text-gray-600 block mb-1">Nome do procedimento *</label>
             <select value={formName} onChange={e => setFormName(e.target.value)} required
@@ -761,11 +815,13 @@ export function EsteticaTab({ patientId, patientName, readOnly = false }: { pati
 
           {formError && <p className="text-sm text-red-600">{formError}</p>}
           <div className="flex gap-2">
-            <button type="button" onClick={() => setShowForm(false)}
+            {/* Limpa o modo de edição junto: sem isso, cancelar uma edição e
+                clicar em CRIAR abriria o formulário com os dados do anterior. */}
+            <button type="button" onClick={() => { setShowForm(false); limparForm() }}
               className="flex-1 py-2 border border-gray-300 text-sm text-gray-600 rounded-xl hover:bg-gray-50">Cancelar</button>
             <button type="submit" disabled={formSaving || !formName}
               className="flex-1 py-2 bg-violet-600 text-white text-sm font-medium rounded-xl hover:bg-violet-700 disabled:opacity-50">
-              {formSaving ? 'Salvando...' : 'Salvar'}
+              {formSaving ? 'Salvando...' : editandoId ? 'Salvar alterações' : 'Salvar'}
             </button>
           </div>
         </form>
@@ -789,7 +845,11 @@ export function EsteticaTab({ patientId, patientName, readOnly = false }: { pati
                     {s.region && <p className="text-xs text-gray-400 mt-0.5">📍 {s.region}</p>}
                   </div>
                   {!readOnly && (
-                    <button onClick={() => handleDelete(s.id)} className="text-red-400 hover:text-red-600 text-sm shrink-0">🗑</button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button onClick={() => abrirEdicao(s)} title="Editar procedimento"
+                        className="text-violet-500 hover:text-violet-700 text-sm">✏️</button>
+                      <button onClick={() => handleDelete(s.id)} className="text-red-400 hover:text-red-600 text-sm">🗑</button>
+                    </div>
                   )}
                 </div>
 
