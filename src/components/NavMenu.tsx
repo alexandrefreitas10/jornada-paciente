@@ -33,17 +33,25 @@ export function NavMenu({ userName, isAdmin, canEstoque, canConciliacao }: Props
 
   return (
     <>
-      {/* Desktop: row de links */}
-      <div className="hidden sm:flex items-center justify-center gap-3 text-sm text-gray-600 mt-1 pb-1 flex-wrap">
-        {links.map((l, i) => (
-          <span key={l.href} className="flex items-center gap-3">
-            {i > 0 && <span className="text-gray-300">|</span>}
-            <a href={l.href} className="hover:text-violet-700 transition-colors">{l.label}</a>
-          </span>
-        ))}
-        <span className="text-gray-300">|</span>
-        <span className="truncate max-w-[140px]">{userName}</span>
-        <LogoutButton />
+      {/* Desktop. O usuário e o Sair saíram do fluxo dos links de propósito:
+          com 13 itens a linha quebra em telas de notebook, e antes era o
+          "Alexandre | Sair" que caía sozinho embaixo, parecendo defeito. Agora
+          os links quebram entre si e a identificação tem a sua própria linha,
+          de forma intencional. */}
+      <div className="hidden sm:block mt-1 pb-1">
+        <div className="flex items-center justify-center gap-x-3 gap-y-1 text-sm text-gray-600 flex-wrap">
+          {links.map((l, i) => (
+            <span key={l.href} className="flex items-center gap-3">
+              {i > 0 && <span className="text-gray-300">|</span>}
+              <a href={l.href} className="hover:text-violet-700 transition-colors">{l.label}</a>
+            </span>
+          ))}
+        </div>
+        <div className="flex items-center justify-center gap-3 text-xs text-gray-500 mt-1">
+          <span className="truncate max-w-[180px]">{userName}</span>
+          <span className="text-gray-300">|</span>
+          <LogoutButton />
+        </div>
       </div>
 
       {/* Mobile: hamburger */}

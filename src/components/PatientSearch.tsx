@@ -57,10 +57,10 @@ export function PatientSearch({ patients }: Props) {
         )}
       </div>
 
-      {/* Só aparece quando existe alguém de estética: enquanto a clínica não
-          tiver nenhum, a tela continua exatamente como sempre foi. */}
-      {contagem.estetica > 0 && (
-        <div className="flex gap-2 mb-4 flex-wrap">
+      {/* Sempre visível, a pedido do dono: o filtro também SINALIZA que os
+          cards de hoje são todos da nutrologia, o que antes não aparecia em
+          lugar nenhum da tela. */}
+      <div className="flex gap-2 mb-4 flex-wrap">
           {(['nutrologia', 'estetica', 'todos'] as const).map(t => (
             <button
               key={t}
@@ -73,8 +73,7 @@ export function PatientSearch({ patients }: Props) {
               {t === 'todos' ? 'Todos' : ROTULO_TIPO[t]} ({contagem[t]})
             </button>
           ))}
-        </div>
-      )}
+      </div>
 
       {filtered.length === 0 ? (
         <div className="text-center py-12 text-gray-400">

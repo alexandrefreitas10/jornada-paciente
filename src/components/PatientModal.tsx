@@ -54,7 +54,10 @@ export function PatientModal({ initial, onSave, onClose, title, telefoneObrigato
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+      {/* `max-h` + `overflow-y-auto`: o formulário já passa da altura da tela
+          em notebook, e sem rolagem os botões de Cancelar e Salvar ficam fora
+          do alcance — o quadro vira uma armadilha sem saída. */}
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-semibold mb-4">{title}</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
