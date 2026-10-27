@@ -3,6 +3,9 @@
 import { useState, useRef, useEffect, Component, type ReactNode, type ErrorInfo } from 'react'
 import { baixarBlob, gerarMontagem, salvarMontagem } from '@/lib/montagem-canvas'
 import { apelidoDeArquivo } from '@/lib/montagem'
+import {
+  dataDaUltimaSessao, descreverCadencia, UNIDADES, type UnidadeIntervalo,
+} from '@/lib/estetica-intervalo'
 
 class RenderErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
   constructor(props: { children: ReactNode }) {
@@ -46,6 +49,10 @@ interface AestheticSession {
   procedure_name: string
   total_sessions: number
   sessions_per_week: number
+  /** Nulo em procedimento gravado antes do intervalo existir: aí vale
+   *  `sessions_per_week` (ver `descreverCadencia`). */
+  intervalo_valor?: number | null
+  intervalo_unidade?: string | null
   start_date: string
   end_date: string
   region: string | null
@@ -73,14 +80,6 @@ function fmtDate(iso: string) {
   if (!iso) return ''
   const [y, m, d] = iso.slice(0, 10).split('-')
   return `${d}/${m}/${y}`
-}
-
-function calcEndDate(startDate: string, totalSessions: number, sessionsPerWeek: number): string {
-  const spw = Math.max(1, sessionsPerWeek)
-  const weeks = Math.ceil(totalSessions / spw)
-  const start = new Date(startDate + 'T12:00:00')
-  start.setDate(start.getDate() + weeks * 7 - 1)
-  return start.toISOString().slice(0, 10)
 }
 
 function today() {
@@ -172,7 +171,14 @@ export function EsteticaTab({ patientId, patientName, readOnly = false }: { pati
   // Form state
   const [formName, setFormName] = useState('')
   const [formTotal, setFormTotal] = useState('10')
-  const [formSpw, setFormSpw] = useState('1')
+  // "A cada N [dias/semanas/meses]". Padrão 1 semana: é o que 26 dos 33
+  // procedimentos gravados usam, então quem só faz semanal não muda a rotina.
+  const [formIntervalo, setFormIntervalo] = useState('1')
+  const [formUnidade, setFormUnidade] = useState<UnidadeIntervalo>('semanas')
+  // Data final digitada à mão. Enquanto for null, o campo acompanha a
+  // frequência; assim que o dono digita, a data passa a ser dele e nenhum
+  // ajuste em outro campo a sobrescreve.
+  const [formFimManual, setFormFimManual] = useState<string | null>(null)
   const [formStart, setFormStart] = useState(today())
   const [formRegion, setFormRegion] = useState('')
   const [formSaving, setFormSaving] = useState(false)
@@ -225,9 +231,10 @@ export function EsteticaTab({ patientId, patientName, readOnly = false }: { pati
   // Histórico expandido
   const [historyOpen, setHistoryOpen] = useState<Set<number>>(new Set())
 
-  const endDate = formStart && formTotal && formSpw
-    ? calcEndDate(formStart, Number(formTotal), Number(formSpw))
+  const fimAutomatico = formStart && formTotal && formIntervalo
+    ? dataDaUltimaSessao(formStart, Number(formTotal), Number(formIntervalo), formUnidade)
     : ''
+  const endDate = formFimManual ?? fimAutomatico
 
   useEffect(() => {
     fetch(`/api/patients/${patientId}/aesthetic-sessions`)
@@ -273,7 +280,11 @@ export function EsteticaTab({ patientId, patientName, readOnly = false }: { pati
         body: JSON.stringify({
           procedure_name: formName,
           total_sessions: Number(formTotal),
-          sessions_per_week: Number(formSpw),
+          // `sessions_per_week` continua sendo gravado porque a coluna é NOT
+          // NULL; quando o intervalo está preenchido, ele é ignorado na leitura.
+          sessions_per_week: 1,
+          intervalo_valor: Number(formIntervalo) || 1,
+          intervalo_unidade: formUnidade,
           start_date: formStart,
           end_date: endDate,
           region: formRegion || null,
@@ -284,7 +295,7 @@ export function EsteticaTab({ patientId, patientName, readOnly = false }: { pati
       const newSession: AestheticSession = await res.json()
       setSessions(prev => [newSession, ...prev])
       setShowForm(false)
-      setFormName(''); setFormTotal('10'); setFormSpw('1'); setFormStart(today()); setFormRegion(''); setFormMeasurements([])
+      setFormName(''); setFormTotal('10'); setFormIntervalo('1'); setFormUnidade('semanas'); setFormFimManual(null); setFormStart(today()); setFormRegion(''); setFormMeasurements([])
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Erro')
     } finally {
@@ -587,9 +598,15 @@ export function EsteticaTab({ patientId, patientName, readOnly = false }: { pati
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
             </div>
             <div>
-              <label className="text-xs font-medium text-gray-600 block mb-1">Sessões por semana</label>
-              <input type="number" min="1" max="7" value={formSpw} onChange={e => setFormSpw(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+              <label className="text-xs font-medium text-gray-600 block mb-1">A cada</label>
+              <div className="flex gap-2">
+                <input type="number" min="1" value={formIntervalo} onChange={e => setFormIntervalo(e.target.value)}
+                  className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+                <select value={formUnidade} onChange={e => setFormUnidade(e.target.value as UnidadeIntervalo)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+                  {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </div>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -599,9 +616,19 @@ export function EsteticaTab({ patientId, patientName, readOnly = false }: { pati
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
             </div>
             <div>
-              <label className="text-xs font-medium text-gray-600 block mb-1">Data final (automático)</label>
-              <input readOnly value={endDate ? fmtDate(endDate) : '—'}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-100 text-gray-500 cursor-not-allowed" />
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-medium text-gray-600">Data final</label>
+                {/* Só aparece depois de o dono mexer: é a saída para voltar ao
+                    automático sem ter que adivinhar qual era a data. */}
+                {formFimManual && (
+                  <button type="button" onClick={() => setFormFimManual(null)}
+                    className="text-xs text-violet-600 hover:underline">
+                    recalcular
+                  </button>
+                )}
+              </div>
+              <input type="date" value={endDate} onChange={e => setFormFimManual(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
             </div>
           </div>
           <div>
@@ -689,7 +716,7 @@ export function EsteticaTab({ patientId, patientName, readOnly = false }: { pati
                 <div className="flex gap-4 text-xs text-gray-500">
                   <span>Início: <strong className="text-gray-700">{fmtDate(s.start_date)}</strong></span>
                   <span>Término: <strong className="text-gray-700">{fmtDate(s.end_date)}</strong></span>
-                  <span>{s.sessions_per_week}×/semana</span>
+                  <span>{descreverCadencia(s)}</span>
                 </div>
 
                 {/* Progresso */}

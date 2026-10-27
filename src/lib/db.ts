@@ -317,6 +317,13 @@ async function runMigrations() {
   // Arquivamento de implantes (pacientes antigos)
   await sql.unsafe(`ALTER TABLE implants ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`).catch(() => {})
 
+  // Intervalo entre sessões de estética. ANULÁVEIS de propósito: nulo quer
+  // dizer "procedimento gravado antes desta mudança, leia sessions_per_week".
+  // É isso que permite acrescentar a cadência mensal (depilação a laser) e de
+  // 60 dias sem reescrever os 33 registros que ninguém conferiu.
+  await sql.unsafe(`ALTER TABLE aesthetic_sessions ADD COLUMN IF NOT EXISTS intervalo_valor INTEGER`).catch(() => {})
+  await sql.unsafe(`ALTER TABLE aesthetic_sessions ADD COLUMN IF NOT EXISTS intervalo_unidade TEXT`).catch(() => {})
+
   // Medidas dos procedimentos estéticos
   await sql.unsafe(`ALTER TABLE aesthetic_sessions ADD COLUMN IF NOT EXISTS initial_measurements JSONB DEFAULT '[]'`).catch(() => {})
   await sql.unsafe(`ALTER TABLE aesthetic_session_completions ADD COLUMN IF NOT EXISTS measurements JSONB DEFAULT '[]'`).catch(() => {})
