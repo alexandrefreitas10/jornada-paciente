@@ -317,6 +317,19 @@ async function runMigrations() {
   // Arquivamento de implantes (pacientes antigos)
   await sql.unsafe(`ALTER TABLE implants ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`).catch(() => {})
 
+  // A lista de procedimentos que o card oferece. `chave` é UNIQUE para a
+  // garantia de "não duplica" valer no BANCO, e não só na tela: duas pessoas
+  // cadastrando o mesmo procedimento ao mesmo tempo não podem criar dois.
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS procedimentos_esteticos (
+      id SERIAL PRIMARY KEY,
+      nome TEXT NOT NULL,
+      chave TEXT NOT NULL UNIQUE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      created_by TEXT
+    )
+  `).catch(() => {})
+
   // Intervalo entre sessões de estética. ANULÁVEIS de propósito: nulo quer
   // dizer "procedimento gravado antes desta mudança, leia sessions_per_week".
   // É isso que permite acrescentar a cadência mensal (depilação a laser) e de

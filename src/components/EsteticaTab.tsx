@@ -170,6 +170,12 @@ export function EsteticaTab({ patientId, patientName, readOnly = false }: { pati
 
   // Form state
   const [formName, setFormName] = useState('')
+  // A lista que o campo oferece. Vem do servidor para o nome gravado ser
+  // sempre uma grafia já existente — é o que acaba com a unificação manual.
+  const [procedimentos, setProcedimentos] = useState<{ id: number; nome: string }[]>([])
+  const [novoProc, setNovoProc] = useState('')
+  const [salvandoProc, setSalvandoProc] = useState(false)
+  const [avisoProc, setAvisoProc] = useState<string | null>(null)
   const [formTotal, setFormTotal] = useState('10')
   // Dois jeitos de marcar, porque são coisas diferentes no mundo real: "2x por
   // semana" não é um intervalo fixo (a clínica marca terça e quinta), e "a cada
@@ -245,6 +251,43 @@ export function EsteticaTab({ patientId, patientName, readOnly = false }: { pati
   const endDate = formFimManual ?? fimAutomatico
 
   useEffect(() => {
+    fetch('/api/procedimentos-esteticos')
+      .then(r => (r.ok ? r.json() : []))
+      .then(setProcedimentos)
+      .catch(() => setProcedimentos([]))
+  }, [])
+
+  // Cadastra um procedimento novo e já o deixa escolhido. Se o nome cair num
+  // que já existe, o servidor devolve o existente e a tela avisa — senão a
+  // pessoa não entenderia por que o nome dela virou outro.
+  async function cadastrarProcedimento() {
+    const nome = novoProc.trim()
+    if (!nome || salvandoProc) return
+    setSalvandoProc(true)
+    setAvisoProc(null)
+    try {
+      const res = await fetch('/api/procedimentos-esteticos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome }),
+      })
+      const corpo = await res.json()
+      if (!res.ok) throw new Error(corpo?.error || 'Não foi possível cadastrar.')
+      const { procedimento, jaExistia } = corpo
+      setProcedimentos(prev =>
+        prev.some(p => p.id === procedimento.id) ? prev : [...prev, procedimento].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')),
+      )
+      setFormName(procedimento.nome)
+      setNovoProc('')
+      if (jaExistia) setAvisoProc(`Esse procedimento já existia como "${procedimento.nome}" — usei o que já estava na lista.`)
+    } catch (e) {
+      setAvisoProc(e instanceof Error ? e.message : 'Não foi possível cadastrar.')
+    } finally {
+      setSalvandoProc(false)
+    }
+  }
+
+  useEffect(() => {
     fetch(`/api/patients/${patientId}/aesthetic-sessions`)
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
       .then(data => {
@@ -306,7 +349,7 @@ export function EsteticaTab({ patientId, patientName, readOnly = false }: { pati
       const newSession: AestheticSession = await res.json()
       setSessions(prev => [newSession, ...prev])
       setShowForm(false)
-      setFormName(''); setFormTotal('10'); setFormModo('semana'); setFormPorSemana('1'); setFormIntervalo('1'); setFormUnidade('semanas'); setFormFimManual(null); setFormStart(today()); setFormRegion(''); setFormMeasurements([])
+      setFormName(''); setNovoProc(''); setAvisoProc(null); setFormTotal('10'); setFormModo('semana'); setFormPorSemana('1'); setFormIntervalo('1'); setFormUnidade('semanas'); setFormFimManual(null); setFormStart(today()); setFormRegion(''); setFormMeasurements([])
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Erro')
     } finally {
@@ -598,9 +641,22 @@ export function EsteticaTab({ patientId, patientName, readOnly = false }: { pati
           <h3 className="text-sm font-semibold text-gray-700">Novo procedimento</h3>
           <div>
             <label className="text-xs font-medium text-gray-600 block mb-1">Nome do procedimento *</label>
-            <input value={formName} onChange={e => setFormName(e.target.value)} required
-              placeholder="Ex: Drenagem linfática, Radiofrequência..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            <select value={formName} onChange={e => setFormName(e.target.value)} required
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+              <option value="">Escolha o procedimento…</option>
+              {procedimentos.map(p => <option key={p.id} value={p.nome}>{p.nome}</option>)}
+            </select>
+            <div className="flex gap-2 mt-2">
+              <input value={novoProc} onChange={e => setNovoProc(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); cadastrarProcedimento() } }}
+                placeholder="Procedimento novo? Digite e clique em adicionar"
+                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+              <button type="button" onClick={cadastrarProcedimento} disabled={!novoProc.trim() || salvandoProc}
+                className="px-3 py-2 text-sm font-medium rounded-lg border border-violet-200 text-violet-700 hover:bg-violet-50 disabled:opacity-50">
+                {salvandoProc ? 'Adicionando…' : '+ Adicionar'}
+              </button>
+            </div>
+            {avisoProc && <p className="text-xs text-amber-700 mt-1">{avisoProc}</p>}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
