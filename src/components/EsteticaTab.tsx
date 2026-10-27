@@ -720,27 +720,33 @@ export function EsteticaTab({ patientId, patientName, readOnly = false }: { pati
             </div>
             <div>
               <label className="text-xs font-medium text-gray-600 block mb-1">Frequência</label>
-              <div className="flex gap-2">
-                {formModo === 'semana' ? (
-                  <input type="number" min="1" max="7" value={formPorSemana}
-                    onChange={e => setFormPorSemana(e.target.value)}
-                    className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
-                ) : (
-                  <>
-                    <input type="number" min="1" value={formIntervalo}
-                      onChange={e => setFormIntervalo(e.target.value)}
-                      className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
-                    <select value={formUnidade} onChange={e => setFormUnidade(e.target.value as UnidadeIntervalo)}
-                      className="w-28 px-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
-                      {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
-                    </select>
-                  </>
-                )}
+              {/* Empilhado: três controles lado a lado não cabem em meia
+                  largura e o último saía para fora do cartão. O modo vem
+                  primeiro porque é ele que decide o que os campos de baixo
+                  querem dizer. */}
+              <div className="flex flex-col gap-2">
                 <select value={formModo} onChange={e => setFormModo(e.target.value as 'semana' | 'intervalo')}
-                  className="flex-1 px-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+                  className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
                   <option value="semana">× por semana</option>
                   <option value="intervalo">a cada…</option>
                 </select>
+                <div className="flex gap-2">
+                  {formModo === 'semana' ? (
+                    <input type="number" min="1" max="7" value={formPorSemana}
+                      onChange={e => setFormPorSemana(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+                  ) : (
+                    <>
+                      <input type="number" min="1" value={formIntervalo}
+                        onChange={e => setFormIntervalo(e.target.value)}
+                        className="w-20 shrink-0 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+                      <select value={formUnidade} onChange={e => setFormUnidade(e.target.value as UnidadeIntervalo)}
+                        className="flex-1 min-w-0 px-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+                        {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>
