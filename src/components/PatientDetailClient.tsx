@@ -17,6 +17,7 @@ import { TermsTab } from './TermsTab'
 import { MedicationsTab } from './MedicationsTab'
 import { EsteticaTab } from './EsteticaTab'
 import { OuvidoriaTab } from './OuvidoriaTab'
+import { abaInicial, podeVerAba, ROTULO_TIPO, tipoDe } from '@/lib/tipo-paciente'
 
 const AVATAR_COLORS = [
   'bg-violet-500', 'bg-blue-500', 'bg-emerald-500',
@@ -56,15 +57,24 @@ interface Props {
 export function PatientDetailClient({ patient, initialMeasurements, initialPhotos, initialBioimpedances, initialExams, initialDiets, initialEvolutionPhotos, initialPrescriptions, initialPrescricoes = [], currentUserName, readOnly = false }: Props) {
   const [completedKeys, setCompletedKeys] = useState<string[]>(patient.completed_task_keys)
   const [editOpen, setEditOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState<Tab>(readOnly ? 'evolution' : 'tasks')
+  // Cliente só de estética não tem as abas do tratamento da nutrologia: o card
+  // precisa ABRIR numa que existe para ela, senão fica em branco.
+  const tipo = tipoDe((patient as { tipo?: string }).tipo)
+  const [activeTab, setActiveTab] = useState<Tab>(
+    abaInicial(tipo, readOnly ? 'evolution' : 'tasks') as Tab,
+  )
   const router = useRouter()
 
   const TAB_KEY = `patient-tab-${patient.id}`
 
   useEffect(() => {
     const saved = sessionStorage.getItem(TAB_KEY)
-    if (saved && !(readOnly && saved === 'tasks')) setActiveTab(saved as Tab)
-  }, [TAB_KEY, readOnly])
+    // `podeVerAba` também na volta: a aba guardada pode ser de um tipo que
+    // mudou depois, e restaurá-la deixaria o card numa aba inexistente.
+    if (saved && !(readOnly && saved === 'tasks') && podeVerAba(tipo, saved)) {
+      setActiveTab(saved as Tab)
+    }
+  }, [TAB_KEY, readOnly, tipo])
 
   function handleTabChange(tab: Tab) {
     setActiveTab(tab)
@@ -97,7 +107,7 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
     router.refresh()
   }
 
-  const tabs: { key: Tab; label: string }[] = [
+  const tabs = ([
     ...(readOnly ? [] : [{ key: 'tasks' as Tab, label: 'Tarefas' }]),
     { key: 'evolution', label: 'Evolução' },
     { key: 'photos', label: 'Fotos' },
@@ -110,7 +120,7 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
     { key: 'estetica', label: '✨ Estética' },
     // Ouvidoria só existe no portal do paciente
     ...(readOnly ? [{ key: 'ouvidoria' as Tab, label: '📣 Ouvidoria' }] : []),
-  ]
+  ] as { key: Tab; label: string }[]).filter(t => podeVerAba(tipo, t.key))
 
   return (
     <main className="max-w-2xl mx-auto px-4 py-8">

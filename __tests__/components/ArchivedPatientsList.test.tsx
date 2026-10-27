@@ -7,7 +7,7 @@ jest.mock('next/navigation', () => ({ useRouter: () => ({ refresh: jest.fn() }) 
 
 const base = {
   phone: null, start_date: '2026-07-01', duration: '12', notes: '', created_at: '2026-07-01T12:00:00.000Z',
-  created_by: 'Carlos', completed_count: 0,
+  created_by: 'Carlos', completed_count: 0, tipo: 'nutrologia',
 }
 
 const pacientes: ArchivedPatientItem[] = [

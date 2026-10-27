@@ -1,8 +1,11 @@
 import sql, { initSchema } from './db'
+import { ehTipoPaciente, tipoDe } from './tipo-paciente'
 
 export interface PatientRow {
   id: number
   name: string
+  /** 'nutrologia' ou 'estetica' — ver `src/lib/tipo-paciente.ts`. */
+  tipo: string
   phone: string | null
   start_date: string
   duration: string
@@ -27,6 +30,8 @@ export interface PatientDetail extends PatientRow {
 
 export interface PatientInput {
   name: string
+  /** Omitido = nutrologia, que é o que todo paciente existente é. */
+  tipo?: string
   /** Só dígitos, com DDD. Vazio = sem telefone. */
   phone: string
   start_date: string
@@ -90,8 +95,8 @@ export async function createPatient(input: PatientInput): Promise<number> {
   if (!input.name.trim()) throw new Error('name is required')
   await initSchema()
   const rows = await sql`
-    INSERT INTO patients (name, start_date, duration, notes, phone, created_by)
-    VALUES (${input.name.trim()}, ${input.start_date}, ${input.duration}, ${input.notes}, ${input.phone || null}, ${input.created_by ?? null})
+    INSERT INTO patients (name, start_date, duration, notes, phone, created_by, tipo)
+    VALUES (${input.name.trim()}, ${input.start_date}, ${input.duration}, ${input.notes}, ${input.phone || null}, ${input.created_by ?? null}, ${tipoDe(input.tipo)})
     RETURNING id
   `
   return rows[0].id
@@ -143,7 +148,12 @@ export async function updatePatient(id: number, input: PatientInput): Promise<vo
         -- aberta ANTES de alguém preencher o número pelo card de Em tratamento
         -- ainda carrega phone = null, e salvar o nome por ali zeraria o que
         -- acabou de ser coletado. Nada no app precisa limpar um telefone.
-        phone = COALESCE(${input.phone || null}, phone)
+        phone = COALESCE(${input.phone || null}, phone),
+        -- Mesma ideia do telefone: tipo ausente quer dizer "não mexe", não
+        -- "volta para nutrologia". Sem isso, uma aba antiga do navegador (que
+        -- não conhece o campo) converteria uma cliente de estética em paciente
+        -- da nutrologia só por salvar uma correção de nome.
+        tipo = COALESCE(${ehTipoPaciente(input.tipo) ? input.tipo : null}, tipo)
     WHERE id = ${id}
   `
 }

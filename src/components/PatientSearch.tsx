@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { PatientCard } from './PatientCard'
 import { PatientListItem } from '@/lib/patients'
+import { ROTULO_TIPO, tipoDe, type TipoPaciente } from '@/lib/tipo-paciente'
 
 interface Props {
   patients: PatientListItem[]
@@ -10,12 +11,20 @@ interface Props {
 
 export function PatientSearch({ patients }: Props) {
   const [query, setQuery] = useState('')
+  // Começa na nutrologia, que é a lista que o dono sempre viu. Quem é só
+  // estética não some: tem a própria aba, com a contagem ao lado.
+  const [tipo, setTipo] = useState<TipoPaciente | 'todos'>('nutrologia')
 
+  const contagem = {
+    todos: patients.length,
+    nutrologia: patients.filter(p => tipoDe(p.tipo) === 'nutrologia').length,
+    estetica: patients.filter(p => tipoDe(p.tipo) === 'estetica').length,
+  }
+
+  const doTipo = tipo === 'todos' ? patients : patients.filter(p => tipoDe(p.tipo) === tipo)
   const filtered = query.trim()
-    ? patients.filter((p) =>
-        p.name.toLowerCase().includes(query.toLowerCase())
-      )
-    : patients
+    ? doTipo.filter((p) => p.name.toLowerCase().includes(query.toLowerCase()))
+    : doTipo
 
   return (
     <>
@@ -47,6 +56,25 @@ export function PatientSearch({ patients }: Props) {
           </button>
         )}
       </div>
+
+      {/* Só aparece quando existe alguém de estética: enquanto a clínica não
+          tiver nenhum, a tela continua exatamente como sempre foi. */}
+      {contagem.estetica > 0 && (
+        <div className="flex gap-2 mb-4 flex-wrap">
+          {(['nutrologia', 'estetica', 'todos'] as const).map(t => (
+            <button
+              key={t}
+              onClick={() => setTipo(t)}
+              aria-pressed={tipo === t}
+              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                tipo === t ? 'bg-violet-600 text-white' : 'text-gray-600 hover:bg-gray-50 border border-gray-200'
+              }`}
+            >
+              {t === 'todos' ? 'Todos' : ROTULO_TIPO[t]} ({contagem[t]})
+            </button>
+          ))}
+        </div>
+      )}
 
       {filtered.length === 0 ? (
         <div className="text-center py-12 text-gray-400">

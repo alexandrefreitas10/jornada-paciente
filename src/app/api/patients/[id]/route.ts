@@ -17,7 +17,7 @@ export async function PUT(request: Request, { params }: Params) {
   const { id } = await params
   try {
     const body = await request.json()
-    const { name, start_date, duration, notes, phone } = body
+    const { name, start_date, duration, notes, phone , tipo } = body
     if (!name?.trim()) {
       return NextResponse.json({ error: 'Nome é obrigatório' }, { status: 400 })
     }
@@ -30,7 +30,7 @@ export async function PUT(request: Request, { params }: Params) {
       if (!tel.ok) return NextResponse.json({ error: tel.motivo }, { status: 400 })
       digitos = tel.digitos
     }
-    await updatePatient(Number(id), { name, start_date: start_date ?? '', duration: duration ?? '', notes: notes ?? '', phone: digitos })
+    await updatePatient(Number(id), { name, tipo, start_date: start_date ?? '', duration: duration ?? '', notes: notes ?? '', phone: digitos })
 
     const session = await auth()
     await logAudit({

@@ -3,9 +3,12 @@
 
 import { useState } from 'react'
 import { validarTelefone } from '@/lib/telefone'
+import { ROTULO_TIPO, TIPO_PADRAO, TIPOS_PACIENTE, tipoDe } from '@/lib/tipo-paciente'
 
 interface PatientFormData {
   name: string
+  /** 'nutrologia' (padrão) ou 'estetica'. */
+  tipo?: string
   phone: string
   start_date: string
   duration: string
@@ -26,7 +29,7 @@ interface Props {
 
 export function PatientModal({ initial, onSave, onClose, title, telefoneObrigatorio = false }: Props) {
   const [form, setForm] = useState<PatientFormData>(
-    initial ?? { name: '', start_date: '', duration: '', notes: '', phone: '' }
+    initial ?? { name: '', tipo: TIPO_PADRAO, start_date: '', duration: '', notes: '', phone: '' }
   )
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -76,6 +79,24 @@ export function PatientModal({ initial, onSave, onClose, title, telefoneObrigato
             />
           </div>
           <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de atendimento</label>
+            <select
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-400"
+              value={tipoDe(form.tipo)}
+              onChange={(e) => setForm({ ...form, tipo: e.target.value })}
+            >
+              {TIPOS_PACIENTE.map(t => <option key={t} value={t}>{ROTULO_TIPO[t]}</option>)}
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              Estética mostra no card apenas Estética e Fotos — o resto é do tratamento da nutrologia.
+            </p>
+          </div>
+          {/* Início e duração são do tratamento da nutrologia: para quem só faz
+              estética eles ficariam vazios para sempre, e as datas que importam
+              são as de cada procedimento. */}
+          {tipoDe(form.tipo) === 'nutrologia' && (
+          <>
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Data de início</label>
             <input
               type="date"
@@ -99,6 +120,8 @@ export function PatientModal({ initial, onSave, onClose, title, telefoneObrigato
               <span className="text-sm text-gray-500 whitespace-nowrap">semanas</span>
             </div>
           </div>
+          </>
+          )}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
             <textarea

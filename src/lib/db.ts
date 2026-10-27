@@ -317,6 +317,11 @@ async function runMigrations() {
   // Arquivamento de implantes (pacientes antigos)
   await sql.unsafe(`ALTER TABLE implants ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`).catch(() => {})
 
+  // De que tipo é a pessoa: 'nutrologia' (o card como sempre foi) ou
+  // 'estetica' (quem só faz procedimento estético). O DEFAULT faz os pacientes
+  // que já existem continuarem sendo da nutrologia, que é o que todos são.
+  await sql.unsafe(`ALTER TABLE patients ADD COLUMN IF NOT EXISTS tipo TEXT NOT NULL DEFAULT 'nutrologia'`).catch(() => {})
+
   // A lista de procedimentos que o card oferece. `chave` é UNIQUE para a
   // garantia de "não duplica" valer no BANCO, e não só na tela: duas pessoas
   // cadastrando o mesmo procedimento ao mesmo tempo não podem criar dois.

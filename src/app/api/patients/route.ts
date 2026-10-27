@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     const session = await auth()
     const createdBy = session?.user?.name ?? null
     const body = await request.json()
-    const { name, start_date, duration, notes, phone } = body
+    const { name, start_date, duration, notes, phone, tipo } = body
     if (!name?.trim()) {
       return NextResponse.json({ error: 'Nome é obrigatório' }, { status: 400 })
     }
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     if (!tel.ok) {
       return NextResponse.json({ error: tel.motivo }, { status: 400 })
     }
-    const id = await createPatient({ name, start_date: start_date ?? '', duration: duration ?? '', notes: notes ?? '', phone: tel.digitos, created_by: createdBy })
+    const id = await createPatient({ name, tipo, start_date: start_date ?? '', duration: duration ?? '', notes: notes ?? '', phone: tel.digitos, created_by: createdBy })
     return NextResponse.json({ id }, { status: 201 })
   } catch {
     return NextResponse.json({ error: 'Erro ao criar paciente' }, { status: 500 })
