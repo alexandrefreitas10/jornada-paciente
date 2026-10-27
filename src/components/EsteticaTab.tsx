@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, Component, type ReactNode, type ErrorInfo 
 import { baixarBlob, gerarMontagem, salvarMontagem } from '@/lib/montagem-canvas'
 import { apelidoDeArquivo } from '@/lib/montagem'
 import {
-  dataDaUltimaSessao, descreverCadencia, UNIDADES, type UnidadeIntervalo,
+  dataDaUltimaSessao, descreverCadencia, fimPorSemana, UNIDADES, type UnidadeIntervalo,
 } from '@/lib/estetica-intervalo'
 
 class RenderErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
@@ -171,8 +171,12 @@ export function EsteticaTab({ patientId, patientName, readOnly = false }: { pati
   // Form state
   const [formName, setFormName] = useState('')
   const [formTotal, setFormTotal] = useState('10')
-  // "A cada N [dias/semanas/meses]". Padrão 1 semana: é o que 26 dos 33
-  // procedimentos gravados usam, então quem só faz semanal não muda a rotina.
+  // Dois jeitos de marcar, porque são coisas diferentes no mundo real: "2x por
+  // semana" não é um intervalo fixo (a clínica marca terça e quinta), e "a cada
+  // 60 dias" não é um número por semana. Padrão "por semana", que é o que 31
+  // dos 33 procedimentos gravados usam.
+  const [formModo, setFormModo] = useState<'semana' | 'intervalo'>('semana')
+  const [formPorSemana, setFormPorSemana] = useState('1')
   const [formIntervalo, setFormIntervalo] = useState('1')
   const [formUnidade, setFormUnidade] = useState<UnidadeIntervalo>('semanas')
   // Data final digitada à mão. Enquanto for null, o campo acompanha a
@@ -231,8 +235,12 @@ export function EsteticaTab({ patientId, patientName, readOnly = false }: { pati
   // Histórico expandido
   const [historyOpen, setHistoryOpen] = useState<Set<number>>(new Set())
 
-  const fimAutomatico = formStart && formTotal && formIntervalo
-    ? dataDaUltimaSessao(formStart, Number(formTotal), Number(formIntervalo), formUnidade)
+  // Campo numérico em branco (o dono apagou para digitar outro) não pode
+  // zerar a data sugerida: vale 1 até ele terminar de digitar.
+  const fimAutomatico = formStart && formTotal
+    ? (formModo === 'semana'
+        ? fimPorSemana(formStart, Number(formTotal), Number(formPorSemana) || 1)
+        : dataDaUltimaSessao(formStart, Number(formTotal), Number(formIntervalo) || 1, formUnidade))
     : ''
   const endDate = formFimManual ?? fimAutomatico
 
@@ -282,9 +290,12 @@ export function EsteticaTab({ patientId, patientName, readOnly = false }: { pati
           total_sessions: Number(formTotal),
           // `sessions_per_week` continua sendo gravado porque a coluna é NOT
           // NULL; quando o intervalo está preenchido, ele é ignorado na leitura.
-          sessions_per_week: 1,
-          intervalo_valor: Number(formIntervalo) || 1,
-          intervalo_unidade: formUnidade,
+          // Cada modo grava no seu campo. No modo semana o intervalo vai
+          // nulo, e é isso que faz a tela continuar lendo `sessions_per_week`
+          // — o mesmo caminho dos procedimentos antigos.
+          sessions_per_week: formModo === 'semana' ? (Number(formPorSemana) || 1) : 1,
+          intervalo_valor: formModo === 'intervalo' ? (Number(formIntervalo) || 1) : null,
+          intervalo_unidade: formModo === 'intervalo' ? formUnidade : null,
           start_date: formStart,
           end_date: endDate,
           region: formRegion || null,
@@ -295,7 +306,7 @@ export function EsteticaTab({ patientId, patientName, readOnly = false }: { pati
       const newSession: AestheticSession = await res.json()
       setSessions(prev => [newSession, ...prev])
       setShowForm(false)
-      setFormName(''); setFormTotal('10'); setFormIntervalo('1'); setFormUnidade('semanas'); setFormFimManual(null); setFormStart(today()); setFormRegion(''); setFormMeasurements([])
+      setFormName(''); setFormTotal('10'); setFormModo('semana'); setFormPorSemana('1'); setFormIntervalo('1'); setFormUnidade('semanas'); setFormFimManual(null); setFormStart(today()); setFormRegion(''); setFormMeasurements([])
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Erro')
     } finally {
@@ -598,13 +609,27 @@ export function EsteticaTab({ patientId, patientName, readOnly = false }: { pati
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
             </div>
             <div>
-              <label className="text-xs font-medium text-gray-600 block mb-1">A cada</label>
+              <label className="text-xs font-medium text-gray-600 block mb-1">Frequência</label>
               <div className="flex gap-2">
-                <input type="number" min="1" value={formIntervalo} onChange={e => setFormIntervalo(e.target.value)}
-                  className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
-                <select value={formUnidade} onChange={e => setFormUnidade(e.target.value as UnidadeIntervalo)}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
-                  {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+                {formModo === 'semana' ? (
+                  <input type="number" min="1" max="7" value={formPorSemana}
+                    onChange={e => setFormPorSemana(e.target.value)}
+                    className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+                ) : (
+                  <>
+                    <input type="number" min="1" value={formIntervalo}
+                      onChange={e => setFormIntervalo(e.target.value)}
+                      className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+                    <select value={formUnidade} onChange={e => setFormUnidade(e.target.value as UnidadeIntervalo)}
+                      className="w-28 px-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+                      {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </>
+                )}
+                <select value={formModo} onChange={e => setFormModo(e.target.value as 'semana' | 'intervalo')}
+                  className="flex-1 px-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+                  <option value="semana">× por semana</option>
+                  <option value="intervalo">a cada…</option>
                 </select>
               </div>
             </div>

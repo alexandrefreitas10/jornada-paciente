@@ -1,5 +1,5 @@
 import {
-  dataDaUltimaSessao, descreverCadencia, descreverIntervalo, somarIntervalo,
+  dataDaUltimaSessao, descreverCadencia, descreverIntervalo, fimPorSemana, somarIntervalo,
 } from '@/lib/estetica-intervalo'
 
 describe('dataDaUltimaSessao', () => {
@@ -57,5 +57,22 @@ describe('descreverCadencia', () => {
   it('unidade estranha no banco não vira texto quebrado na tela', () => {
     expect(descreverCadencia({ intervalo_valor: 3, intervalo_unidade: 'luas', sessions_per_week: 1 }))
       .toBe('1×/semana')
+  })
+})
+
+describe('fimPorSemana', () => {
+  it('mantém a conta que a tela sempre usou para "N por semana"', () => {
+    // 10 sessões, 1 por semana, a partir de 27/10: fim da décima semana.
+    // Preservado de propósito — 31 dos 33 procedimentos gravados são assim.
+    expect(fimPorSemana('2026-10-27', 10, 1)).toBe('2027-01-04')
+  })
+
+  it('duas por semana terminam na metade do tempo', () => {
+    expect(fimPorSemana('2026-10-27', 10, 2)).toBe('2026-11-30')
+  })
+
+  it('número ímpar de sessões arredonda a semana para cima', () => {
+    // 5 sessões a 2 por semana são 3 semanas, não 2 e meia.
+    expect(fimPorSemana('2026-10-27', 5, 2)).toBe('2026-11-16')
   })
 })

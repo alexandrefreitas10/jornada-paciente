@@ -67,6 +67,26 @@ export function dataDaUltimaSessao(
   return somarIntervalo(inicioIso, total - 1, valor, unidade)
 }
 
+/**
+ * A data final de um procedimento marcado por SEMANA ("2x por semana").
+ *
+ * É a conta que existia antes do intervalo, preservada de propósito: 31 dos 33
+ * procedimentos gravados são deste tipo, e "2x por semana" não é um intervalo
+ * fixo — a clínica marca terça e quinta, não "a cada três dias e meio". O que
+ * esta conta devolve é o fim da última semana de tratamento, não o dia de uma
+ * sessão, e é assim que a tela sempre mostrou.
+ */
+export function fimPorSemana(inicioIso: string, totalSessoes: number, porSemana: number): string {
+  const d = new Date(`${inicioIso}T12:00:00`)
+  if (Number.isNaN(d.getTime())) return inicioIso
+  const porSem = Math.max(1, Math.floor(porSemana || 1))
+  const semanas = Math.ceil(Math.max(1, Math.floor(totalSessoes || 1)) / porSem)
+  d.setDate(d.getDate() + semanas * 7 - 1)
+  const mes = String(d.getMonth() + 1).padStart(2, '0')
+  const dia = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${mes}-${dia}`
+}
+
 const SINGULAR: Record<UnidadeIntervalo, string> = {
   dias: 'dia',
   semanas: 'semana',
