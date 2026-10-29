@@ -16,7 +16,10 @@ export async function listarSessoesEstetica(): Promise<SessaoEstetica[]> {
       s.total_sessions      AS "totalSessoes",
       COUNT(c.id)::int      AS feitas,
       s.start_date          AS inicio,
-      MAX(c.completed_at)   AS "ultimaFeita"
+      MAX(c.completed_at)   AS "ultimaFeita",
+      s.sessions_per_week,
+      s.intervalo_valor,
+      s.intervalo_unidade
     FROM aesthetic_sessions s
     JOIN patients p ON p.id = s.patient_id
     LEFT JOIN aesthetic_session_completions c ON c.aesthetic_session_id = s.id

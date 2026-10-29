@@ -8,7 +8,8 @@ import {
 const sessao = (over: Partial<SessaoEstetica>): SessaoEstetica => ({
   id: 1, patientId: 1, patientName: 'Fulana de Tal',
   procedimento: 'T-SCULPTOR', totalSessoes: 6, feitas: 0,
-  inicio: '2026-09-01', ultimaFeita: null, ...over,
+  inicio: '2026-09-01', ultimaFeita: null,
+  sessions_per_week: 1, intervalo_valor: null, intervalo_unidade: null, ...over,
 })
 
 describe('chaveProcedimento', () => {

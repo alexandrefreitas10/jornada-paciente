@@ -15,6 +15,12 @@ export interface SessaoEstetica {
   inicio: string | null
   /** `completed_at` da última sessão realizada, ou null. */
   ultimaFeita: string | null
+  /** A cadência combinada, nos dois formatos que existem (ver
+   *  `estetica-intervalo.ts`). Usada para saber de quantos em quantos dias a
+   *  pessoa deveria vir. */
+  sessions_per_week: number | null
+  intervalo_valor: number | null
+  intervalo_unidade: string | null
 }
 
 export interface GrupoProcedimento {
