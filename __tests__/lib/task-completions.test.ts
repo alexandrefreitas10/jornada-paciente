@@ -25,6 +25,13 @@ describe.skip('task-completions (desligada: precisa de Postgres local)', () => {
     // Ida e volta, que é o que a tela faz a cada clique na caixinha.
   })
 
+  it('funciona na primeira chamada do processo, sem outra rota ter migrado antes', () => {
+    // É o caso que mais interessa justamente para esta suíte: contra um
+    // Postgres local recém-criado, marcar tarefa é a primeira consulta que
+    // acontece. Sem o `initSchema()` que faltava na lib, a tabela
+    // `task_completions` nem existiria ainda.
+  })
+
   it('a marcação é por (paciente, tarefa): desmarcar de um não afeta o outro', () => {
     // Os dois filtros do `WHERE` juntos. Se um dia alguém esquecer o
     // `patient_id`, desmarcar uma tarefa a apagaria de todos os pacientes.
