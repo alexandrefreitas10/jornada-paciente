@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getTermByToken } from '@/lib/patient-terms'
 import { getFileStream } from '@/lib/s3'
+import { cabecalhosDeArquivo, espiarInicio } from '@/lib/entrega-de-arquivo'
 
 export async function GET(
   req: NextRequest,
@@ -20,12 +21,22 @@ export async function GET(
       return NextResponse.json({ error: 'Arquivo não encontrado' }, { status: 404 })
     }
 
-    const { body, contentType } = await getFileStream(s3Key)
-    return new NextResponse(body, {
-      headers: {
-        'Content-Type': contentType,
-        'Content-Disposition': `inline; filename="${fileName}"`,
-      },
+    const { body } = await getFileStream(s3Key)
+
+    // Mesma trava das rotas de arquivo de paciente, e aqui ela pesa mais: esta
+    // rota é alcançável SEM LOGIN — o token basta, e o middleware a libera.
+    // Servia o Content-Type gravado no S3, inline, na nossa origem, então um
+    // termo gravado como `image/svg+xml` executaria script no navegador de
+    // quem abrisse o link para assinar.
+    //
+    // O nome do arquivo também entrava cru no cabeçalho; um CR/LF em
+    // `file_name` injetava cabeçalho. `cabecalhosDeArquivo` higieniza.
+    //
+    // PDF continua inline porque a página de assinatura o mostra num
+    // `<iframe>`: sem isso o paciente não leria o termo antes de assinar.
+    const { primeirosBytes, corpo } = await espiarInicio(body)
+    return new NextResponse(corpo, {
+      headers: { ...cabecalhosDeArquivo(primeirosBytes, fileName) },
     })
   } catch (err) {
     console.error('[download file error]', err)
