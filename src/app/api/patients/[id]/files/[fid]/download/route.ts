@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getFileById } from '@/lib/patient-files'
 import { ownsResource } from '@/lib/authz'
 import { getSignedDownloadUrlWithFilename, getFileStream } from '@/lib/s3'
+import { cabecalhosDeArquivo, espiarInicio } from '@/lib/entrega-de-arquivo'
 
 export async function GET(
   req: NextRequest,
@@ -16,10 +17,20 @@ export async function GET(
 
   // ?proxy=1 → stream direto (usado pelo canvas para evitar CORS)
   if (req.nextUrl.searchParams.get('proxy') === '1') {
-    const { body, contentType } = await getFileStream(file.s3_key)
-    return new NextResponse(body, {
+    const { body } = await getFileStream(file.s3_key)
+
+    // O Content-Type GRAVADO no S3 não é usado: ele veio do cliente no upload,
+    // e há arquivo antigo gravado com tipo arbitrário — inclusive foto cujo
+    // `file.type` chegou vazio do celular. Quem decide são os bytes.
+    //
+    // Isto é servido INLINE na PRÓPRIA ORIGEM do sistema, que é o que torna o
+    // tipo perigoso: um `image/svg+xml` aqui executaria o script de dentro do
+    // SVG com a sessão de quem abriu — escalada de um login da equipe para o
+    // do dono. Ver `entrega-de-arquivo.ts`.
+    const { primeirosBytes, corpo } = await espiarInicio(body)
+    return new NextResponse(corpo, {
       headers: {
-        'Content-Type': contentType,
+        ...cabecalhosDeArquivo(primeirosBytes, file.original_name),
         'Cache-Control': 'private, max-age=60',
       },
     })
