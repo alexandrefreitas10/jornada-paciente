@@ -1,18 +1,19 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { createPortal, flushSync } from 'react-dom'
 import Link from 'next/link'
 import {
   agruparPorProcedimento, type GrupoProcedimento, type SessaoEstetica,
 } from '@/lib/estetica-relatorio'
 import {
-  filtrarAtrasos, montarAtrasos,
+  filtrarAtrasos, montarAtrasos, FILTRO_ROTULO,
   type EtiquetaAtraso, type FiltroAtraso, type LinhaAtraso,
 } from '@/lib/estetica-atraso'
 import { descreverCadencia } from '@/lib/estetica-intervalo'
 import { fmtDiaPuro, fmtInstante } from '@/lib/datas'
 import { EsteticaImpressao } from './EsteticaImpressao'
+import { nomeDoRelatorio } from './nome-do-relatorio'
 
 // Relatórios › Estética: uma sub-aba por procedimento, com quem ainda tem
 // sessão a fazer e quem já terminou.
@@ -72,12 +73,9 @@ const ROTULOS: Record<EtiquetaAtraso, string> = {
   nunca_veio: 'nunca veio',
 }
 
-const FILTROS: { key: FiltroAtraso; label: string }[] = [
-  { key: 'atrasados', label: 'Atrasados' },
-  { key: 'nunca_veio', label: 'Nunca veio' },
-  { key: 'em_dia', label: 'Em dia' },
-  { key: 'todos', label: 'Todos' },
-]
+// A ORDEM dos botões é desta lista; o texto de cada um vem de
+// `FILTRO_ROTULO`, para a tela, o papel e o nome do arquivo nunca divergirem.
+const FILTROS: FiltroAtraso[] = ['atrasados', 'nunca_veio', 'em_dia', 'todos']
 
 function LinhaDeAtraso({ l }: { l: LinhaAtraso }) {
   return (
@@ -110,6 +108,8 @@ export function Estetica() {
   const [escolhido, setEscolhido] = useState<string | null>(null)
   const [visao, setVisao] = useState<'procedimento' | 'atraso'>('procedimento')
   const [filtro, setFiltro] = useState<FiltroAtraso>('atrasados')
+  // O carimbo do papel é o momento de IMPRIMIR, não o de abrir a aba.
+  const [emitidoEm, setEmitidoEm] = useState(() => new Date())
   // O portal só pode ser criado no navegador; no servidor não há `document`.
   const [montado, setMontado] = useState(false)
   useEffect(() => setMontado(true), [])
@@ -146,6 +146,20 @@ export function Estetica() {
   // A sub-aba escolhida é guardada pela CHAVE, não pela posição: entrar um
   // procedimento novo não pode trocar o que está aberto na tela.
   const atual = grupos.find(g => g.chave === escolhido) ?? grupos[0]
+
+  function imprimir() {
+    const agora = new Date()
+    // `window.print()` é síncrono e fotografa o DOM no instante da chamada.
+    // Sem forçar a pintura antes, o papel sairia carimbado com a hora em que a
+    // aba foi aberta, e não com a de quem clicou agora.
+    flushSync(() => setEmitidoEm(agora))
+    // O Chrome usa o título da página como nome do PDF salvo. Sem isto, dois
+    // relatórios diferentes nasciam os dois com o nome do sistema. O título
+    // volta ao normal depois para a aba do navegador não ficar renomeada.
+    const titulo = document.title
+    document.title = nomeDoRelatorio({ visao, grupo: atual?.nome ?? null, filtro, quando: agora })
+    try { window.print() } finally { document.title = titulo }
+  }
 
   if (erro) return <p className="text-sm text-red-600">{erro}</p>
   if (sessoes === null) return <p className="text-sm text-gray-500">Carregando…</p>
@@ -192,7 +206,7 @@ export function Estetica() {
           </button>
         ))}
         <button
-          onClick={() => window.print()}
+          onClick={imprimir}
           className="ml-auto px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
         >
           🖨️ Imprimir / Salvar PDF
@@ -204,14 +218,14 @@ export function Estetica() {
           <div className="flex gap-2 flex-wrap mb-4">
             {FILTROS.map(f => (
               <button
-                key={f.key}
-                onClick={() => setFiltro(f.key)}
-                aria-pressed={filtro === f.key}
+                key={f}
+                onClick={() => setFiltro(f)}
+                aria-pressed={filtro === f}
                 className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                  filtro === f.key ? 'bg-violet-600 text-white' : 'text-gray-600 hover:bg-gray-50 border border-gray-200'
+                  filtro === f ? 'bg-violet-600 text-white' : 'text-gray-600 hover:bg-gray-50 border border-gray-200'
                 }`}
               >
-                {`${f.label} (${contagem[f.key]})`}
+                {`${FILTRO_ROTULO[f]} (${contagem[f]})`}
               </button>
             ))}
           </div>
@@ -268,7 +282,7 @@ export function Estetica() {
           filtro={filtro}
           atrasos={atrasosFiltrados}
           grupo={atual ?? null}
-          emitidoEm={new Date()}
+          emitidoEm={emitidoEm}
         />,
         document.body
       )}

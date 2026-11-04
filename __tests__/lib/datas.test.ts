@@ -1,4 +1,4 @@
-import { fmtDiaPuro, fmtInstante } from '@/lib/datas'
+import { fmtDiaPuro, fmtInstante, fmtInstanteComHora } from '@/lib/datas'
 
 // O defeito que estes testes travam: a aba Relatórios › Estética mostrava as
 // datas UM DIA ANTES do que está no banco. `2026-08-01` é um dia de calendário;
@@ -59,5 +59,23 @@ describe('as duas funções juntas', () => {
     // `timestamptz`. Unificar as duas funções quebraria um dos dois lados.
     expect(fmtDiaPuro('2026-08-01T00:00:00.000Z')).toBe('01/08/2026')
     expect(fmtInstante('2026-08-01T00:00:00.000Z')).toBe('31/07/2026')
+  })
+})
+
+describe('fmtInstanteComHora', () => {
+  it('escreve a hora junto, no fuso da clínica', () => {
+    // 17h30 UTC = 14h30 em Brasília.
+    expect(fmtInstanteComHora('2026-11-04T17:30:00.000Z')).toBe('04/11/2026 14h30')
+  })
+
+  it('vira o dia junto com o instante, não com o UTC', () => {
+    // 01h30 UTC do dia 2 é 22h30 do dia 1º em Brasília: quem imprimiu à noite
+    // precisa ver a noite do próprio dia de trabalho, não a madrugada seguinte.
+    expect(fmtInstanteComHora('2026-08-02T01:30:00.000Z')).toBe('01/08/2026 22h30')
+  })
+
+  it('devolve o travessão quando não há data', () => {
+    expect(fmtInstanteComHora(null)).toBe('—')
+    expect(fmtInstanteComHora('nem data')).toBe('—')
   })
 })

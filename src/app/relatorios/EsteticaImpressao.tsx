@@ -1,7 +1,7 @@
-import type { EtiquetaAtraso, FiltroAtraso, LinhaAtraso } from '@/lib/estetica-atraso'
+import { FILTRO_ROTULO, type EtiquetaAtraso, type FiltroAtraso, type LinhaAtraso } from '@/lib/estetica-atraso'
 import type { GrupoProcedimento, SessaoEstetica } from '@/lib/estetica-relatorio'
 import { descreverCadencia } from '@/lib/estetica-intervalo'
-import { fmtDiaPuro, fmtInstante } from '@/lib/datas'
+import { fmtDiaPuro, fmtInstante, fmtInstanteComHora } from '@/lib/datas'
 
 // A versão em papel da aba Estética, para "Imprimir / Salvar PDF".
 //
@@ -19,13 +19,6 @@ const ROTULOS: Record<EtiquetaAtraso, string> = {
   amarela: 'atrasada',
   vermelha: 'muito atrasada',
   nunca_veio: 'nunca veio',
-}
-
-const FILTRO_ROTULO: Record<FiltroAtraso, string> = {
-  atrasados: 'Atrasados',
-  nunca_veio: 'Nunca veio',
-  em_dia: 'Em dia',
-  todos: 'Todos',
 }
 
 /** O tempo sem vir, escrito como a tela escreve. */
@@ -109,7 +102,7 @@ export function EsteticaImpressao({
         <h1 className="text-base font-bold uppercase">{titulo}</h1>
         <div className="flex justify-between text-[11px] mt-1">
           <span>{subtitulo}</span>
-          <span>Emitido em {fmtInstante(emitidoEm)}</span>
+          <span>Emitido em {fmtInstanteComHora(emitidoEm)}</span>
         </div>
       </header>
 

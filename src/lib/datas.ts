@@ -57,3 +57,19 @@ export function fmtInstante(valor: string | Date | null | undefined): string {
     day: '2-digit', month: '2-digit', year: 'numeric', timeZone: FUSO_CLINICA,
   })
 }
+
+/**
+ * O mesmo instante da função acima, mas COM A HORA.
+ *
+ * Existe para carimbar o relatório impresso: dois relatórios tirados no mesmo
+ * dia ficavam idênticos no cabeçalho, e quem comparava as duas folhas na mesa
+ * não sabia qual era a mais recente.
+ */
+export function fmtInstanteComHora(valor: string | Date | null | undefined): string {
+  const d = paraData(valor)
+  if (!d) return SEM_DATA
+  const hora = d.toLocaleTimeString('pt-BR', {
+    hour: '2-digit', minute: '2-digit', timeZone: FUSO_CLINICA,
+  }).replace(':', 'h')
+  return `${fmtInstante(d)} ${hora}`
+}

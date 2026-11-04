@@ -98,6 +98,15 @@ export function classificarAtraso(
 
 export type FiltroAtraso = 'todos' | 'atrasados' | 'em_dia' | 'nunca_veio'
 
+/** Como cada filtro se chama para quem lê — na tela, no papel e no nome do
+ *  arquivo. Estava escrito nos três lugares e podia divergir entre eles. */
+export const FILTRO_ROTULO: Record<FiltroAtraso, string> = {
+  atrasados: 'Atrasados',
+  nunca_veio: 'Nunca veio',
+  em_dia: 'Em dia',
+  todos: 'Todos',
+}
+
 export interface LinhaAtraso extends SessaoEstetica, Atraso {}
 
 /** Prioridade na tela: o mais abandonado primeiro. Quem nunca veio fica no

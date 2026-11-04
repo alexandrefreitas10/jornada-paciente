@@ -125,3 +125,49 @@ describe('Estetica: as datas saem iguais às do banco', () => {
     expect(papel()).not.toHaveTextContent('31/07/2026')
   })
 })
+
+describe('Estetica: nome do arquivo salvo', () => {
+  it('batiza o arquivo com a visão e a hora antes de imprimir, e devolve o título depois', async () => {
+    // O Chrome usa o título da página como nome do PDF. Sem isto, os dois
+    // relatórios do mesmo dia nasciam os dois "Instituto Torres.pdf".
+    const tituloOriginal = 'Instituto Torres'
+    document.title = tituloOriginal
+    const tituloNaHoraDeImprimir: string[] = []
+    window.print = jest.fn(() => { tituloNaHoraDeImprimir.push(document.title) })
+
+    await abrir()
+    await userEvent.click(screen.getByRole('button', { name: /imprimir/i }))
+
+    expect(tituloNaHoraDeImprimir).toEqual(['Estetica - DEPILACAO A LASER - 04-11-2026 09h00'])
+    expect(document.title).toBe(tituloOriginal)
+  })
+
+  it('usa o nome da visão de atraso quando é ela que está aberta', async () => {
+    const tituloNaHoraDeImprimir: string[] = []
+    window.print = jest.fn(() => { tituloNaHoraDeImprimir.push(document.title) })
+
+    await abrir()
+    await userEvent.click(screen.getByRole('button', { name: /quem está atrasado/i }))
+    await userEvent.click(screen.getByRole('button', { name: /imprimir/i }))
+
+    expect(tituloNaHoraDeImprimir).toEqual(['Estetica - Quem esta atrasado - Atrasados - 04-11-2026 09h00'])
+  })
+})
+
+describe('Estetica: o carimbo é o momento de imprimir', () => {
+  it('já está pintado no papel quando o navegador fotografa a página', async () => {
+    // Olha o DOM DE DENTRO do `print`: é esse instante que o navegador manda
+    // para o papel. Se o React ainda não tiver pintado o novo horário aqui, o
+    // relatório sai carimbado com a hora em que a página foi aberta.
+    const papelNaHoraDeImprimir: string[] = []
+    window.print = jest.fn(() => {
+      papelNaHoraDeImprimir.push(document.getElementById('estetica-print')?.textContent ?? '')
+    })
+
+    await abrir()
+    jest.setSystemTime(new Date('2026-11-04T20:00:00Z')) // 17h00 em Brasília
+    await userEvent.click(screen.getByRole('button', { name: /imprimir/i }))
+
+    expect(papelNaHoraDeImprimir[0]).toContain('Emitido em 04/11/2026 17h00')
+  })
+})

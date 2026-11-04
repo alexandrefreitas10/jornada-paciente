@@ -174,3 +174,12 @@ describe('EsteticaImpressao: as datas do papel', () => {
     expect(linha).not.toHaveTextContent('31/07/2026')
   })
 })
+
+describe('EsteticaImpressao: hora da emissão', () => {
+  it('carimba a hora, não só o dia', () => {
+    // Dois relatórios tirados no mesmo dia ficavam idênticos no cabeçalho, e
+    // quem comparava as duas folhas não sabia qual era a mais recente.
+    render(<EsteticaImpressao visao="atraso" filtro="todos" atrasos={[atraso()]} grupo={null} emitidoEm={new Date('2026-11-04T17:30:00.000Z')} />)
+    expect(screen.getByText('Emitido em 04/11/2026 14h30')).toBeInTheDocument()
+  })
+})
