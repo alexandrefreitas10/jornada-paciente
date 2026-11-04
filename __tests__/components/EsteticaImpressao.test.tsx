@@ -144,3 +144,33 @@ describe('EsteticaImpressao: visão por procedimento', () => {
     expect(screen.getByRole('region', { name: /relatório de estética/i })).toBeInTheDocument()
   })
 })
+
+describe('EsteticaImpressao: as datas do papel', () => {
+  // `inicio` chega como o postgres.js + `NextResponse.json` entregam uma coluna
+  // `date`: o dia puro virou meia-noite UTC no caminho. `ultimaFeita` é um
+  // `timestamptz` de verdade — 22h30 de 28/10 em Brasília.
+  const comDatas = sessao({
+    patientName: 'Marcela Quintiliano Reis',
+    inicio: '2026-08-01T00:00:00.000Z',
+    ultimaFeita: '2026-10-29T01:30:00.000Z',
+  })
+
+  const grupo = {
+    chave: 'criofrequencia',
+    nome: 'CRIOFREQUÊNCIA',
+    pacientes: 1,
+    emAberto: [comDatas],
+    finalizados: [],
+  }
+
+  it('o início sai como está no banco e a última sessão no fuso da clínica', () => {
+    render(<EsteticaImpressao visao="procedimento" filtro="todos" atrasos={[]} grupo={grupo} emitidoEm={EMITIDO} />)
+
+    const linha = screen.getByRole('row', { name: /Marcela Quintiliano Reis/ })
+    // O papel tinha a MESMA função copiada da tela: se um lado for corrigido
+    // sozinho, relatório impresso e tela passam a mostrar dias diferentes.
+    expect(linha).toHaveTextContent('01/08/2026')
+    expect(linha).toHaveTextContent('28/10/2026')
+    expect(linha).not.toHaveTextContent('31/07/2026')
+  })
+})

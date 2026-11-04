@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { RelatorioUltimaSemana } from '@/components/RelatorioUltimaSemana'
+import { fmtDiaPuro } from '@/lib/datas'
 import { EmTratamento } from './EmTratamento'
 import { Estetica } from './Estetica'
 
@@ -308,7 +309,7 @@ function Concluidos() {
                       {p.name}
                     </a>
                     <p className="text-xs text-gray-400">
-                      {p.start_date && `Início: ${new Date(p.start_date).toLocaleDateString('pt-BR')}`}
+                      {p.start_date && `Início: ${fmtDiaPuro(p.start_date)}`}
                       {p.duration && ` · ${p.duration} sem.`}
                       {' · '}{p.completed_count} tarefas
                     </p>
