@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import {
   agruparPorProcedimento, type GrupoProcedimento, type SessaoEstetica,
@@ -10,6 +11,7 @@ import {
   type EtiquetaAtraso, type FiltroAtraso, type LinhaAtraso,
 } from '@/lib/estetica-atraso'
 import { descreverCadencia } from '@/lib/estetica-intervalo'
+import { EsteticaImpressao } from './EsteticaImpressao'
 
 // Relatórios › Estética: uma sub-aba por procedimento, com quem ainda tem
 // sessão a fazer e quem já terminou.
@@ -115,6 +117,9 @@ export function Estetica() {
   const [escolhido, setEscolhido] = useState<string | null>(null)
   const [visao, setVisao] = useState<'procedimento' | 'atraso'>('procedimento')
   const [filtro, setFiltro] = useState<FiltroAtraso>('atrasados')
+  // O portal só pode ser criado no navegador; no servidor não há `document`.
+  const [montado, setMontado] = useState(false)
+  useEffect(() => setMontado(true), [])
 
   const carregar = useCallback(async () => {
     setErro(null)
@@ -158,6 +163,23 @@ export function Estetica() {
 
   return (
     <div>
+      {/* Só na impressão: esconde a página inteira e deixa o papel. Mesmo
+          padrão do Relatório da Última Semana. O bloco já está no DOM o tempo
+          todo (escondido), e não é montado no clique, para a janela de
+          impressão do navegador nunca abrir antes de o conteúdo existir. */}
+      <style>{`
+        @media print {
+          body > * { display: none !important; }
+          #estetica-print {
+            display: block !important;
+            background: white; color: black; padding: 24px;
+          }
+          /* Cabeçalho da tabela repetido em cada página: sem isso, da segunda
+             folha em diante ninguém sabe qual coluna é qual. */
+          #estetica-print thead { display: table-header-group; }
+        }
+      `}</style>
+
       {/* Duas visões da mesma coisa: a lista por procedimento (quem está em
           cada um) e a lista por atraso (quem sumiu). */}
       <div className="flex gap-2 mb-4">
@@ -176,6 +198,12 @@ export function Estetica() {
             {v.label}
           </button>
         ))}
+        <button
+          onClick={() => window.print()}
+          className="ml-auto px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+        >
+          🖨️ Imprimir / Salvar PDF
+        </button>
       </div>
 
       {visao === 'atraso' ? (
@@ -230,6 +258,26 @@ export function Estetica() {
         </>
       )}
       </>
+      )}
+
+      {/* Vai para dentro do `body` por portal, e não aqui na árvore, porque a
+          regra de impressão é `body > * { display: none }`: um descendente de
+          elemento escondido não volta a aparecer por mais `!important` que
+          tenha. Filho direto do body, ele escapa da regra e ainda flui em
+          várias páginas — preso num `position: fixed` o relatório de 41
+          pacientes sairia cortado na primeira folha.
+          Só depois de montar: no servidor não existe `document`.
+          Recebe o que a tela JÁ filtrou — não refiltra — para o papel nunca
+          discordar do que estava à frente de quem clicou em imprimir. */}
+      {montado && createPortal(
+        <EsteticaImpressao
+          visao={visao}
+          filtro={filtro}
+          atrasos={atrasosFiltrados}
+          grupo={atual ?? null}
+          emitidoEm={new Date()}
+        />,
+        document.body
       )}
     </div>
   )
