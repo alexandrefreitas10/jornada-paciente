@@ -14,6 +14,43 @@ const FUSO_CLINICA = 'America/Sao_Paulo'
 
 const SEM_DATA = '—'
 
+// Brasília é UTC-3 fixo desde 2019 (sem horário de verão). O banco guarda em
+// UTC: sem este ajuste, um evento das 22h viraria o dia seguinte.
+const OFFSET_BRASILIA_MS = 3 * 60 * 60 * 1000
+
+const DIA_MS = 24 * 60 * 60 * 1000
+
+/** Um dia puro já escrito, `AAAA-MM-DD`. */
+const SO_DIA = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * "AAAA-MM-DD" do dia em Brasília.
+ *
+ * Morava em `em-tratamento.ts` e veio para cá: é regra de data, não regra do
+ * relatório "Em tratamento", e um segundo relatório passou a precisar dela.
+ * Segue exportada de lá também, para não quebrar quem já a importava.
+ */
+export function dataBrasilia(instante: Date): string {
+  return new Date(instante.getTime() - OFFSET_BRASILIA_MS).toISOString().slice(0, 10)
+}
+
+/**
+ * Soma dias a um DIA PURO e devolve outro dia puro. `null` se a entrada não for
+ * um `AAAA-MM-DD`.
+ *
+ * A conta é feita em UTC inteira, e isso é o ponto: `new Date(dia)` seguido de
+ * `getDate()`/`setDate()` mistura leitura em UTC com escrita no fuso LOCAL, e aí
+ * o resultado passa a depender de onde o processo está rodando. Aqui não há fuso
+ * nenhum envolvido — somar 84 dias a um dia de calendário não é uma pergunta
+ * sobre horário.
+ */
+export function somarDiasAoDia(dia: string | null | undefined, dias: number): string | null {
+  if (!dia || !SO_DIA.test(dia)) return null
+  const base = Date.parse(`${dia}T00:00:00Z`)
+  if (Number.isNaN(base)) return null
+  return new Date(base + dias * DIA_MS).toISOString().slice(0, 10)
+}
+
 /** `new Date`, nunca método de string: o postgres.js devolve `Date` em coluna
  *  de data, e o mesmo campo chega como string quando vem por `fetch`. */
 function paraData(valor: string | Date | null | undefined): Date | null {
