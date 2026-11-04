@@ -75,3 +75,28 @@ describe('ArchivedPatientsList › reativar', () => {
     expect(botao).toHaveTextContent('↩ Reativar')
   })
 })
+
+describe('ArchivedPatientsList › datas', () => {
+  it('o início é o dia cadastrado, não o anterior', () => {
+    render(<ArchivedPatientsList patients={pacientes} />)
+
+    // `start_date` é um dia de calendário digitado no formulário. Lido com
+    // `new Date` sem fuso declarado, virava meia-noite UTC no fuso do
+    // navegador e mostrava 30/06/2026 — um dia antes.
+    //
+    // A prova independente de máquina está em `__tests__/lib/datas.test.ts`,
+    // que fixa o fuso dentro da própria função; aqui o que se trava é o ponto
+    // de chamada não voltar para o `new Date` cru.
+    // Os dois pacientes do fixture têm o mesmo início.
+    expect(screen.getAllByText(/Início: 01\/07\/2026/)).toHaveLength(2)
+    expect(screen.queryByText(/30\/06\/2026/)).toBeNull()
+  })
+
+  it('a data de arquivamento continua no fuso da clínica', () => {
+    render(<ArchivedPatientsList patients={pacientes} />)
+
+    // Contraprova: `archive_event_at` é `timestamptz` (instante) e TEM de ser
+    // convertido. Se alguém "consertar" este campo junto, quebra aqui.
+    expect(screen.getByText(/17\/09\/2026/)).toBeInTheDocument()
+  })
+})

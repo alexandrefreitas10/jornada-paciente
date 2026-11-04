@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { ProgressBar } from './ProgressBar'
 import { PatientListItem } from '@/lib/patients'
+import { fmtDiaPuro } from '@/lib/datas'
 import { ArchivePatientButton } from './ArchivePatientButton'
 import { ALL_TASK_KEYS } from '@/lib/task-definitions'
 
@@ -41,7 +42,7 @@ export function PatientCard({ patient }: Props) {
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-gray-800 truncate">{patient.name}</div>
           <div className="text-xs text-gray-500 mb-2">
-            {patient.start_date && `Início: ${new Date(patient.start_date).toLocaleDateString('pt-BR')}`}
+            {patient.start_date && `Início: ${fmtDiaPuro(patient.start_date)}`}
             {patient.duration && ` · ${patient.duration} sem.`}
             {patient.created_by && (
               <span className="block text-gray-400 mt-0.5">Criado por {patient.created_by}</span>
