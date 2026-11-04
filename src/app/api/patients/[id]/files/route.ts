@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto'
 import { generateExamSummary } from '@/lib/exam-summary'
 import { logSystemError } from '@/lib/system-errors'
 import { auth } from '@/auth'
+import { tipoDeConteudo } from '@/lib/entrega-de-arquivo'
 
 export const maxDuration = 120
 
@@ -43,7 +44,18 @@ export async function POST(
   const ext = file.name.split('.').pop() ?? 'bin'
   const s3Key = `patients/${id}/${fileType}/${randomUUID()}.${ext}`
   const buffer = Buffer.from(await file.arrayBuffer())
-  const mimeType = file.type || 'application/octet-stream'
+
+  // O tipo gravado vem dos BYTES, nunca de `file.type`: aquele campo é texto do
+  // cliente e aceitava `image/svg+xml`, que a rota de download servia inline na
+  // nossa origem — SVG carrega `<script>` e ele rodaria com a sessão de quem
+  // abrisse o arquivo. Fora da lista conhecida grava `application/octet-stream`.
+  //
+  // Nada é RECUSADO aqui de propósito: docx, xlsx e qualquer outro documento
+  // continuam entrando como sempre. Quem decide o que pode ser renderizado é a
+  // rota que serve, pelos bytes — recusar no upload só quebraria fluxo do dono
+  // sem fechar nada que a outra ponta já não feche.
+  const tipoDosBytes = tipoDeConteudo(buffer)
+  const mimeType = tipoDosBytes ?? 'application/octet-stream'
 
   try {
     await uploadFile(s3Key, buffer, mimeType)
@@ -62,7 +74,10 @@ export async function POST(
   // sobreviver a restart do Render e nunca reportar "done" falso.
   if (fileType === 'exam') {
     await setSummaryStatus(record.id, 'pending')
-    generateExamSummary(buffer, mimeType, file.name)
+    // Para a IA vale o tipo dos bytes quando conhecemos (ela recebe um PDF
+    // renomeado como PDF, não como o que o cliente disse) e o declarado quando
+    // não — assim docx e xlsx se comportam exatamente como antes desta mudança.
+    generateExamSummary(buffer, tipoDosBytes ?? (file.type || mimeType), file.name)
       .then(summary => updateFileSummary(record.id, summary))
       .catch(err => {
         const message = err instanceof Error ? err.message : String(err)

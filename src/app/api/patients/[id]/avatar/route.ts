@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { updatePatientAvatar } from '@/lib/patients'
 import { uploadFile, getSignedDownloadUrl } from '@/lib/s3'
+import { tipoDeImagemDosBytes, FORMATOS_ACEITOS } from '@/lib/tipos-de-imagem'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -24,8 +25,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
   const s3Key = `patients/${id}/avatar/${randomUUID()}.${ext}`
   const buffer = Buffer.from(await file.arrayBuffer())
+
+  // O `startsWith('image/')` acima é a conferência amigável, feita no que o
+  // cliente DIZ — e `image/svg+xml` também começa com `image/`. Aqui quem
+  // decide são os bytes.
+  //
+  // O risco deste arquivo é menor que o da rota de download: o avatar só sai
+  // por URL assinada do S3, que é OUTRA origem, então um SVG com script
+  // executaria no domínio do S3 e não no nosso, sem alcançar a sessão de
+  // ninguém. Mesmo assim a foto de perfil é imagem — recusar o que não é
+  // imagem é a resposta certa, e custa uma linha.
+  const tipoReal = tipoDeImagemDosBytes(buffer)
+  if (!tipoReal) {
+    return NextResponse.json({ error: `Envie uma imagem ${FORMATOS_ACEITOS}` }, { status: 400 })
+  }
+
   try {
-    await uploadFile(s3Key, buffer, mime)
+    await uploadFile(s3Key, buffer, tipoReal)
   } catch (err) {
     return NextResponse.json({ error: `Erro ao salvar: ${err instanceof Error ? err.message : String(err)}` }, { status: 500 })
   }
