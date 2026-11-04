@@ -2,6 +2,8 @@
 // sem React — para as fronteiras (7, 8, 28, 29 dias; virada de dia em
 // Brasília) serem testadas sem depender de relógio nem de dados.
 
+import { dataBrasilia } from './datas'
+
 export const ETIQUETAS = ['verde', 'amarela', 'vermelha', 'aguardando'] as const
 export type Etiqueta = (typeof ETIQUETAS)[number]
 
@@ -91,15 +93,12 @@ export const MENSAGENS: Record<Etiqueta, string> = {
     'de reavaliação? Qual o melhor dia para você?',
 }
 
-// Brasília é UTC-3 fixo desde 2019 (sem horário de verão). O banco guarda em
-// UTC: sem este ajuste, uma aplicação às 22h viraria o dia seguinte.
-const OFFSET_BRASILIA_MS = 3 * 60 * 60 * 1000
 const DIA_MS = 24 * 60 * 60 * 1000
 
-/** "AAAA-MM-DD" do dia em Brasília. */
-export function dataBrasilia(instante: Date): string {
-  return new Date(instante.getTime() - OFFSET_BRASILIA_MS).toISOString().slice(0, 10)
-}
+// `dataBrasilia` mora em `datas.ts` agora: é regra de data, não regra deste
+// relatório, e o relatório de Concluídos passou a precisar dela. Segue
+// exportada daqui para não quebrar quem já a importava deste módulo.
+export { dataBrasilia }
 
 /** Dias de calendário (em Brasília) entre dois instantes. */
 export function diasEntre(anterior: Date, agora: Date): number {

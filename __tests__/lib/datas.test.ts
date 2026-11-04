@@ -1,4 +1,6 @@
-import { fmtDiaPuro, fmtInstante, fmtInstanteComHora } from '@/lib/datas'
+import {
+  dataBrasilia, fmtDiaPuro, fmtInstante, fmtInstanteComHora, somarDiasAoDia,
+} from '@/lib/datas'
 
 // O defeito que estes testes travam: a aba Relatórios › Estética mostrava as
 // datas UM DIA ANTES do que está no banco. `2026-08-01` é um dia de calendário;
@@ -77,5 +79,75 @@ describe('fmtInstanteComHora', () => {
   it('devolve o travessão quando não há data', () => {
     expect(fmtInstanteComHora(null)).toBe('—')
     expect(fmtInstanteComHora('nem data')).toBe('—')
+  })
+})
+
+describe('somarDiasAoDia: dia puro + N dias', () => {
+  it('soma 12 semanas sem escorregar', () => {
+    expect(somarDiasAoDia('2026-06-01', 12 * 7)).toBe('2026-08-24')
+  })
+
+  it('atravessa virada de mês e de ano', () => {
+    expect(somarDiasAoDia('2026-01-31', 1)).toBe('2026-02-01')
+    expect(somarDiasAoDia('2026-12-31', 1)).toBe('2027-01-01')
+  })
+
+  it('acerta fevereiro em ano bissexto e em ano comum', () => {
+    expect(somarDiasAoDia('2028-02-28', 1)).toBe('2028-02-29')
+    expect(somarDiasAoDia('2026-02-28', 1)).toBe('2026-03-01')
+  })
+
+  it('zero dias devolve o mesmo dia', () => {
+    expect(somarDiasAoDia('2026-06-01', 0)).toBe('2026-06-01')
+  })
+
+  it('o que não é AAAA-MM-DD vira null, não data inventada', () => {
+    // O relatório trata `null` como "não dá para dizer", e o paciente não entra
+    // na lista por prazo — mesmo comportamento de antes, quando `new Date` de
+    // lixo dava Invalid Date e a comparação saía falsa.
+    expect(somarDiasAoDia('', 7)).toBeNull()
+    expect(somarDiasAoDia(null, 7)).toBeNull()
+    expect(somarDiasAoDia('01/06/2026', 7)).toBeNull()
+    expect(somarDiasAoDia('2026-06', 7)).toBeNull()
+  })
+})
+
+describe('prazo de tratamento encerrado: a fronteira que estava errada', () => {
+  // A regra do relatório de Concluídos, composta das duas funções exatamente
+  // como a rota faz: `somarDiasAoDia(start_date, semanas*7) <= dataBrasilia(agora)`.
+  const encerrado = (inicio: string, semanas: number, agora: Date) => {
+    const fim = somarDiasAoDia(inicio, semanas * 7)
+    return fim !== null && fim <= dataBrasilia(agora)
+  }
+
+  // Início 01/06/2026 + 12 semanas = termina em 24/08/2026.
+  const INICIO = '2026-06-01'
+  const SEMANAS = 12
+
+  it('às 21h de Brasília do dia ANTERIOR o prazo NÃO está encerrado', () => {
+    // Era o defeito: 2026-08-24T00:00:00Z é meia-noite UTC, mas 21h do dia 23
+    // em Brasília. Comparando instantes, o "Prazo encerrado" acendia aqui.
+    expect(encerrado(INICIO, SEMANAS, new Date('2026-08-24T00:30:00Z'))).toBe(false)
+  })
+
+  it('às 23h59 de Brasília do dia anterior ainda NÃO está encerrado', () => {
+    expect(encerrado(INICIO, SEMANAS, new Date('2026-08-24T02:59:00Z'))).toBe(false)
+  })
+
+  it('a partir da meia-noite de Brasília do dia do fim, está encerrado', () => {
+    // 2026-08-24T03:00:00Z = 00h do dia 24 em Brasília.
+    expect(encerrado(INICIO, SEMANAS, new Date('2026-08-24T03:00:00Z'))).toBe(true)
+  })
+
+  it('depois do dia do fim segue encerrado', () => {
+    expect(encerrado(INICIO, SEMANAS, new Date('2026-09-10T15:00:00Z'))).toBe(true)
+  })
+
+  it('bem antes do fim não está encerrado', () => {
+    expect(encerrado(INICIO, SEMANAS, new Date('2026-07-01T15:00:00Z'))).toBe(false)
+  })
+
+  it('sem data de início não encerra por prazo', () => {
+    expect(encerrado('', SEMANAS, new Date('2030-01-01T12:00:00Z'))).toBe(false)
   })
 })
