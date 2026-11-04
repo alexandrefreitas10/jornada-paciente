@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type { ArchivedPatientItem } from '@/lib/patients'
+import { fmtDiaPuro } from '@/lib/datas'
 
 const AVATAR_COLORS = [
   'bg-violet-500', 'bg-blue-500', 'bg-emerald-500',
@@ -79,7 +80,7 @@ export function ArchivedPatientsList({ patients: initial }: Props) {
               <div className="min-w-0">
                 <p className="font-semibold text-gray-800 truncate">{p.name}</p>
                 <p className="text-xs text-gray-400">
-                  {p.start_date && `Início: ${new Date(p.start_date).toLocaleDateString('pt-BR')}`}
+                  {p.start_date && `Início: ${fmtDiaPuro(p.start_date)}`}
                   {p.duration && ` · ${p.duration} sem.`}
                   {p.created_by && ` · ${p.created_by}`}
                 </p>
