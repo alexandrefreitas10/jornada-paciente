@@ -11,6 +11,7 @@ import {
   type EtiquetaAtraso, type FiltroAtraso, type LinhaAtraso,
 } from '@/lib/estetica-atraso'
 import { descreverCadencia } from '@/lib/estetica-intervalo'
+import { fmtDiaPuro, fmtInstante } from '@/lib/datas'
 import { EsteticaImpressao } from './EsteticaImpressao'
 
 // Relatórios › Estética: uma sub-aba por procedimento, com quem ainda tem
@@ -20,17 +21,6 @@ import { EsteticaImpressao } from './EsteticaImpressao'
 // cada carregamento. É isso que faz um procedimento novo, digitado no card,
 // aparecer aqui sozinho — que era o pedido. Escrever a lista aqui quebraria
 // exatamente isso.
-
-function fmtData(valor: string | Date | null): string {
-  if (!valor) return '—'
-  // `new Date`, nunca método de string: o postgres.js devolve `Date` em coluna
-  // de data, e o mesmo campo chega como string quando vem por `fetch`.
-  const d = new Date(valor)
-  if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleDateString('pt-BR', {
-    day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Sao_Paulo',
-  })
-}
 
 function Linha({ s }: { s: SessaoEstetica }) {
   return (
@@ -43,8 +33,11 @@ function Linha({ s }: { s: SessaoEstetica }) {
       </Link>
       <div className="flex items-center gap-4 text-xs text-gray-500 shrink-0">
         <span className="font-medium text-gray-700">{s.feitas} de {s.totalSessoes || '—'}</span>
-        <span>início {fmtData(s.inicio)}</span>
-        <span>última {fmtData(s.ultimaFeita)}</span>
+        {/* Naturezas diferentes de propósito: `start_date` é coluna `date` (dia
+            puro, não converte fuso) e `completed_at` é `timestamptz` (instante,
+            converte para Brasília). Ver `@/lib/datas`. */}
+        <span>início {fmtDiaPuro(s.inicio)}</span>
+        <span>última {fmtInstante(s.ultimaFeita)}</span>
       </div>
     </div>
   )

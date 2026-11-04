@@ -82,3 +82,46 @@ describe('Estetica: imprimir / salvar PDF', () => {
     expect(papel()).toHaveClass('hidden')
   })
 })
+
+// Nomes INVENTADOS. `ultimaFeita` com hora e `Z` de propósito: é um
+// `timestamptz` (`completed_at`), e não um dia puro como `inicio` — a sessão foi
+// lançada às 22h30 de 28/10 em Brasília, que o banco guarda como 29/10 em UTC.
+const COM_DATAS = [{
+  id: 7, patientId: 70, patientName: 'Marcela Quintiliano Reis',
+  procedimento: 'CRIOFREQUÊNCIA', totalSessoes: 10, feitas: 3,
+  inicio: '2026-08-01T00:00:00.000Z', ultimaFeita: '2026-10-29T01:30:00.000Z',
+  sessions_per_week: null, intervalo_valor: 1, intervalo_unidade: 'meses',
+}]
+
+describe('Estetica: as datas saem iguais às do banco', () => {
+  beforeEach(() => {
+    global.fetch = jest.fn(async () => ({ ok: true, json: async () => COM_DATAS })) as unknown as typeof fetch
+  })
+
+  it('o início é o dia cadastrado, não o anterior', async () => {
+    await abrir()
+
+    const linha = screen.getByRole('link', { name: 'Marcela Quintiliano Reis' }).closest('div')!
+    // Era aqui que aparecia 31/07/2026: `start_date` é um dia de calendário e
+    // estava sendo lido como meia-noite UTC convertida para Brasília.
+    expect(linha).toHaveTextContent('início 01/08/2026')
+    expect(linha).not.toHaveTextContent('31/07/2026')
+  })
+
+  it('a última sessão é o dia do atendimento em Brasília, não o do servidor', async () => {
+    await abrir()
+
+    const linha = screen.getByRole('link', { name: 'Marcela Quintiliano Reis' }).closest('div')!
+    // O oposto do caso acima, e por isso as duas funções são separadas:
+    // `completed_at` é um instante e TEM de ser convertido.
+    expect(linha).toHaveTextContent('última 28/10/2026')
+  })
+
+  it('o papel não discorda da tela', async () => {
+    await abrir()
+
+    expect(papel()).toHaveTextContent('01/08/2026')
+    expect(papel()).toHaveTextContent('28/10/2026')
+    expect(papel()).not.toHaveTextContent('31/07/2026')
+  })
+})

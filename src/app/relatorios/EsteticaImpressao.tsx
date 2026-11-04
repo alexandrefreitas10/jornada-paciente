@@ -1,6 +1,7 @@
 import type { EtiquetaAtraso, FiltroAtraso, LinhaAtraso } from '@/lib/estetica-atraso'
 import type { GrupoProcedimento, SessaoEstetica } from '@/lib/estetica-relatorio'
 import { descreverCadencia } from '@/lib/estetica-intervalo'
+import { fmtDiaPuro, fmtInstante } from '@/lib/datas'
 
 // A versão em papel da aba Estética, para "Imprimir / Salvar PDF".
 //
@@ -25,15 +26,6 @@ const FILTRO_ROTULO: Record<FiltroAtraso, string> = {
   nunca_veio: 'Nunca veio',
   em_dia: 'Em dia',
   todos: 'Todos',
-}
-
-function fmtData(valor: string | Date | null): string {
-  if (!valor) return '—'
-  const d = new Date(valor)
-  if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleDateString('pt-BR', {
-    day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Sao_Paulo',
-  })
 }
 
 /** O tempo sem vir, escrito como a tela escreve. */
@@ -75,8 +67,10 @@ function TabelaDeSessoes({ titulo, sessoes }: { titulo: string; sessoes: SessaoE
           <tr key={s.id} className={TR}>
             <td className={TD}>{s.patientName}</td>
             <td className={TD}>{s.feitas} de {s.totalSessoes || '—'}</td>
-            <td className={TD}>{fmtData(s.inicio)}</td>
-            <td className={TD}>{fmtData(s.ultimaFeita)}</td>
+            {/* `start_date` é dia puro e `completed_at` é instante: funções
+                diferentes de propósito. Ver `@/lib/datas`. */}
+            <td className={TD}>{fmtDiaPuro(s.inicio)}</td>
+            <td className={TD}>{fmtInstante(s.ultimaFeita)}</td>
           </tr>
         ))}
       </tbody>
@@ -115,7 +109,7 @@ export function EsteticaImpressao({
         <h1 className="text-base font-bold uppercase">{titulo}</h1>
         <div className="flex justify-between text-[11px] mt-1">
           <span>{subtitulo}</span>
-          <span>Emitido em {fmtData(emitidoEm)}</span>
+          <span>Emitido em {fmtInstante(emitidoEm)}</span>
         </div>
       </header>
 
