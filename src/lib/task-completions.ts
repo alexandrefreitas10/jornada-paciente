@@ -5,8 +5,7 @@ import sql, { initSchema } from './db'
 // rota `/api/patients/[id]/tasks/[key]` vai direto para o INSERT sem migrar.
 // Num banco já criado não dava problema — a tabela existia —, mas num banco
 // novo (ambiente novo, Postgres local de teste) marcar tarefa era a primeira
-// consulta do processo e encontrava a tabela inexistente. É também o que
-// impedia ligar a suíte desligada em `__tests__/lib/task-completions.test.ts`.
+// consulta do processo e encontrava a tabela inexistente.
 //
 // Chamar de novo é barato: `initSchema` é memoizado por processo.
 
