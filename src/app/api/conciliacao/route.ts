@@ -184,6 +184,9 @@ export async function POST(req: NextRequest) {
     const sistema = [...recebidas.lancamentos, ...pagas.lancamentos].filter(l => dentro(l.data))
     const foraRecebidas = recebidas.lancamentos.filter(l => !dentro(l.data)).length
     const foraPagas = pagas.lancamentos.filter(l => !dentro(l.data)).length
+    // Mesma régua de mês das outras listas: a planilha pode trazer pagamento de
+    // outro mês, e mostrá-lo aqui inflaria o dinheiro do mês na tela.
+    const outrasContas = [...recebidas.outrasContas, ...pagas.outrasContas].filter(l => dentro(l.data))
 
     const movimentos: LancamentoExtratoBanco[] = []
     const foraExtrato: Record<Banco, number> = { unicred: 0, itau: 0 }
@@ -228,6 +231,7 @@ export async function POST(req: NextRequest) {
       mes,
       sistema,
       extrato: movimentos,
+      outrasContas,
       s3,
       descartes: {
         naoEntendidasUnicred: unicred.naoEntendidas,
@@ -282,7 +286,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json(
-      montarResultado({ mes, sistema, extrato: movimentos, anterior: null, leitura })
+      montarResultado({ mes, sistema, extrato: movimentos, anterior: null, outrasContas, leitura })
     )
   } catch (err) {
     if (err instanceof ErroDeEnvio) {

@@ -33,6 +33,8 @@ const linha = (chave: string, atual: number, anterior: number) => {
 /** O mês bom: 2 de 3 conferem no Unicred, uma única diferença de cada lado. */
 const SETEMBRO: ResultadoMes = {
   mes: '2026-09',
+  transferencias: [],
+  outrasContas: [],
   bancos: [
     {
       banco: 'unicred',
@@ -886,6 +888,154 @@ describe('ConciliacaoClient', () => {
     expect(aviso).toHaveTextContent(/confira se .*fatura paga neste mês/i)
     // Avisa, não bloqueia: as compras continuam na tela e no Custos.
     expect(within(cartao()).getByRole('table', { name: /compras da fatura/i })).toBeInTheDocument()
+  })
+
+  it('mostra as transferências entre contas num bloco próprio, com os dois lados', async () => {
+    respostaDoMes = {
+      body: {
+        ...SETEMBRO,
+        transferencias: [
+          {
+            data: '2026-09-13',
+            centavos: 900000,
+            de: 'itau',
+            para: 'unicred',
+            descricaoDe: 'PIX ENVIADO ANDRADE TORRES SERVICOS MEDICOS',
+            descricaoPara: 'CREDITO RECEBIMENTO DE PIX / ANDRADE TORRES SERVICOS MEDICOS LTDA',
+          },
+        ],
+      },
+    }
+    await abrir()
+
+    const bloco = screen.getByRole('heading', { name: /transferências entre contas/i }).closest('section')!
+    expect(within(bloco).getByText('13/09/2026')).toBeInTheDocument()
+    expect(within(bloco).getByText('R$ 9.000,00')).toBeInTheDocument()
+    // Os dois lados ficam à vista: o dono vê o que saiu da conta de diferenças.
+    expect(bloco).toHaveTextContent('PIX ENVIADO ANDRADE TORRES')
+    expect(bloco).toHaveTextContent('CREDITO RECEBIMENTO DE PIX')
+  })
+
+  it('explica, no bloco do banco, quanto da diferença é transferência', async () => {
+    respostaDoMes = {
+      body: {
+        ...SETEMBRO,
+        transferencias: [
+          {
+            data: '2026-09-13',
+            centavos: 900000,
+            de: 'itau',
+            para: 'unicred',
+            descricaoDe: 'PIX ENVIADO ANDRADE TORRES SERVICOS MEDICOS',
+            descricaoPara: 'CREDITO RECEBIMENTO DE PIX / ANDRADE TORRES SERVICOS MEDICOS LTDA',
+          },
+        ],
+      },
+    }
+    await abrir()
+
+    const itau = screen.getByRole('heading', { name: 'Itaú' }).closest('section')!
+    expect(itau).toHaveTextContent(/R\$ 9\.000,00 em Saídas é transferência/i)
+    const unicred = screen.getByRole('heading', { name: 'Unicred' }).closest('section')!
+    expect(unicred).toHaveTextContent(/R\$ 9\.000,00 em Entradas é transferência/i)
+  })
+
+  it('mês sem transferência não mostra o bloco', async () => {
+    await abrir()
+    expect(screen.queryByRole('heading', { name: /transferências entre contas/i })).not.toBeInTheDocument()
+  })
+
+  it('corpo do servidor antigo, sem o campo, não derruba a tela', async () => {
+    // Durante um deploy a tela nova pode receber o corpo do servidor anterior.
+    const { transferencias: _semEsse, ...antigo } = SETEMBRO
+    respostaDoMes = { body: antigo }
+    await abrir()
+
+    expect(screen.getByRole('heading', { name: 'Unicred' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /transferências entre contas/i })).not.toBeInTheDocument()
+  })
+
+  it('mostra o que o BPO lançou numa conta sem extrato, com a conta e o total', async () => {
+    respostaDoMes = {
+      body: {
+        ...SETEMBRO,
+        outrasContas: [
+          {
+            data: '2026-09-05',
+            competencia: '2026-09-01',
+            centavos: 150000,
+            conta: 'Dinheiro',
+            nome: 'SUBLOCAÇÃO',
+            descricao: 'SALA 3',
+            categoria: 'Receita c/ Aluguel',
+          },
+        ],
+      },
+    }
+    await abrir()
+
+    const bloco = screen.getByRole('heading', { name: /outras contas/i }).closest('section')!
+    expect(within(bloco).getByText('05/09/2026')).toBeInTheDocument()
+    expect(within(bloco).getByText('Dinheiro')).toBeInTheDocument()
+    expect(bloco).toHaveTextContent('SUBLOCAÇÃO')
+    expect(bloco).toHaveTextContent('R$ 1.500,00')
+    // Não é diferença para cobrar do BPO: o bloco tem de dizer isso.
+    expect(bloco).toHaveTextContent(/não há extrato|sem extrato/i)
+  })
+
+  it('avisa no pé do comparativo quanto ficou fora do total por outras contas', async () => {
+    respostaDoMes = {
+      body: {
+        ...SETEMBRO,
+        outrasContas: [
+          {
+            data: '2026-09-05', competencia: '2026-09-01', centavos: 150000, conta: 'Dinheiro',
+            nome: 'SUBLOCAÇÃO', descricao: 'SALA 3', categoria: 'Receita c/ Aluguel',
+          },
+        ],
+      },
+    }
+    await abrir()
+    await custos()
+
+    const receitas = screen.getByRole('table', { name: /receitas/i }).closest('section')!
+    expect(receitas).toHaveTextContent(/R\$ 1\.500,00.*outras contas.*Dinheiro/i)
+    expect(receitas).toHaveTextContent(/fora deste total/i)
+    // Só entrada: o lado de despesas não inventa linha.
+    const despesas = screen.getByRole('table', { name: /despesas/i }).closest('section')!
+    expect(despesas).not.toHaveTextContent(/outras contas/i)
+  })
+
+  it('avisa também quando o lado inteiro ficou fora: "nenhuma categoria" sozinho seria mentira', async () => {
+    respostaDoMes = {
+      body: {
+        ...SETEMBRO,
+        comparativo: { ...SETEMBRO.comparativo, receitas: [] },
+        outrasContas: [
+          {
+            data: '2026-09-05', competencia: '2026-09-01', centavos: 150000, conta: 'Dinheiro',
+            nome: 'SUBLOCAÇÃO', descricao: 'SALA 3', categoria: 'Receita c/ Aluguel',
+          },
+        ],
+      },
+    }
+    await abrir()
+    await custos()
+
+    const receitas = screen.getByRole('heading', { name: 'Receitas' }).closest('section')!
+    expect(receitas).toHaveTextContent(/R\$ 1\.500,00.*outras contas/i)
+  })
+
+  it('mês sem nenhuma outra conta não mostra o bloco', async () => {
+    await abrir()
+    expect(screen.queryByRole('heading', { name: /outras contas/i })).not.toBeInTheDocument()
+  })
+
+  it('mês gravado antes da funcionalidade avisa que precisa reenviar, em vez de dizer que não houve', async () => {
+    respostaDoMes = { body: { ...SETEMBRO, outrasContas: null } }
+    await abrir()
+
+    expect(screen.getByText(/enviado antes.*reenvie/i)).toBeInTheDocument()
   })
 
   it('diz quando a lista de meses não carrega', async () => {

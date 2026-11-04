@@ -110,6 +110,67 @@ describe('lerPlanilha', () => {
     expect(r.bancoDesconhecido).toBe(2)
   })
 
+  it('guarda a linha de outra conta em vez de perdê-la, com o nome da conta', () => {
+    // O dinheiro em espécie não tem extrato para conferir, mas é dinheiro do
+    // mês: sumir com ele faz o total do sistema ficar menor que o do contábil
+    // sem ninguém saber por quê.
+    const r = lerPlanilha([
+      CABECALHO,
+      linha({
+        'Data de pagamento': '05/09/2026', 'Competência': '01/09/2026', Nome: 'SUBLOCAÇÃO',
+        'Descrição': 'SALA 3', Categoria: 'Receita c/ Aluguel',
+        'Valor categoria/centro de custo': '1500', Banco: 'Dinheiro',
+      }),
+    ])
+
+    expect(r.outrasContas).toEqual([{
+      data: '2026-09-05',
+      competencia: '2026-09-01',
+      centavos: 150000,
+      conta: 'Dinheiro',
+      nome: 'SUBLOCAÇÃO',
+      descricao: 'SALA 3',
+      categoria: 'Receita c/ Aluguel',
+    }])
+    // Continua fora da conciliação por banco.
+    expect(r.lancamentos).toEqual([])
+  })
+
+  it('guardar a linha não muda o contador do aviso de leitura', () => {
+    const r = lerPlanilha([
+      CABECALHO,
+      RECEITA,
+      linha({ 'Data de pagamento': '03/09/2026', Nome: 'N', Categoria: 'C', 'Valor categoria/centro de custo': '50', Banco: 'Banco do Brasil' }),
+      linha({ 'Data de pagamento': '03/09/2026', Nome: 'N', Categoria: 'C', 'Valor categoria/centro de custo': '50', Banco: '' }),
+    ])
+
+    expect(r.bancoDesconhecido).toBe(2)
+    expect(r.outrasContas).toHaveLength(2)
+    // Conta em branco vira texto vazio, não "undefined" na tela.
+    expect(r.outrasContas.map(l => l.conta)).toEqual(['Banco do Brasil', ''])
+  })
+
+  it('linha de outra conta sem valor legível continua descartada', () => {
+    // Sem valor não há o que mostrar, e mostrar zero seria inventar dinheiro.
+    const r = lerPlanilha([
+      CABECALHO,
+      linha({ 'Data de pagamento': '05/09/2026', Nome: 'N', Categoria: 'C', 'Valor categoria/centro de custo': '1.500,00', Banco: 'Dinheiro' }),
+    ])
+
+    expect(r.outrasContas).toEqual([])
+    expect(r.semValor).toBe(1)
+  })
+
+  it('linha de outra conta sem data de pagamento continua descartada', () => {
+    const r = lerPlanilha([
+      CABECALHO,
+      linha({ Nome: 'N', Categoria: 'C', 'Valor categoria/centro de custo': '1500', Banco: 'Dinheiro' }),
+    ])
+
+    expect(r.outrasContas).toEqual([])
+    expect(r.semDataPagamento).toBe(1)
+  })
+
   it('aceita Itaú com e sem acento e ignora caixa e espaços', () => {
     const { lancamentos } = lerPlanilha([
       CABECALHO,
@@ -131,8 +192,8 @@ describe('lerPlanilha', () => {
   })
 
   it('planilha vazia devolve resultado vazio, sem explodir', () => {
-    expect(lerPlanilha([])).toEqual({ lancamentos: [], semDataPagamento: 0, bancoDesconhecido: 0, semValor: 0 })
-    expect(lerPlanilha([CABECALHO])).toEqual({ lancamentos: [], semDataPagamento: 0, bancoDesconhecido: 0, semValor: 0 })
+    expect(lerPlanilha([])).toEqual({ lancamentos: [], outrasContas: [], semDataPagamento: 0, bancoDesconhecido: 0, semValor: 0 })
+    expect(lerPlanilha([CABECALHO])).toEqual({ lancamentos: [], outrasContas: [], semDataPagamento: 0, bancoDesconhecido: 0, semValor: 0 })
   })
 
   it('recusa uma planilha que não tem as colunas esperadas', () => {

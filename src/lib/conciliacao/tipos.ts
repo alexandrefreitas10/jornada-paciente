@@ -69,15 +69,41 @@ export interface ExtratoLido {
   conferenciaSaldo: ConferenciaSaldo | null
 }
 
+/**
+ * Um lançamento do BPO numa conta que não é Unicred nem Itaú — dinheiro em
+ * espécie, caixa, outro banco.
+ *
+ * É um tipo SEPARADO de `LancamentoSistema`, e não ele com o campo `banco`
+ * alargado para texto, justamente para a conta desconhecida não ter como
+ * chegar a `conciliar`: lá só entra `LancamentoSistema`, cujo `banco` é um dos
+ * dois. Alargar aquele campo deixaria um "Dinheiro" aparecer como diferença do
+ * Unicred no dia em que alguém esquecesse um filtro.
+ */
+export interface LancamentoOutraConta {
+  data: string // AAAA-MM-DD
+  competencia: string | null
+  centavos: number // negativo = saída
+  /** O texto da coluna "Banco" como veio na planilha: "Dinheiro", "Caixa"... */
+  conta: string
+  nome: string
+  descricao: string | null
+  categoria: string
+}
+
 export interface PlanilhaLida {
   lancamentos: LancamentoSistema[]
+  /** As linhas de `bancoDesconhecido`, guardadas em vez de perdidas: não há
+   *  extrato para conferi-las, mas são dinheiro do mês e a tela as mostra. */
+  outrasContas: LancamentoOutraConta[]
   /** Linha sem "Data de pagamento" (ou em formato não reconhecido): não foi
    *  paga, logo não pode estar no extrato. Descarte esperado. */
   semDataPagamento: number
-  /** Linha cujo "Banco" não é Unicred nem Itaú. Descartada de propósito: a
-   *  conciliação é por conta, e adivinhar o banco inventaria divergência. */
+  /** Linha cujo "Banco" não é Unicred nem Itaú. Fica fora da conciliação de
+   *  propósito — adivinhar o banco inventaria divergência —, mas não é jogada
+   *  fora: vai para `outrasContas`. O contador existe porque o aviso de
+   *  leitura continua dizendo quantas linhas saíram da conciliação. */
   bancoDesconhecido: number
-  /** Linha paga, de banco conhecido, cujo valor não deu para ler. Nos arquivos
+  /** Linha paga cujo valor não deu para ler, de qualquer conta. Nos arquivos
    *  reais é zero; acima de zero é falha de leitura e a tela avisa. */
   semValor: number
 }

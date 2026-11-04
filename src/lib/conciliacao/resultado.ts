@@ -2,7 +2,15 @@ import type { CompraEnquadrada } from '@/lib/fatura/enquadrar'
 import { substituirCartao } from '@/lib/fatura/substituir'
 import { compararCategorias, compararFornecedores, type LinhaComparativo } from './comparativo'
 import { conciliar, type ResultadoConciliacao } from './conciliar'
-import type { Banco, ConferenciaSaldo, LancamentoExtrato, LancamentoSistema, PeriodoExtrato } from './tipos'
+import { acharTransferencias, type ParTransferencia } from './transferencias'
+import type {
+  Banco,
+  ConferenciaSaldo,
+  LancamentoExtrato,
+  LancamentoOutraConta,
+  LancamentoSistema,
+  PeriodoExtrato,
+} from './tipos'
 
 // A montagem do que a aba mostra: a conciliação de cada banco e o comparativo
 // contra o mês anterior. Puro — as duas rotas (o envio e a releitura de um mês
@@ -80,6 +88,17 @@ export interface ResultadoMes {
   mes: string
   /** Um bloco por banco, na ordem de `BANCOS`. */
   bancos: ResultadoConciliacao[]
+  /** Dinheiro que só trocou de conta. Fica FORA das diferenças de cada banco
+   *  (ver `acharTransferencias`) e aparece num bloco próprio: sai da lista de
+   *  cobrança do BPO, mas continua à vista. */
+  transferencias: ParTransferencia[]
+  /** O que o BPO lançou numa conta sem extrato (dinheiro, caixa, outro banco).
+   *  Não entra na conciliação nem no comparativo — tem bloco próprio.
+   *
+   *  `null` é "mês gravado antes de isto existir", nunca "não houve": sem essa
+   *  distinção, abrir um mês antigo mostraria ausência de dinheiro onde na
+   *  verdade ninguém guardou. Lista vazia é a afirmação de que não houve. */
+  outrasContas: LancamentoOutraConta[] | null
   comparativo: {
     /** AAAA-MM do mês comparado, ou `null` quando não há mês anterior gravado
      *  — a tela diz isso em vez de mostrar tudo como alta de 100%. */
@@ -104,6 +123,8 @@ export function montarResultado(entrada: {
    *  elas (ver `substituirCartao`). Vazio ou ausente = o mês continua como
    *  antes de a fatura existir. */
   compras?: CompraEnquadrada[] | null
+  /** Ausente = mês gravado antes de o sistema guardar as outras contas. */
+  outrasContas?: LancamentoOutraConta[] | null
   leitura?: Leitura | null
 }): ResultadoMes {
   // ABRE OS DOIS MESES OU NENHUM. Comparar um mês aberto contra um mês fechado
@@ -139,11 +160,18 @@ export function montarResultado(entrada: {
   const comFornecedores = (linhas: LinhaComparativo[]): CategoriaComparativo[] =>
     linhas.map(l => ({ ...l, fornecedores: compararFornecedores(sistema, anterior, l.chave) }))
 
+  // A transferência entre contas atravessa DOIS bancos, então só dá para
+  // reconhecê-la depois que os dois blocos existem — `conciliar` enxerga um
+  // banco de cada vez e nunca veria o outro lado do par.
+  const semTransferencias = acharTransferencias(
+    BANCOS.map(banco => conciliar(entrada.sistema, entrada.extrato.filter(l => l.banco === banco), banco))
+  )
+
   return {
     mes: entrada.mes,
-    bancos: BANCOS.map(banco =>
-      conciliar(entrada.sistema, entrada.extrato.filter(l => l.banco === banco), banco)
-    ),
+    bancos: semTransferencias.resultados,
+    transferencias: semTransferencias.pares,
+    outrasContas: entrada.outrasContas ?? null,
     comparativo: {
       mesAnterior: entrada.anterior?.mes ?? null,
       receitas: comFornecedores(categorias.receitas),

@@ -634,6 +634,18 @@ async function runMigrations() {
       valor_centavos BIGINT NOT NULL,
       descricao TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS conciliacao_outras_contas (
+      id SERIAL PRIMARY KEY,
+      mes_id INTEGER NOT NULL REFERENCES conciliacao_meses(id) ON DELETE CASCADE,
+      data DATE NOT NULL,
+      competencia DATE,
+      valor_centavos BIGINT NOT NULL,
+      conta TEXT NOT NULL,
+      nome TEXT NOT NULL,
+      descricao TEXT,
+      categoria TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS conciliacao_outras_contas_mes_idx ON conciliacao_outras_contas (mes_id);
     CREATE INDEX IF NOT EXISTS conciliacao_sistema_mes_idx ON conciliacao_sistema (mes_id);
     CREATE INDEX IF NOT EXISTS conciliacao_extrato_mes_idx ON conciliacao_extrato (mes_id);
   `).catch(() => {})
@@ -648,6 +660,15 @@ async function runMigrations() {
     ALTER TABLE conciliacao_meses ADD COLUMN IF NOT EXISTS nao_entendidas_itau INTEGER;
     ALTER TABLE conciliacao_meses ADD COLUMN IF NOT EXISTS sem_valor_recebidas INTEGER;
     ALTER TABLE conciliacao_meses ADD COLUMN IF NOT EXISTS sem_valor_pagas INTEGER;
+  `).catch(() => {})
+
+  // Quantas linhas de conta sem extrato (dinheiro, caixa, outro banco) foram
+  // guardadas com o mês. Sem DEFAULT pelo mesmo motivo das colunas acima, e
+  // aqui o motivo é ainda mais direto: zero linhas na tabela é ambíguo — pode
+  // ser "não houve dinheiro neste mês" ou "este mês foi enviado antes de a
+  // tabela existir". NULL separa os dois, e a tela diz coisas diferentes.
+  await sql.unsafe(`
+    ALTER TABLE conciliacao_meses ADD COLUMN IF NOT EXISTS outras_contas_linhas INTEGER;
   `).catch(() => {})
 
   // A prova de leitura de cada extrato: saldo de abertura impresso, soma dos

@@ -1,7 +1,7 @@
 import sql, { initSchema } from '@/lib/db'
 import { mesAnterior, mesValido } from './conciliacao/periodo'
 import { montarResultado, type LancamentoExtratoBanco, type ResultadoMes } from './conciliacao/resultado'
-import type { Banco, ConferenciaSaldo, LancamentoSistema } from './conciliacao/tipos'
+import type { Banco, ConferenciaSaldo, LancamentoOutraConta, LancamentoSistema } from './conciliacao/tipos'
 import { comprasDoComparativo, lerFaturaDoMes, type FaturaGravada } from './fatura-db'
 import { comprasParaComparativo, totalLancadoNoCartao } from './fatura/substituir'
 import { categoriasDisponiveis } from './fatura/enquadrar'
@@ -62,6 +62,7 @@ export interface DadosMes {
   mes: string
   sistema: LancamentoSistema[]
   extrato: LancamentoExtratoBanco[]
+  outrasContas: LancamentoOutraConta[]
   s3: ChavesS3
   descartes: Descartes
   conferencias: Conferencias
@@ -86,6 +87,9 @@ export interface MesGravado extends MesEnviado {
   conferencias: Conferencias
   sistema: LancamentoSistema[]
   extrato: LancamentoExtratoBanco[]
+  /** `null` num mês gravado antes de a tabela existir: ninguém guardou aquelas
+   *  linhas, e lista vazia afirmaria que o mês não teve dinheiro em espécie. */
+  outrasContas: LancamentoOutraConta[] | null
 }
 
 /** Quantas linhas vão num único INSERT. 320 linhas/mês é o volume real; o lote
@@ -129,6 +133,7 @@ export async function salvarMes(dados: DadosMes): Promise<void> {
         nao_entendidas_unicred, nao_entendidas_itau, sem_valor_recebidas, sem_valor_pagas,
         saldo_abertura_unicred, saldo_soma_unicred, saldo_fechamento_unicred,
         saldo_abertura_itau, saldo_soma_itau, saldo_fechamento_itau,
+        outras_contas_linhas,
         created_by
       )
       VALUES (
@@ -138,6 +143,7 @@ export async function salvarMes(dados: DadosMes): Promise<void> {
         ${dados.descartes.semValorRecebidas}, ${dados.descartes.semValorPagas},
         ${u ? u.abertura : null}, ${u ? u.soma : null}, ${u ? u.fechamento : null},
         ${i ? i.abertura : null}, ${i ? i.soma : null}, ${i ? i.fechamento : null},
+        ${dados.outrasContas.length},
         ${dados.createdBy}
       )
       RETURNING id
@@ -168,6 +174,23 @@ export async function salvarMes(dados: DadosMes): Promise<void> {
       }))
       await tx`INSERT INTO conciliacao_extrato ${tx(linhas, 'mes_id', 'banco', 'data', 'valor_centavos', 'descricao')}`
     }
+
+    // Tabela própria, e não `conciliacao_sistema` com o CHECK afrouxado: o
+    // CHECK é o que garante que uma conta sem extrato nunca seja lida de volta
+    // como lançamento de banco e vire diferença falsa na conciliação.
+    for (const lote of lotes(dados.outrasContas, LOTE)) {
+      const linhas = lote.map(l => ({
+        mes_id: mesId,
+        data: l.data,
+        competencia: l.competencia,
+        valor_centavos: l.centavos,
+        conta: l.conta,
+        nome: l.nome,
+        descricao: l.descricao,
+        categoria: l.categoria,
+      }))
+      await tx`INSERT INTO conciliacao_outras_contas ${tx(linhas, 'mes_id', 'data', 'competencia', 'valor_centavos', 'conta', 'nome', 'descricao', 'categoria')}`
+    }
   })
 }
 
@@ -186,6 +209,16 @@ interface LinhaExtrato {
   data: string
   valor_centavos: string
   descricao: string
+}
+
+interface LinhaOutraConta {
+  data: string
+  competencia: string | null
+  valor_centavos: string
+  conta: string
+  nome: string
+  descricao: string | null
+  categoria: string
 }
 
 /** BIGINT volta como string no postgres.js — centavo é número aqui dentro. */
@@ -240,17 +273,19 @@ export async function lerMes(mes: string): Promise<MesGravado | null> {
     saldo_abertura_itau: string | null
     saldo_soma_itau: string | null
     saldo_fechamento_itau: string | null
+    outras_contas_linhas: number | null
   }[]>`
     SELECT id, to_char(mes, 'YYYY-MM') AS mes, created_at, created_by,
            recebidas_s3_key, pagas_s3_key, unicred_s3_key, itau_s3_key,
            nao_entendidas_unicred, nao_entendidas_itau, sem_valor_recebidas, sem_valor_pagas,
            saldo_abertura_unicred, saldo_soma_unicred, saldo_fechamento_unicred,
-           saldo_abertura_itau, saldo_soma_itau, saldo_fechamento_itau
+           saldo_abertura_itau, saldo_soma_itau, saldo_fechamento_itau,
+           outras_contas_linhas
     FROM conciliacao_meses WHERE mes = ${dia}::date
   `
   if (!cabecalho) return null
 
-  const [sistema, extrato] = await Promise.all([
+  const [sistema, extrato, outras] = await Promise.all([
     sql<LinhaSistema[]>`
       SELECT to_char(data, 'YYYY-MM-DD') AS data,
              to_char(competencia, 'YYYY-MM-DD') AS competencia,
@@ -260,6 +295,12 @@ export async function lerMes(mes: string): Promise<MesGravado | null> {
     sql<LinhaExtrato[]>`
       SELECT banco, to_char(data, 'YYYY-MM-DD') AS data, valor_centavos, descricao
       FROM conciliacao_extrato WHERE mes_id = ${cabecalho.id} ORDER BY data, id
+    `,
+    sql<LinhaOutraConta[]>`
+      SELECT to_char(data, 'YYYY-MM-DD') AS data,
+             to_char(competencia, 'YYYY-MM-DD') AS competencia,
+             valor_centavos, conta, nome, descricao, categoria
+      FROM conciliacao_outras_contas WHERE mes_id = ${cabecalho.id} ORDER BY data, id
     `,
   ])
 
@@ -331,6 +372,22 @@ export async function lerMes(mes: string): Promise<MesGravado | null> {
       centavos: centavos(l.valor_centavos),
       descricao: l.descricao,
     })),
+    // Quem decide é a COLUNA, não a tabela: zero linha é ambíguo (mês sem
+    // dinheiro, ou mês enviado antes de a tabela existir) e a coluna NULL é o
+    // que diz "ninguém guardou". Sem isso a tela afirmaria, para setembro, que
+    // não houve dinheiro nenhum.
+    outrasContas:
+      cabecalho.outras_contas_linhas === null
+        ? null
+        : outras.map(l => ({
+            data: l.data,
+            competencia: l.competencia,
+            centavos: centavos(l.valor_centavos),
+            conta: l.conta,
+            nome: l.nome,
+            descricao: l.descricao,
+            categoria: l.categoria,
+          })),
   }
 }
 
@@ -397,6 +454,7 @@ export async function montarMesGravado(mes: string): Promise<MesMontado | null> 
       ? { mes: anteriorMes, sistema: anteriorSistema, compras: comprasAnterior }
       : null,
     compras,
+    outrasContas: gravado.outrasContas,
     leitura: d
       ? {
           recebidas: { semValor: d.semValorRecebidas },

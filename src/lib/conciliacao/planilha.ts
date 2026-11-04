@@ -1,4 +1,4 @@
-import { dataBrParaIso, type Banco, type LancamentoSistema, type PlanilhaLida } from './tipos'
+import { dataBrParaIso, type Banco, type LancamentoOutraConta, type LancamentoSistema, type PlanilhaLida } from './tipos'
 
 // Leitor das duas planilhas que o BPO exporta do sistema contábil: contas
 // recebidas e contas pagas. Têm o MESMO cabeçalho, exceto a última coluna
@@ -70,7 +70,7 @@ export function pontoParaCentavos(bruto: unknown): number | null {
 }
 
 export function lerPlanilha(linhas: unknown[][]): PlanilhaLida {
-  const vazio: PlanilhaLida = { lancamentos: [], semDataPagamento: 0, bancoDesconhecido: 0, semValor: 0 }
+  const vazio: PlanilhaLida = { lancamentos: [], outrasContas: [], semDataPagamento: 0, bancoDesconhecido: 0, semValor: 0 }
   const [cabecalho, ...dados] = linhas
   if (!cabecalho) return vazio
 
@@ -95,7 +95,7 @@ export function lerPlanilha(linhas: unknown[][]): PlanilhaLida {
     throw new Error(`Planilha não reconhecida: faltam as colunas ${faltando.join(', ')}. Esperado o export de contas recebidas/pagas do sistema contábil.`)
   }
 
-  const r: PlanilhaLida = { ...vazio, lancamentos: [] }
+  const r: PlanilhaLida = { ...vazio, lancamentos: [], outrasContas: [] }
   for (const linha of dados) {
     // Linha inteiramente vazia é rodapé/sobra do export, não é descarte.
     if (!linha || linha.every(c => texto(c) === '')) continue
@@ -105,14 +105,27 @@ export function lerPlanilha(linhas: unknown[][]): PlanilhaLida {
       r.semDataPagamento++
       continue
     }
-    const banco = BANCOS[chave(linha[i.banco])]
-    if (!banco) {
-      r.bancoDesconhecido++
-      continue
-    }
+    // O valor é lido ANTES de olhar o banco: linha sem valor legível não serve
+    // nem para conciliar nem para mostrar em "outras contas", e tem de acender
+    // o aviso de falha de leitura em vez de sumir contada como "outro banco" —
+    // o contador diria "1" e o bloco mostraria nada.
     const centavos = pontoParaCentavos(linha[i.valor])
     if (centavos === null) {
       r.semValor++
+      continue
+    }
+    const banco = BANCOS[chave(linha[i.banco])]
+    if (!banco) {
+      r.bancoDesconhecido++
+      r.outrasContas.push({
+        data,
+        competencia: i.competencia < 0 ? null : dataBrParaIso(texto(linha[i.competencia])),
+        centavos,
+        conta: texto(linha[i.banco]),
+        nome: texto(linha[i.nome]),
+        descricao: i.descricao < 0 ? null : texto(linha[i.descricao]) || null,
+        categoria: texto(linha[i.categoria]),
+      })
       continue
     }
     r.lancamentos.push({

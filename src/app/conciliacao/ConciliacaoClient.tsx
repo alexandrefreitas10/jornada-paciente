@@ -5,7 +5,8 @@ import { resultadoDoMes, totalizar, type LinhaComparativo } from '@/lib/concilia
 import type { ResultadoConciliacao } from '@/lib/conciliacao/conciliar'
 import { mesValido } from '@/lib/conciliacao/periodo'
 import type { CategoriaComparativo, Leitura, LeituraPlanilha, ResultadoMes } from '@/lib/conciliacao/resultado'
-import type { Banco, ConferenciaSaldo } from '@/lib/conciliacao/tipos'
+import type { ParTransferencia } from '@/lib/conciliacao/transferencias'
+import type { Banco, ConferenciaSaldo, LancamentoOutraConta } from '@/lib/conciliacao/tipos'
 import { ehCategoriaCartao, NAO_IDENTIFICADO } from '@/lib/fatura/enquadrar'
 import { AJUSTES_CARTAO } from '@/lib/fatura/substituir'
 import type { FaturaDaTela } from '@/lib/fatura/tela'
@@ -274,11 +275,169 @@ function Totais({ r }: { r: ResultadoConciliacao }) {
   )
 }
 
+/**
+ * O que o BPO lançou numa conta que não tem extrato: dinheiro em espécie,
+ * caixa, outro banco.
+ *
+ * Não é diferença, e não entra na conciliação de banco nenhum — não existe
+ * extrato para conferir contra. Mas é dinheiro do mês, e até aqui ele sumia da
+ * tela inteira: o dono comparava o total do contábil com o do sistema e a
+ * diferença não tinha explicação em lugar nenhum.
+ *
+ * `null` é "mês enviado antes de isto existir". Nesse caso a tela diz isso, em
+ * vez de não mostrar nada — não mostrar nada afirmaria que não houve dinheiro
+ * naquele mês, e ninguém sabe se houve.
+ */
+function BlocoOutrasContas({ linhas }: { linhas: LancamentoOutraConta[] | null }) {
+  if (linhas === null) {
+    return (
+      <section className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+        <p className="text-xs text-gray-500">
+          Este mês foi enviado antes de o sistema guardar os lançamentos de contas sem extrato (dinheiro, caixa, outro
+          banco). Reenvie o mês para vê-los.
+        </p>
+      </section>
+    )
+  }
+  if (linhas.length === 0) return null
+
+  const total = linhas.reduce((s, l) => s + l.centavos, 0)
+
+  return (
+    <section className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <h2 className="text-base font-semibold text-gray-800">Outras contas (fora de Unicred e Itaú)</h2>
+        <span className="text-xs font-semibold px-2 py-1 rounded-full border text-gray-600 bg-gray-50 border-gray-200">
+          {plural(linhas.length, 'lançamento', 'lançamentos')} · {reais(total)}
+        </span>
+      </div>
+
+      <p className="text-xs text-gray-500">
+        O BPO lançou nestas contas e não há extrato para conferir, então não entram na conciliação nem no comparativo —
+        e não são diferença para cobrar do BPO.
+      </p>
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[34rem] text-xs select-text">
+          <thead>
+            <tr className="border-b border-gray-200">
+              <th className={TH}>Data</th>
+              <th className={`${TH} text-right`}>Valor</th>
+              <th className={TH}>Conta</th>
+              <th className={TH}>Nome</th>
+              <th className={TH}>Descrição</th>
+              <th className={TH}>Categoria</th>
+            </tr>
+          </thead>
+          <tbody>
+            {porData(linhas).map((l, i) => (
+              <tr key={i} className="border-b border-gray-50 last:border-0">
+                <td className={`${TD} whitespace-nowrap`}>{dia(l.data)}</td>
+                <td className={`${TD} text-right whitespace-nowrap font-medium text-gray-900`}>{reais(l.centavos)}</td>
+                <td className={`${TD} whitespace-nowrap`}>{l.conta || '—'}</td>
+                <td className={`${TD} break-words`}>{l.nome}</td>
+                <td className={`${TD} break-words`}>{l.descricao ?? '—'}</td>
+                <td className={`${TD} break-words`}>{l.categoria}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
+
+/**
+ * A ponte entre os totais e o bloco de transferências. Sem ela o dono vê uma
+ * diferença de R$ 19.000,00 na linha de Saídas e nenhuma diferença listada
+ * embaixo — e o número fica sem dono. A tabela de totais em si não é tocada:
+ * ela é a prova contra o extrato e tem de continuar mostrando o que o banco
+ * mexeu de verdade.
+ */
+function ExplicaTransferencias({ banco, pares }: { banco: Banco; pares: ParTransferencia[] }) {
+  const soma = (f: (p: ParTransferencia) => boolean) =>
+    pares.filter(f).reduce((s, p) => s + p.centavos, 0)
+  const saiu = soma(p => p.de === banco)
+  const entrou = soma(p => p.para === banco)
+  const partes = [
+    saiu > 0 ? `${reais(saiu)} em Saídas` : null,
+    entrou > 0 ? `${reais(entrou)} em Entradas` : null,
+  ].filter((p): p is string => p !== null)
+  if (partes.length === 0) return null
+
+  return (
+    <p className="text-xs text-gray-500">
+      Da diferença acima, {partes.join(' e ')} {partes.length > 1 ? 'são transferências' : 'é transferência'} entre as
+      suas contas — ver o bloco no fim da página.
+    </p>
+  )
+}
+
+/**
+ * O dinheiro que só trocou de conta. Fica num bloco próprio, FORA das
+ * diferenças de cada banco: não é erro do BPO, e cobrá-lo dele seria cobrar
+ * errado. Mas também não some — o par aparece inteiro, com as duas descrições,
+ * para o dono ver o que saiu da conta de diferenças e por quê. Esconder sem
+ * mostrar seria trocar uma pergunta ruim por uma mentira tranquilizadora.
+ */
+function BlocoTransferencias({ pares }: { pares: ParTransferencia[] }) {
+  if (pares.length === 0) return null
+  const total = pares.reduce((s, p) => s + p.centavos, 0)
+
+  return (
+    <section className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <h2 className="text-base font-semibold text-gray-800">Transferências entre contas</h2>
+        <span className="text-xs font-semibold px-2 py-1 rounded-full border text-gray-600 bg-gray-50 border-gray-200">
+          {plural(pares.length, 'transferência', 'transferências')} · {reais(total)}
+        </span>
+      </div>
+
+      <p className="text-xs text-gray-500">
+        Saiu de uma conta sua e entrou na outra, no mesmo dia e pelo mesmo valor. Não é receita nem despesa, por isso o
+        BPO não lança — e por isso não conta como diferença.
+      </p>
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[34rem] text-xs select-text">
+          <thead>
+            <tr className="border-b border-gray-200">
+              <th className={TH}>Data</th>
+              <th className={`${TH} text-right`}>Valor</th>
+              <th className={TH}>De</th>
+              <th className={TH}>Para</th>
+              <th className={TH}>Descrição no extrato</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pares.map((p, i) => (
+              <tr key={i} className="border-b border-gray-50 last:border-0">
+                <td className={`${TD} whitespace-nowrap`}>{dia(p.data)}</td>
+                <td className={`${TD} text-right whitespace-nowrap font-medium text-gray-900`}>{reais(p.centavos)}</td>
+                <td className={`${TD} whitespace-nowrap`}>{BANCO_NOME[p.de]}</td>
+                <td className={`${TD} whitespace-nowrap`}>{BANCO_NOME[p.para]}</td>
+                <td className={`${TD} break-words`}>
+                  <span className="block">{p.descricaoDe}</span>
+                  <span className="block text-gray-500">{p.descricaoPara}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
+
 function BlocoBanco({
   r,
+  transferencias,
   conferencia,
 }: {
   r: ResultadoConciliacao
+  /** As transferências do mês que envolvem ESTE banco, já fora das diferenças
+   *  dele — usadas só para explicar a linha de diferença dos totais. */
+  transferencias: ParTransferencia[]
   /** `undefined` = nada guardado para este mês; `null` = sem prova possível. */
   conferencia: ConferenciaSaldo | null | undefined
 }) {
@@ -323,6 +482,7 @@ function BlocoBanco({
             movimentos do extrato.
           </p>
           <Totais r={r} />
+          <ExplicaTransferencias banco={r.banco} pares={transferencias} />
 
           {diferencas === 0 ? (
             <p className="text-sm text-green-800 bg-green-50 border border-green-200 rounded-lg p-3">
@@ -465,6 +625,7 @@ function BlocoCategorias({
   mesAnterior,
   aberta,
   abrir,
+  outrasContas,
 }: {
   titulo: string
   linhas: CategoriaComparativo[]
@@ -473,6 +634,9 @@ function BlocoCategorias({
   mesAnterior: string | null
   aberta: string | null
   abrir: (chave: string | null) => void
+  /** O que o mês teve em conta sem extrato, para o aviso do rodapé. `null` em
+   *  mês gravado antes de isso ser guardado: aí não se afirma nada. */
+  outrasContas: LancamentoOutraConta[] | null
 }) {
   const fator = receita ? 1 : -1
   const exibe = (centavos: number) => fator * centavos
@@ -491,6 +655,9 @@ function BlocoCategorias({
       <section className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-2">
         <h2 className="text-base font-semibold text-gray-800">{titulo}</h2>
         <p className="text-sm text-gray-500">Nenhuma categoria com movimento neste mês.</p>
+        {/* O aviso entra aqui também: um mês cujo movimento foi TODO em conta
+            sem extrato mostraria "nenhum movimento" com dinheiro tendo entrado. */}
+        <ForaDesteTotal linhas={outrasContas} receita={receita} />
       </section>
     )
   }
@@ -583,7 +750,35 @@ function BlocoCategorias({
           </tr>
         </tfoot>
       </table>
+      <ForaDesteTotal linhas={outrasContas} receita={receita} />
     </section>
+  )
+}
+
+/**
+ * O aviso de que o total acima não é tudo que o mês movimentou.
+ *
+ * O comparativo é, por decisão do dono, a soma das DUAS CONTAS BANCÁRIAS — é o
+ * número que conversa com os extratos. Dinheiro em espécie não passou por banco
+ * nenhum e por isso fica fora. Sem este aviso, quem compara o total daqui com o
+ * do sistema contábil acha uma diferença e não tem como saber de onde veio.
+ */
+function ForaDesteTotal({ linhas, receita }: { linhas: LancamentoOutraConta[] | null; receita: boolean }) {
+  if (!linhas) return null
+  const doLado = linhas.filter(l => (receita ? l.centavos > 0 : l.centavos < 0))
+  if (doLado.length === 0) return null
+
+  const total = doLado.reduce((s, l) => s + l.centavos, 0)
+  // Sem repetir: três lançamentos em "Dinheiro" não viram "Dinheiro, Dinheiro,
+  // Dinheiro". Conta em branco não entra na lista de nomes.
+  const contas = [...new Set(doLado.map(l => l.conta).filter(c => c !== ''))]
+
+  return (
+    <p className="text-xs text-gray-500 pt-2">
+      {reais(Math.abs(total))} {receita ? 'entraram' : 'saíram'} por outras contas
+      {contas.length > 0 && ` (${contas.join(', ')})`}, fora deste total — ver o bloco &ldquo;Outras contas&rdquo; na
+      Conciliação.
+    </p>
   )
 }
 
@@ -1295,8 +1490,17 @@ export function ConciliacaoClient() {
               {/* `leitura` ausente é mês gravado antes da conferência: passa
                   `undefined` e o bloco não diz nada sobre saldo. */}
               {resultado.bancos.map(b => (
-                <BlocoBanco key={b.banco} r={b} conferencia={resultado.leitura?.[b.banco].conferenciaSaldo} />
+                <BlocoBanco
+                  key={b.banco}
+                  r={b}
+                  transferencias={resultado.transferencias ?? []}
+                  conferencia={resultado.leitura?.[b.banco].conferenciaSaldo}
+                />
               ))}
+              {/* `?? []`: durante um deploy o navegador pode estar com a tela
+                  nova e receber o corpo do servidor antigo, sem este campo. */}
+              <BlocoTransferencias pares={resultado.transferencias ?? []} />
+              <BlocoOutrasContas linhas={resultado.outrasContas ?? null} />
             </div>
           ) : (
             <div className="space-y-4">
@@ -1331,6 +1535,7 @@ export function ConciliacaoClient() {
                 titulo="Despesas"
                 linhas={resultado.comparativo.despesas}
                 receita={false}
+                outrasContas={resultado.outrasContas ?? null}
                 mes={resultado.mes}
                 mesAnterior={resultado.comparativo.mesAnterior}
                 aberta={aberta}
@@ -1340,6 +1545,7 @@ export function ConciliacaoClient() {
                 titulo="Receitas"
                 linhas={resultado.comparativo.receitas}
                 receita
+                outrasContas={resultado.outrasContas ?? null}
                 mes={resultado.mes}
                 mesAnterior={resultado.comparativo.mesAnterior}
                 aberta={aberta}
