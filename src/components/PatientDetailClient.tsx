@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { PatientDetail } from '@/lib/patients'
 import { formatarTelefone } from '@/lib/telefone'
+import { fmtDiaPuro } from '@/lib/datas'
 import { Measurement } from '@/lib/measurements'
 import { TASK_PHASES, ALL_TASK_KEYS } from '@/lib/task-definitions'
 import { ProgressBar } from './ProgressBar'
@@ -138,7 +139,11 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
           <div className="flex-1 min-w-0">
             <h1 className="text-xl font-bold text-gray-900">{patient.name}</h1>
             <p className="text-sm text-gray-500">
-              {patient.start_date && `Início: ${patient.start_date}`}
+              {/* Formatado, não cru: aqui saía "2026-06-01", que é o formato do
+                  banco e não o que se lê. O campo do ✏️ continua recebendo o
+                  valor cru mais abaixo — é um `<input type="date">`, que só
+                  aceita `AAAA-MM-DD`. */}
+              {patient.start_date && `Início: ${fmtDiaPuro(patient.start_date)}`}
               {patient.start_date && patient.duration && ' · '}
               {patient.duration}
             </p>
