@@ -90,14 +90,19 @@ export function PatientDetailClient({ patient, initialMeasurements, initialPhoto
     await fetch(`/api/patients/${patient.id}/tasks/${taskKey}`, { method })
   }
 
-  async function handleEdit(data: { name: string; phone: string; start_date: string; duration: string; notes: string }) {
+  async function handleEdit(data: { name: string; tipo?: string; phone: string; start_date: string; duration: string; notes: string }) {
     // O PUT regrava o telefone que recebe: mandar o campo é o que impede a
     // edição de apagar o número de quem já tem.
+    //
+    // O `tipo` precisa ir junto pelo motivo oposto: o servidor trata campo
+    // ausente como "não mexe", então omiti-lo fazia a troca de estética para
+    // nutrologia salvar sem erro nenhum e não mudar nada.
     const res = await fetch(`/api/patients/${patient.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: data.name,
+        tipo: data.tipo,
         start_date: data.start_date,
         duration: data.duration,
         notes: data.notes,

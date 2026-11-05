@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import '@testing-library/jest-dom'
 import { PatientDetailClient } from '@/components/PatientDetailClient'
 import type { PatientDetail } from '@/lib/patients'
@@ -66,5 +67,40 @@ describe('PatientDetailClient › data de início', () => {
     montar({ start_date: '' })
 
     expect(screen.queryByText(/Início:/)).toBeNull()
+  })
+})
+
+/** O corpo JSON do PUT que salvou o cadastro. */
+function corpoDoPut(): Record<string, unknown> {
+  const chamada = (global.fetch as jest.Mock).mock.calls.find(
+    ([, init]) => (init as RequestInit | undefined)?.method === 'PUT',
+  )
+  if (!chamada) throw new Error('nenhum PUT foi disparado')
+  return JSON.parse((chamada[1] as RequestInit).body as string)
+}
+
+describe('PatientDetailClient › tipo de atendimento', () => {
+  // O servidor trata campo ausente como "não mexe". Se a tela esquecer de
+  // mandar o tipo, a troca salva sem erro nenhum e não muda nada — foi o que
+  // acontecia, e é por isso que o teste olha o CORPO da requisição.
+  it('estetica que virou nutrologia é salva como nutrologia', async () => {
+    const user = userEvent.setup()
+    montar({ tipo: 'estetica' })
+
+    await user.click(screen.getByRole('button', { name: /Editar/ }))
+    await user.selectOptions(screen.getByRole('combobox'), 'nutrologia')
+    await user.click(screen.getByRole('button', { name: 'Salvar' }))
+
+    await waitFor(() => expect(corpoDoPut().tipo).toBe('nutrologia'))
+  })
+
+  it('quem não foi mexido continua com o tipo que tinha', async () => {
+    const user = userEvent.setup()
+    montar({ tipo: 'estetica' })
+
+    await user.click(screen.getByRole('button', { name: /Editar/ }))
+    await user.click(screen.getByRole('button', { name: 'Salvar' }))
+
+    await waitFor(() => expect(corpoDoPut().tipo).toBe('estetica'))
   })
 })
