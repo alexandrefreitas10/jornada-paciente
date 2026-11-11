@@ -1,5 +1,9 @@
 // Envio do aviso (push). Só servidor: usa a chave privada VAPID.
-import webpush from 'web-push'
+// Importes NOMEADOS: `web-push` é CommonJS e não tem `export default`. Com
+// `import webpush from 'web-push'` o TypeScript aceita (por esModuleInterop),
+// mas o Turbopack recusa na hora de empacotar — e aí o erro só aparece no
+// build do Render, nunca no `tsc` nem no `jest`.
+import { sendNotification, setVapidDetails } from 'web-push'
 import { apagarAssinatura, assinaturasDoPaciente } from './push-db'
 import { assinaturaMorreu, enderecoDeServicoConhecido, montarAviso, type Aviso } from './push'
 
@@ -12,7 +16,7 @@ function configurar(): boolean {
   const publica = process.env.VAPID_PUBLIC_KEY
   const privada = process.env.VAPID_PRIVATE_KEY
   if (!publica || !privada) return false
-  webpush.setVapidDetails(process.env.VAPID_SUBJECT ?? 'mailto:contato@institutotorres.com.br', publica, privada)
+  setVapidDetails(process.env.VAPID_SUBJECT ?? 'mailto:contato@institutotorres.com.br', publica, privada)
   return true
 }
 
@@ -49,7 +53,7 @@ export async function avisarPaciente(patientId: number, aviso: Aviso): Promise<R
       continue
     }
     try {
-      await webpush.sendNotification(
+      await sendNotification(
         { endpoint: a.endpoint, keys: { p256dh: a.p256dh, auth: a.auth } },
         corpo,
       )
