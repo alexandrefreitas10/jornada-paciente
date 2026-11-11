@@ -368,6 +368,22 @@ async function runMigrations() {
   await sql.unsafe(`ALTER TABLE patient_users ADD COLUMN IF NOT EXISTS email_registered_at TIMESTAMPTZ`).catch(() => {})
   await sql.unsafe(`UPDATE patient_users SET email_registered_at = created_at WHERE email_registered_at IS NULL`).catch(() => {})
 
+  // Aviso (push) do portal. Uma linha por APARELHO, não por paciente: a mesma
+  // pessoa pode ter o portal no celular e no tablet, e cada um tem endereço
+  // próprio. `endpoint` é único porque é ele que identifica o aparelho — se o
+  // paciente reinstalar, volta um endereço novo e o velho morre sozinho no
+  // primeiro envio (ver `assinaturaMorreu` em src/lib/push.ts).
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id           SERIAL PRIMARY KEY,
+      patient_id   INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      endpoint     TEXT UNIQUE NOT NULL,
+      p256dh       TEXT NOT NULL,
+      auth         TEXT NOT NULL,
+      created_at   TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(() => {})
+
   // NPS e ouvidoria do portal do paciente
   await sql.unsafe(`
     CREATE TABLE IF NOT EXISTS patient_nps (

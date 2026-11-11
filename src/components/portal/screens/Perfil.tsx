@@ -3,7 +3,8 @@
 import React from 'react'
 import { C, serif, longDate, initial, shadowCard } from '../theme'
 import { ScreenHeader } from '../ui'
-import { IconUser, IconBell, IconLock, IconChat, IconCamera } from '../Icons'
+import { IconUser, IconLock, IconChat, IconCamera } from '../Icons'
+import { AvisosPush } from '../AvisosPush'
 import type { PortalData, Screen } from '../types'
 
 function Row({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick?: () => void }) {
@@ -123,7 +124,7 @@ export function Perfil({ data, go, onLogout, onBack }: { data: PortalData; go: (
 
       {/* Demais itens */}
       <div style={{ margin: '0 20px', background: C.white, borderRadius: 18, boxShadow: shadowCard, overflow: 'hidden' }}>
-        <Row icon={<IconBell size={20} color={C.goldIcon} />} label="Notificações" />
+        <AvisosPush />
         <div style={{ height: 1, background: C.border, margin: '0 16px' }} />
         <Row icon={<IconLock size={20} color={C.goldIcon} />} label="Privacidade e senha" />
         <div style={{ height: 1, background: C.border, margin: '0 16px' }} />
