@@ -35,6 +35,42 @@ export function assinaturaMorreu(status: number): boolean {
   return status === 410 || status === 404
 }
 
+/**
+ * Os serviços de push de verdade. Cada navegador tem o seu, e o endereço da
+ * inscrição sempre sai de um deles.
+ *
+ * `.` na frente dos coringas de propósito: sem ele, `fcm.googleapis.com` também
+ * casaria com `fcm.googleapis.com.evil.com`, que é domínio de outro dono.
+ */
+const SERVICOS = [
+  'fcm.googleapis.com',
+  'android.googleapis.com',
+  'updates.push.services.mozilla.com',
+]
+const SUFIXOS = ['.push.apple.com', '.notify.windows.com', '.googleapis.com']
+
+/**
+ * O endereço da inscrição aponta para um serviço de push conhecido?
+ *
+ * **Isto é trava de segurança, não validação de formulário.** O endereço chega
+ * do NAVEGADOR: sem a lista, um paciente autenticado poderia gravar o endereço
+ * de uma máquina interna da rede e o servidor passaria a bater lá a cada aviso,
+ * virando ferramenta dele (SSRF). Vale conferir nas DUAS pontas — ao gravar e
+ * antes de enviar — porque uma linha pode ter sido gravada antes desta regra.
+ */
+export function enderecoDeServicoConhecido(endereco: string): boolean {
+  let url: URL
+  try {
+    url = new URL(endereco)
+  } catch {
+    return false
+  }
+  // http deixaria o endereço do paciente exposto no caminho.
+  if (url.protocol !== 'https:') return false
+  const host = url.hostname.toLowerCase()
+  return SERVICOS.includes(host) || SUFIXOS.some(s => host.endsWith(s))
+}
+
 export interface Aviso {
   titulo: string
   texto: string

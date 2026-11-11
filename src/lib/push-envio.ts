@@ -1,7 +1,7 @@
 // Envio do aviso (push). Só servidor: usa a chave privada VAPID.
 import webpush from 'web-push'
 import { apagarAssinatura, assinaturasDoPaciente } from './push-db'
-import { assinaturaMorreu, montarAviso, type Aviso } from './push'
+import { assinaturaMorreu, enderecoDeServicoConhecido, montarAviso, type Aviso } from './push'
 
 /**
  * As chaves ficam só no ambiente (painel do Render), nunca no repositório.
@@ -41,6 +41,13 @@ export async function avisarPaciente(patientId: number, aviso: Aviso): Promise<R
   let enviados = 0, removidos = 0, falhas = 0
 
   for (const a of assinaturas) {
+    // Segunda conferida, de proposito: esta linha pode ter sido gravada antes
+    // de a trava existir. Endereco estranho sai do banco em vez de ser batido.
+    if (!enderecoDeServicoConhecido(a.endpoint)) {
+      await apagarAssinatura(a.endpoint)
+      removidos++
+      continue
+    }
     try {
       await webpush.sendNotification(
         { endpoint: a.endpoint, keys: { p256dh: a.p256dh, auth: a.auth } },

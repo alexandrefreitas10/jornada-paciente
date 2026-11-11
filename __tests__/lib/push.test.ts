@@ -1,4 +1,4 @@
-import { assinaturaMorreu, chaveParaBytes, montarAviso } from '@/lib/push'
+import { assinaturaMorreu, chaveParaBytes, enderecoDeServicoConhecido, montarAviso } from '@/lib/push'
 
 describe('chaveParaBytes', () => {
   // A chave VAPID viaja como base64url (com - e _ no lugar de + e /), mas o
@@ -46,5 +46,48 @@ describe('montarAviso', () => {
   it('aceita abrir numa tela específica', () => {
     const aviso = montarAviso({ titulo: 'a', texto: 'b', url: '/portal/paciente/nps' })
     expect(JSON.parse(aviso).url).toBe('/portal/paciente/nps')
+  })
+})
+
+describe('enderecoDeServicoConhecido', () => {
+  // O endereço chega do NAVEGADOR. Sem esta trava, um paciente autenticado
+  // podia gravar um endereço interno da rede e fazer o servidor bater lá a
+  // cada aviso — o servidor viraria ferramenta dele (SSRF).
+  it('aceita os serviços de push de verdade', () => {
+    for (const bom of [
+      'https://web.push.apple.com/QAbc123',
+      'https://fcm.googleapis.com/fcm/send/abc:123',
+      'https://updates.push.services.mozilla.com/wpush/v2/xyz',
+      'https://sin.notify.windows.com/w/?token=abc',
+    ]) {
+      expect(enderecoDeServicoConhecido(bom)).toBe(true)
+    }
+  })
+
+  it('recusa endereço interno, que é o ataque', () => {
+    for (const mau of [
+      'http://169.254.169.254/latest/meta-data/',   // metadados da nuvem
+      'http://localhost:5432/',
+      'https://10.0.0.5/interno',
+      'https://evil.example.com/coleta',
+    ]) {
+      expect(enderecoDeServicoConhecido(mau)).toBe(false)
+    }
+  })
+
+  it('exige https: http abriria espaço para interceptação', () => {
+    expect(enderecoDeServicoConhecido('http://fcm.googleapis.com/fcm/send/a')).toBe(false)
+  })
+
+  it('não cai no truque do domínio parecido', () => {
+    // "fcm.googleapis.com.evil.com" termina com ".evil.com", não com o
+    // domínio real — comparar por "contém" deixaria isso passar.
+    expect(enderecoDeServicoConhecido('https://fcm.googleapis.com.evil.com/x')).toBe(false)
+    expect(enderecoDeServicoConhecido('https://naoweb.push.apple.com.br/x')).toBe(false)
+  })
+
+  it('texto que nem é URL não derruba nada', () => {
+    expect(enderecoDeServicoConhecido('nem é url')).toBe(false)
+    expect(enderecoDeServicoConhecido('')).toBe(false)
   })
 })

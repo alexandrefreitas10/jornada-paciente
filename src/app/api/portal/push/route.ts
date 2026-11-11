@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { portalAuth } from '@/auth-portal'
 import { apagarAssinatura, salvarAssinatura } from '@/lib/push-db'
+import { enderecoDeServicoConhecido } from '@/lib/push'
 
 /**
  * O paciente só pode inscrever o PRÓPRIO aparelho: o `patient_id` vem da
@@ -29,6 +30,11 @@ export async function POST(request: Request) {
     const { endpoint, keys } = await request.json()
     if (typeof endpoint !== 'string' || !endpoint || !keys?.p256dh || !keys?.auth) {
       return NextResponse.json({ error: 'Inscrição incompleta' }, { status: 400 })
+    }
+    // O endereço vem do navegador, então não se confia nele: um endereço de
+    // máquina interna gravado aqui faria o servidor bater lá a cada aviso.
+    if (!enderecoDeServicoConhecido(endpoint)) {
+      return NextResponse.json({ error: 'Endereço de inscrição não reconhecido' }, { status: 400 })
     }
     await salvarAssinatura(patientId, { endpoint, p256dh: keys.p256dh, auth: keys.auth })
     return NextResponse.json({ ok: true })
