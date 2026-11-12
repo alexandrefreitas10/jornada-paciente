@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, Component, type ReactNode, type ErrorInfo } from 'react'
 import { baixarBlob, gerarMontagem, salvarMontagem } from '@/lib/montagem-canvas'
 import { apelidoDeArquivo } from '@/lib/montagem'
+import { recusaDeEnvio } from '@/lib/envio-de-foto'
 import {
   dataDaUltimaSessao, descreverCadencia, fimPorSemana, UNIDADES, type UnidadeIntervalo,
 } from '@/lib/estetica-intervalo'
@@ -213,6 +214,7 @@ export function EsteticaTab({ patientId, patientName, readOnly = false }: { pati
   const [photos, setPhotos] = useState<FileRecord[]>([])
   const [photosLoading, setPhotosLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [erroEnvio, setErroEnvio] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [lightboxPhoto, setLightboxPhoto] = useState<FileRecord | null>(null)
 
@@ -482,23 +484,61 @@ export function EsteticaTab({ patientId, patientName, readOnly = false }: { pati
     }
   }
 
+  /**
+   * Teto de tempo de cada envio. A rota tem `maxDuration = 120`, então passar
+   * disso é sinal de que a resposta não vem mais. Sem teto, uma requisição que
+   * nunca volta deixa o botão em "Enviando..." para sempre — foi exatamente o
+   * que a equipe viu em 12/11/2026, quando o servidor morria por falta de
+   * memória no meio do envio e ninguém recebia aviso nenhum.
+   */
+  const TEMPO_MAXIMO_MS = 150_000
+
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files
     if (!files || files.length === 0) return
+    const escolhidos = Array.from(files)
+    setErroEnvio(null)
+
+    // Recusa ANTES de o arquivo sair do aparelho: arquivo grande demais derruba
+    // o servidor (ver src/lib/envio-de-foto.ts) e prejudica todo mundo, não só
+    // quem está enviando.
+    const problemas: string[] = []
+    const aceitos: File[] = []
+    for (const file of escolhidos) {
+      const recusa = recusaDeEnvio(file)
+      if (recusa) problemas.push(recusa)
+      else aceitos.push(file)
+    }
+
     setUploading(true)
     try {
-      for (const file of Array.from(files)) {
+      for (const file of aceitos) {
         const fd = new FormData()
         fd.append('file', file)
         fd.append('type', 'estetica')
-        const res = await fetch(`/api/patients/${patientId}/files`, { method: 'POST', body: fd })
-        if (res.ok) {
+        const relogio = new AbortController()
+        const limite = setTimeout(() => relogio.abort(), TEMPO_MAXIMO_MS)
+        try {
+          const res = await fetch(`/api/patients/${patientId}/files`, {
+            method: 'POST', body: fd, signal: relogio.signal,
+          })
+          if (!res.ok) {
+            // Antes o erro era engolido em silêncio e a pessoa achava que tinha
+            // enviado. Agora ela lê o que houve.
+            problemas.push(`"${file.name}" não foi enviada (erro ${res.status}). Tente de novo.`)
+            continue
+          }
           const data = await res.json()
           if (data.id) setPhotos(prev => [data, ...prev])
+        } catch {
+          problemas.push(`"${file.name}" não foi enviada: a conexão caiu ou demorou demais.`)
+        } finally {
+          clearTimeout(limite)
         }
       }
     } finally {
       setUploading(false)
+      setErroEnvio(problemas.length > 0 ? problemas.join(' ') : null)
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
@@ -1076,6 +1116,12 @@ export function EsteticaTab({ patientId, patientName, readOnly = false }: { pati
             <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleUpload} />
           </div>
         </div>
+
+        {erroEnvio && (
+          <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700">
+            {erroEnvio}
+          </div>
+        )}
 
         {compareMode && (
           <div className="mb-3 p-3 bg-violet-50 border border-violet-200 rounded-xl text-xs text-violet-700">
