@@ -1,5 +1,5 @@
 import { auth } from '@/auth'
-import { podeEstoque } from '@/lib/authz'
+import { podeEstoque } from '@/lib/permissoes'
 import { redirect } from 'next/navigation'
 import { dataBrasilia } from '@/lib/datas'
 import { AgendaClient } from './AgendaClient'

@@ -24,7 +24,7 @@ export function ehStatusAgendamento(s: string): s is StatusAgendamento {
  * Nome do índice único parcial de db.ts. Mora aqui, ao lado de quem o descreve,
  * para o chamador não depender de uma string solta que o tsc não confere.
  */
-const INDICE_FATIA = 'agendamento_fatia_viva'
+export const INDICE_FATIA = 'agendamento_fatia_viva'
 
 /**
  * Reconhece a violação (23505) DESTE índice: a fatia já foi tomada por outro
@@ -125,7 +125,14 @@ export async function mudarStatus(
   const [linha] = await sql<Agendamento[]>`
     UPDATE agendamentos
     SET status = ${status},
-        desmarcado_por = CASE WHEN ${status}::text = 'desmarcou' THEN ${por} ELSE desmarcado_por END
+        -- Só grava a autoria na PRIMEIRA desmarcação. Desmarcar o que já está
+        -- desmarcado sobrescreveria quem soltou a vaga primeiro — e é
+        -- justamente esse nome que responde "quem tirou o paciente da agenda?"
+        -- meses depois. O segundo clique não acrescenta informação; apaga.
+        desmarcado_por = CASE
+          WHEN ${status}::text = 'desmarcou' AND desmarcado_por IS NULL THEN ${por}
+          ELSE desmarcado_por
+        END
     WHERE id = ${id}
     RETURNING ${COLUNAS_AGENDAMENTO}`
   return linha ?? null

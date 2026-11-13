@@ -1,4 +1,5 @@
 import { auth } from '@/auth'
+import { podeEstoque } from './permissoes'
 
 // Retorna true se a sessão de staff atual é admin. Use no início de handlers
 // sensíveis (gestão de usuários, exclusão permanente de auditoria).
@@ -10,16 +11,9 @@ export async function isAdminSession(): Promise<boolean> {
 
 // Retorna true se a sessão de staff atual pode mexer no estoque (admin ou
 // permissão can_estoque). Use nas rotas de mutação de estoque.
-/**
- * A regra de quem mexe no estoque, PURA, para quem já tem o usuário em mãos.
- *
- * Existe para a página do servidor não reescrever `is_admin || can_estoque`:
- * ela já carrega a sessão, e chamar `canEstoqueSession()` custaria um segundo
- * `auth()` só para repetir uma comparação que já está escrita aqui.
- */
-export function podeEstoque(user: { is_admin?: boolean; can_estoque?: boolean } | null | undefined): boolean {
-  return !!user?.is_admin || !!user?.can_estoque
-}
+
+// Reexportado para quem já importa daqui; a regra mora em permissoes.ts.
+export { podeEstoque }
 
 export async function canEstoqueSession(): Promise<boolean> {
   const session = await auth()
