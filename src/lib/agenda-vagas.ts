@@ -8,8 +8,17 @@ export type Ocupacao = { hora: string }
 // Faixa fora do ar, em HH:MM. `ate` é EXCLUSIVO: 15:00–16:00 libera as 16:00.
 export type Bloqueio = { de: string; ate: string }
 
-// "HH:MM" tem largura fixa, então a ordem de texto é a ordem do relógio.
-const cobertaPor = (hora: string, b: Bloqueio) => hora >= b.de && hora < b.ate
+const minutos = (hhmm: string) => {
+  const [h, m] = hhmm.split(':').map(Number)
+  return h * 60 + m
+}
+
+// O bloqueio vale para o atendimento INTEIRO, não só para a fatia de início:
+// um soro de 40 min às 15:40 com sala fechada a partir das 16:00 deixaria o
+// paciente na cadeira com a sala fechada (é o mesmo raciocínio do fim do dia).
+// Intervalo [hora, hora+duração) contra [de, ate): encostar em 'de' não cruza.
+const cruzaBloqueio = (hora: string, duracao: Duracao, b: Bloqueio) =>
+  minutos(hora) < minutos(b.ate) && minutos(hora) + duracao > minutos(b.de)
 
 // Só a fatia de INÍCIO conta como ocupada, de propósito: a enfermeira só fica
 // presa nos ~10 min iniciais; o soro de 40 min usa uma cadeira, não a enfermeira.
@@ -28,7 +37,7 @@ export function vagasDoDia(
     (hora) =>
       cabeNoExpediente(dia, hora, duracao) &&
       !fatiaOcupada(hora, ocupadas) &&
-      !bloqueios.some((b) => cobertaPor(hora, b)),
+      !bloqueios.some((b) => cruzaBloqueio(hora, duracao, b)),
   )
 }
 
@@ -40,11 +49,12 @@ export function motivoDeRecusa(
   ocupadas: Ocupacao[],
   bloqueios: Bloqueio[],
 ): string | null {
-  if (fatiasDoDia(dia).length === 0) return 'A clínica não atende neste dia.'
-  if (!fatiasDoDia(dia).includes(hora)) return 'Este horário está fora do expediente da clínica.'
+  const fatias = fatiasDoDia(dia)
+  if (fatias.length === 0) return 'A clínica não atende neste dia.'
+  if (!fatias.includes(hora)) return 'Este horário está fora do expediente da clínica.'
   if (!cabeNoExpediente(dia, hora, duracao))
     return `Um atendimento de ${duracao} minutos às ${hora} passaria da hora em que a clínica fecha.`
   if (fatiaOcupada(hora, ocupadas)) return 'Este horário já está ocupado por outro agendamento.'
-  if (bloqueios.some((b) => cobertaPor(hora, b))) return 'Este horário está bloqueado na agenda.'
+  if (bloqueios.some((b) => cruzaBloqueio(hora, duracao, b))) return 'Este horário está bloqueado na agenda.'
   return null
 }

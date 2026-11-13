@@ -26,6 +26,18 @@ describe('vagasDoDia', () => {
     expect(v).not.toContain('15:00'); expect(v).not.toContain('15:50')
     expect(v).toContain('16:00')
   })
+  describe('bloqueio considera a duração (intervalo [hora, hora+D))', () => {
+    const bloq = [{ de: '16:00', ate: '17:00' }]
+    it('40 min às 15:40 termina 16:20 e cruza o bloqueio: não é oferecida', () => {
+      expect(vagasDoDia(SEG, 40, [], bloq)).not.toContain('15:40')
+    })
+    it('40 min às 15:20 termina exatamente às 16:00: não cruza', () => {
+      expect(vagasDoDia(SEG, 40, [], bloq)).toContain('15:20')
+    })
+    it('10 min às 15:40 termina 15:50: continua oferecida', () => {
+      expect(vagasDoDia(SEG, 10, [], bloq)).toContain('15:40')
+    })
+  })
   it('dia fechado não tem vaga', () => {
     expect(vagasDoDia('2026-11-22', 10, [], [])).toEqual([])
   })
@@ -46,5 +58,14 @@ describe('motivoDeRecusa', () => {
   })
   it('diz quando o dia está fechado', () => {
     expect(motivoDeRecusa('2026-11-22', '15:00', 10, [], [])).toMatch(/fechad|não atende/i)
+  })
+  it('diz quando a hora não existe na grade', () => {
+    expect(motivoDeRecusa(SEG, '15:05', 10, [], [])).toMatch(/fora do expediente/i)
+    expect(motivoDeRecusa(SEG, '13:00', 10, [], [])).toMatch(/fora do expediente/i)
+  })
+  it('recusa 40 min que começa antes e termina dentro do bloqueio', () => {
+    const bloq = [{ de: '16:00', ate: '17:00' }]
+    expect(motivoDeRecusa(SEG, '15:40', 40, [], bloq)).toMatch(/bloquead/i)
+    expect(motivoDeRecusa(SEG, '15:20', 40, [], bloq)).toBeNull()
   })
 })
