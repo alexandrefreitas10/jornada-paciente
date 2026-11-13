@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { fatiasDoDia, vivo } from '@/lib/agenda-grade'
+import { semAcento } from '@/lib/sem-acento'
 import { atingidosPeloBloqueio, motivoDeRecusa } from '@/lib/agenda-vagas'
 import { somarDiasAoDia } from '@/lib/datas'
 import type { AgendamentoComNome, BloqueioGravado, Desmarcado, StatusAgendamento } from '@/lib/agenda-db'
@@ -40,7 +41,6 @@ const dm = (dia: string) => `${dia.slice(8, 10)}/${dia.slice(5, 7)}`
 const rotuloDia = (dia: string) => `${DIAS_SEMANA[diaDaSemana(dia)]}, ${dm(dia)}`
 const minutos = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5))
 const hhmm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`
-const semAcento = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
 async function lerJson(r: Response) {
   return r.json().catch(() => ({}))
@@ -100,12 +100,18 @@ export function AgendaClient({ hoje, podeEstoque = false }: { hoje: string; pode
   // horário aparece ocupado justamente quando o sistema o considera livre. O
   // total dos que saíram aparece no rodapé.
   const visiveis = useMemo(() => agendamentos.filter((a) => vivo(a.status) || a.status === 'faltou'), [agendamentos])
-  const liberadosNoPeriodo = agendamentos.filter((a) => a.status === 'remarcou' || a.status === 'desmarcou').length
+  // Derivado de `visiveis`, e não reenumerando os status: uma lista à parte
+  // envelheceria calada se um sexto status entrasse — some da grade E some da
+  // contagem, sem ninguém notar.
+  const liberadosNoPeriodo = agendamentos.length - visiveis.length
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async function chamar(url: string, init: RequestInit, aoOk?: (dados: any) => void) {
     setOcupado(true)
     setErro(null)
+    // Limpa o aviso TAMBÉM: sem isto, um "termina depois do fechamento" de uma
+    // ação anterior fica pairando sobre a próxima e parece pertencer a ela.
+    setAviso(null)
     try {
       const r = await fetch(url, init)
       const dados = await lerJson(r)

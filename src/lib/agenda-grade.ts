@@ -1,3 +1,8 @@
+// `import type` de propósito: `agenda-db` importa este módulo em tempo de
+// execução, e importar de volta criaria ciclo. Importação só de tipo é
+// apagada na compilação, então o tipo volta sem trazer o ciclo junto.
+import type { StatusAgendamento } from './agenda-db'
+
 // src/lib/agenda-grade.ts
 // A grade diz QUANDO a clínica atende. Quem já está ocupado é outra camada
 // (subtrai desta). Lib pura: sem banco, sem React, sem rede.
@@ -14,7 +19,7 @@ export type Duracao = (typeof DURACOES)[number]
  * os `status IN (...)` de agenda-db.ts), que não pode chamar uma função TS:
  * quem mudar a regra aqui precisa mudar lá também.
  */
-export function vivo(status: string): boolean {
+export function vivo(status: StatusAgendamento | string): boolean {
   return status === 'agendado' || status === 'atendido'
 }
 

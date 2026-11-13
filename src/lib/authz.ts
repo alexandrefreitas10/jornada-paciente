@@ -10,10 +10,20 @@ export async function isAdminSession(): Promise<boolean> {
 
 // Retorna true se a sessão de staff atual pode mexer no estoque (admin ou
 // permissão can_estoque). Use nas rotas de mutação de estoque.
+/**
+ * A regra de quem mexe no estoque, PURA, para quem já tem o usuário em mãos.
+ *
+ * Existe para a página do servidor não reescrever `is_admin || can_estoque`:
+ * ela já carrega a sessão, e chamar `canEstoqueSession()` custaria um segundo
+ * `auth()` só para repetir uma comparação que já está escrita aqui.
+ */
+export function podeEstoque(user: { is_admin?: boolean; can_estoque?: boolean } | null | undefined): boolean {
+  return !!user?.is_admin || !!user?.can_estoque
+}
+
 export async function canEstoqueSession(): Promise<boolean> {
   const session = await auth()
-  const u = session?.user as { is_admin?: boolean; can_estoque?: boolean } | undefined
-  return !!u?.is_admin || !!u?.can_estoque
+  return podeEstoque(session?.user as { is_admin?: boolean; can_estoque?: boolean } | undefined)
 }
 
 // Conciliação é dos donos da clínica: admin ou permissão can_conciliacao. A aba

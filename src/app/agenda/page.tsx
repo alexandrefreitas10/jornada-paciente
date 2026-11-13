@@ -1,4 +1,5 @@
 import { auth } from '@/auth'
+import { podeEstoque } from '@/lib/authz'
 import { redirect } from 'next/navigation'
 import { dataBrasilia } from '@/lib/datas'
 import { AgendaClient } from './AgendaClient'
@@ -15,6 +16,10 @@ export default async function AgendaPage() {
   // Só a ponte "registrar saída dos ativos" depende de outro módulo: quem não
   // entra em Estoque não pode ver um atalho que termina em 403 depois do trabalho
   // de escanear os itens. Mesma regra do menu.
-  const u = session.user as { is_admin?: boolean; can_estoque?: boolean }
-  return <AgendaClient hoje={dataBrasilia(new Date())} podeEstoque={!!(u.is_admin || u.can_estoque)} />
+  return (
+    <AgendaClient
+      hoje={dataBrasilia(new Date())}
+      podeEstoque={podeEstoque(session.user as { is_admin?: boolean; can_estoque?: boolean })}
+    />
+  )
 }
