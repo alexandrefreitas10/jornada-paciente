@@ -1,5 +1,6 @@
 import sql, { initSchema } from '@/lib/db'
-import { DURACOES, type Duracao } from './agenda-grade'
+import { DURACOES, vivo, type Duracao } from './agenda-grade'
+import { podeMarcarOutro } from './agenda-paciente'
 import { atingidosPeloBloqueio } from './agenda-vagas'
 import { logSystemError } from './system-errors'
 
@@ -96,6 +97,71 @@ export interface AgendamentoComNome extends Agendamento {
  * viajando à toa. LEFT JOIN para que um paciente removido não faça o
  * agendamento sumir da tela; a pessoa continua marcada.
  */
+export interface PedidoDoPaciente {
+  patientId: number
+  dia: string
+  hora: string
+  duracao: Duracao
+  /** Id do agendamento que está sendo trocado, ou `null` para marcar novo. */
+  trocarId: number | null
+  janela: { de: string; ate: string }
+  agora: Date
+}
+
+export type ResultadoDoPedido =
+  | { ok: true; agendamento: Agendamento }
+  | { ok: false; motivo: 'ja-tem-um' | 'nao-encontrado' }
+
+/**
+ * Marca (ou troca) o agendamento do paciente com a regra "um vivo por vez"
+ * garantida pelo BANCO, não por leitura.
+ *
+ * POR QUE PRECISA DE TRAVA: ler, conferir e gravar em passos separados é uma
+ * corrida. Dois toques no mesmo instante — comuns no celular — passam os dois
+ * pela conferência e o paciente fica com dois horários presos. Com um paciente
+ * em piloto isso exige ele competindo consigo mesmo; com a clínica inteira
+ * marcando, vira rotina.
+ *
+ * `pg_advisory_xact_lock(patient_id)` serializa por PACIENTE: dois pedidos do
+ * mesmo paciente entram em fila, pedidos de pacientes diferentes não se
+ * atrapalham. A trava solta sozinha no fim da transação, inclusive se der erro.
+ *
+ * A outra trava — duas PESSOAS na mesma fatia — continua sendo o índice único
+ * parcial, que é de outra natureza e já existe.
+ */
+export async function marcarComTravaDoPaciente(p: PedidoDoPaciente): Promise<ResultadoDoPedido> {
+  await initSchema()
+  return sql.begin(async (tx) => {
+    await tx`SELECT pg_advisory_xact_lock(${p.patientId})`
+
+    const meus = await tx<Agendamento[]>`
+      SELECT ${COLUNAS_AGENDAMENTO} FROM agendamentos
+      WHERE patient_id = ${p.patientId}
+        AND dia BETWEEN ${p.janela.de}::date AND ${p.janela.ate}::date`
+
+    const antigo = p.trocarId === null
+      ? null
+      : meus.find((a) => a.id === p.trocarId && vivo(a.status)) ?? null
+    if (p.trocarId !== null && !antigo) return { ok: false as const, motivo: 'nao-encontrado' as const }
+
+    // Relido DENTRO da trava: é esta leitura que vale, não a que a rota fez
+    // antes de entrar aqui.
+    const outros = meus.filter((a) => a.id !== antigo?.id)
+    if (!podeMarcarOutro(outros, p.agora)) {
+      return { ok: false as const, motivo: 'ja-tem-um' as const }
+    }
+
+    if (antigo) {
+      await tx`UPDATE agendamentos SET status = 'remarcou' WHERE id = ${antigo.id}`
+    }
+    const [criado] = await tx<Agendamento[]>`
+      INSERT INTO agendamentos (patient_id, dia, hora, duracao, encaixe, criado_por)
+      VALUES (${p.patientId}, ${p.dia}::date, ${p.hora}::time, ${p.duracao}, false, NULL)
+      RETURNING ${COLUNAS_AGENDAMENTO}`
+    return { ok: true as const, agendamento: criado }
+  }) as Promise<ResultadoDoPedido>
+}
+
 /** Os agendamentos de UM paciente dentro de um intervalo. Para o portal. */
 export async function agendamentosDoPaciente(
   patientId: number,

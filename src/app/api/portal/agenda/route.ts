@@ -5,7 +5,7 @@ import {
   agendamentosDoPaciente,
   agendamentosDoPeriodo,
   bloqueiosDoPeriodo,
-  criarAgendamento,
+  marcarComTravaDoPaciente,
   duracaoValida,
   ehFatiaOcupada,
   mudarStatus,
@@ -185,6 +185,9 @@ export async function POST(request: Request) {
       { status: 409 },
     )
   }
+  // A conferência de "um por vez" acontece de novo DENTRO da transação, com
+  // trava por paciente. Esta aqui é só para recusar cedo, com mensagem boa;
+  // a que vale é a de lá.
   if (!antigo && !podeMarcarOutro(meus, agora)) {
     return NextResponse.json(
       { error: 'Você já tem uma aplicação marcada. Troque o horário dela ou desmarque antes de marcar outra.' },
@@ -201,15 +204,30 @@ export async function POST(request: Request) {
   if (motivo) return NextResponse.json({ error: motivo }, { status: 409 })
 
   try {
-    if (antigo) await mudarStatus(antigo.id, 'remarcou', null)
-    const criado = await criarAgendamento({
-      patientId, dia, hora, duracao: duracao as Duracao, encaixe: false, criadoPor: null,
+    // Marcar e soltar o horário antigo numa transação só, com
+    // `pg_advisory_xact_lock(patient_id)`: dois toques no mesmo instante
+    // entram em fila em vez de criarem dois agendamentos. Era o último item
+    // obrigatório antes de abrir para todos os pacientes.
+    const r = await marcarComTravaDoPaciente({
+      patientId, dia, hora, duracao: duracao as Duracao,
+      trocarId: antigo?.id ?? null,
+      janela: { de, ate },
+      agora,
     })
-    return NextResponse.json({ agendamento: criado }, { status: 201 })
+    if (!r.ok) {
+      return r.motivo === 'nao-encontrado'
+        ? NextResponse.json({ error: 'Agendamento não encontrado.' }, { status: 404 })
+        : NextResponse.json(
+            { error: 'Você já tem uma aplicação marcada. Troque o horário dela ou desmarque antes de marcar outra.' },
+            { status: 409 },
+          )
+    }
+    return NextResponse.json({ agendamento: r.agendamento }, { status: 201 })
   } catch (erro) {
-    // Alguém pegou a fatia entre a conferência e a gravação.
+    // Outro PACIENTE pegou a fatia entre a conferência e a gravação. A
+    // transação inteira volta atrás, então o agendamento antigo continua de pé
+    // — não é preciso desfazer nada na mão.
     if (ehFatiaOcupada(erro)) {
-      if (antigo) await mudarStatus(antigo.id, 'agendado', null).catch(() => {})
       return NextResponse.json(
         { error: 'Esse horário acabou de ser ocupado. Escolha outro.' },
         { status: 409 },
