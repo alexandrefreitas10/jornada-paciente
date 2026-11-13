@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
+import { logAudit } from '@/lib/audit'
 import { motivoDeRecusa } from '@/lib/agenda-vagas'
 import { vivo } from '@/lib/agenda-grade'
 import {
@@ -20,6 +21,34 @@ const MSG_OCUPADO = 'Este horário já foi retomado por outro agendamento.'
 // "12abc" e "1.5" viram NaN/decimal em Number(); o id só vale se for inteiro puro.
 function lerId(s: string): number | null {
   return /^\d+$/.test(s) && Number(s) > 0 ? Number(s) : null
+}
+
+/**
+ * Registra a mudança no log de auditoria, que é APPEND-ONLY.
+ *
+ * A coluna `desmarcado_por` responde "quem soltou este horário" para a linha
+ * como ela está AGORA — ela se sobrescreve, então não serve de histórico.
+ * Reviver um agendamento, por exemplo, apaga que ele já esteve desmarcado.
+ *
+ * Aqui fica a trilha que não se apaga: cada transição vira uma linha própria,
+ * com quem fez e quando. É o mesmo mecanismo que o resto do sistema usa para
+ * exclusão de paciente e de arquivo.
+ *
+ * Nunca derruba a ação: `logAudit` engole o próprio erro.
+ */
+async function registrarMudanca(
+  userName: string | null | undefined,
+  agendamento: Agendamento,
+  oQueMudou: string,
+) {
+  await logAudit({
+    userName: userName ?? 'Desconhecido',
+    action: 'UPDATE',
+    entityType: 'agendamento',
+    entityId: agendamento.id,
+    patientId: agendamento.patient_id,
+    details: agendamento.dia + ' ' + agendamento.hora + ' — ' + oQueMudou,
+  })
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -45,7 +74,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   try {
     let agendamento: Agendamento | null = null
-    if (status !== undefined) agendamento = await mudarStatus(id, status, session.user.name ?? null)
+    if (status !== undefined) {
+      agendamento = await mudarStatus(id, status, session.user.name ?? null)
+      if (agendamento) await registrarMudanca(session.user.name, agendamento, 'status para ' + status)
+    }
     if (duracao !== undefined && (status === undefined || agendamento)) agendamento = await mudarDuracao(id, duracao)
     if (!agendamento) return NextResponse.json({ error: 'Agendamento não encontrado.' }, { status: 404 })
     // Trocar a duração pode empurrar o atendimento para depois do fechamento ou
@@ -79,5 +111,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 
   const agendamento = await mudarStatus(id, 'desmarcou', session.user.name ?? null)
   if (!agendamento) return NextResponse.json({ error: 'Agendamento não encontrado.' }, { status: 404 })
+  await registrarMudanca(session.user.name, agendamento, 'desmarcou')
   return NextResponse.json({ agendamento })
 }
