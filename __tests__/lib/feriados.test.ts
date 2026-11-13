@@ -19,6 +19,17 @@ describe('ehFeriadoNacional', () => {
     expect(ehFeriadoNacional('2026-02-17')).toBe(true)  // Carnaval 2026
     expect(ehFeriadoNacional('2027-02-17')).toBe(false)
   })
+  it('Páscoa 2025 (20/04): confere o termo de correção m em outro ano', () => {
+    // Datas contadas à mão a partir da Páscoa, não tiradas do código.
+    expect(ehFeriadoNacional('2025-03-04')).toBe(true)  // Carnaval = -47d
+    expect(ehFeriadoNacional('2025-04-18')).toBe(true)  // Sexta-feira Santa = -2d
+    expect(ehFeriadoNacional('2025-06-19')).toBe(true)  // Corpus Christi = +60d
+  })
+  it('Páscoa 2032 (28/03, ano bissexto): exercita o ramo que 2026 e 2027 não pegam', () => {
+    expect(ehFeriadoNacional('2032-02-10')).toBe(true)  // Carnaval = -47d (passa por 29/02)
+    expect(ehFeriadoNacional('2032-03-26')).toBe(true)  // Sexta-feira Santa = -2d
+    expect(ehFeriadoNacional('2032-05-27')).toBe(true)  // Corpus Christi = +60d
+  })
   it('dia comum não é feriado', () => {
     expect(ehFeriadoNacional('2027-03-15')).toBe(false)
   })
