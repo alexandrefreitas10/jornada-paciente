@@ -18,4 +18,9 @@ describe('atingidosPeloBloqueio', () => {
     expect(atingidosPeloBloqueio({ dia: SEG, de: '18:00', ate: '19:00' },
       [{ id: 3, hora: '17:10', duracao: 40 }])).toEqual([])   // 17:10–17:50
   })
+  // Borda do intervalo meio-aberto: 17:20 + 40 min termina às 18:00 em ponto.
+  it('não pega quem termina exatamente quando o bloqueio começa', () => {
+    expect(atingidosPeloBloqueio({ dia: SEG, de: '18:00', ate: '19:00' },
+      [{ id: 4, hora: '17:20', duracao: 40 }])).toEqual([])
+  })
 })

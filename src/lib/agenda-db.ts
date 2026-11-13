@@ -128,9 +128,9 @@ export async function criarBloqueio(dados: {
   ate: string
   motivo?: string | null
   criadoPor: string | null
-}): Promise<BloqueioGravado> {
+}, executor: Executor = sql): Promise<BloqueioGravado> {
   await initSchema()
-  const [linha] = await sql<BloqueioGravado[]>`
+  const [linha] = await executor<BloqueioGravado[]>`
     INSERT INTO agenda_bloqueios (dia, de, ate, motivo, criado_por)
     VALUES (${dados.dia}::date, ${dados.de}::time, ${dados.ate}::time,
             ${dados.motivo ?? null}, ${dados.criadoPor})
@@ -148,6 +148,9 @@ export async function bloqueiosDoPeriodo(de: string, ate: string): Promise<Bloqu
     WHERE dia BETWEEN ${de}::date AND ${ate}::date
     ORDER BY dia, "de", id`
 }
+
+// `sql` ou a transação (`tx`): ambos aceitam template tag.
+type Executor = typeof sql
 
 export interface Desmarcado {
   id: number
@@ -177,21 +180,17 @@ export async function bloquearEDesmarcar(dados: {
   await initSchema()
   const nomeFuncionario = dados.criadoPor?.trim()
   const desmarcadoPor = nomeFuncionario ? `clínica — ${nomeFuncionario}` : 'clínica'
-  return sql.begin(async (tx) => {
-    const [bloqueio] = await tx<BloqueioGravado[]>`
-      INSERT INTO agenda_bloqueios (dia, de, ate, motivo, criado_por)
-      VALUES (${dados.dia}::date, ${dados.de}::time, ${dados.ate}::time,
-              ${dados.motivo ?? null}, ${dados.criadoPor})
-      RETURNING id, to_char(dia, 'YYYY-MM-DD') AS dia, to_char(de, 'HH24:MI') AS de,
-                to_char(ate, 'HH24:MI') AS ate, motivo, criado_por`
-    // Só agendado/atendido segura horário; FOR UPDATE impede que outro pedido
-    // mude essas linhas entre a leitura e a desmarcação.
+  const derrubar = async (tx: Executor) => {
+    // Só agendado/atendido segura horário. FOR UPDATE segura só as linhas que
+    // JÁ EXISTEM (ninguém muda o status delas no meio). NÃO impede um agendamento
+    // novo de entrar na janela bloqueada: trava de linha não é trava de predicado.
+    // Por isso há a varredura depois do commit, abaixo.
     const vivos = await tx<Agendamento[]>`
       SELECT ${COLUNAS_AGENDAMENTO} FROM agendamentos
       WHERE dia = ${dados.dia}::date AND status IN ('agendado', 'atendido')
       ORDER BY hora, id FOR UPDATE`
     const ids = atingidosPeloBloqueio({ dia: dados.dia, de: dados.de, ate: dados.ate }, vivos)
-    if (ids.length === 0) return { bloqueio, desmarcados: [] }
+    if (ids.length === 0) return []
     const atingidos = vivos.filter((a) => ids.includes(a.id))
     await tx`UPDATE agendamentos SET status = 'desmarcou', desmarcado_por = ${desmarcadoPor}
              WHERE id = ANY(${ids}::int[])`
@@ -199,15 +198,23 @@ export async function bloquearEDesmarcar(dados: {
     const linhas = await tx<{ id: number; name: string }[]>`
       SELECT id, name FROM patients WHERE id = ANY(${atingidos.map((a) => a.patient_id)}::int[])`
     for (const l of linhas) nomes.set(l.id, l.name)
-    return {
-      bloqueio,
-      desmarcados: atingidos.map((a) => ({
-        id: a.id,
-        patientId: a.patient_id,
-        nome: nomes.get(a.patient_id) ?? '(paciente removido)',
-        hora: a.hora,
-        duracao: a.duracao,
-      })),
-    }
+    return atingidos.map((a) => ({
+      id: a.id,
+      patientId: a.patient_id,
+      nome: nomes.get(a.patient_id) ?? '(paciente removido)',
+      hora: a.hora,
+      duracao: a.duracao,
+    }))
+  }
+  const { bloqueio, desmarcados } = await sql.begin(async (tx) => {
+    const bloqueio = await criarBloqueio(dados, tx as unknown as Executor)
+    return { bloqueio, desmarcados: await derrubar(tx as unknown as Executor) }
   })
+  // Varredura depois do commit: um POST /api/agenda que leu os bloqueios ANTES
+  // de este existir pode ter inserido dentro da janela. Sem derrubar e listar
+  // esse paciente, a sala fica fechada com gente marcada e a equipe não sabe
+  // quem avisar. Não fecha a janela por completo (o INSERT ainda pode cair
+  // depois daqui), mas a reduz de segundos para microssegundos.
+  const retardatarios = await derrubar(sql)
+  return { bloqueio, desmarcados: [...desmarcados, ...retardatarios] }
 }

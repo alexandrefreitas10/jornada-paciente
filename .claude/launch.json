@@ -6,13 +6,6 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3000
-    },
-    {
-      "name": "jair-veiculos",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "C:/Users/alexa/jair-veiculos", "run", "dev"],
-      "port": 3100,
-      "autoPort": true
     }
   ]
 }
