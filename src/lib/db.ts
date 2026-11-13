@@ -805,14 +805,20 @@ async function runMigrations() {
   `).catch(() => {})
   // Agenda da sala de aplicação. `dia` é DATE: dia puro de calendário, nunca
   // convertido por fuso. Só `created_at` é instante.
+  // Os CHECKs de `duracao` e `status` existem porque o TypeScript protege o
+  // aplicativo, não o banco: scripts avulsos escrevem SQL direto, e um `status`
+  // digitado errado criaria um agendamento invisível (fora da agenda e do
+  // relatório, sem erro). Dentro do CREATE TABLE a restrição sai de graça; depois,
+  // um ALTER TABLE falharia se já houvesse linha fora da regra.
   await sql.unsafe(`
     CREATE TABLE IF NOT EXISTS agendamentos (
       id SERIAL PRIMARY KEY,
       patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
       dia DATE NOT NULL,
       hora TIME NOT NULL,
-      duracao SMALLINT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'agendado',
+      duracao SMALLINT NOT NULL CHECK (duracao IN (10, 40)),
+      status TEXT NOT NULL DEFAULT 'agendado'
+        CHECK (status IN ('agendado','atendido','faltou','remarcou','desmarcou')),
       encaixe BOOLEAN NOT NULL DEFAULT false,
       criado_por TEXT,
       desmarcado_por TEXT,
