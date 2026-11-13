@@ -1,6 +1,7 @@
 import {
   HORAS_DE_ANTECEDENCIA,
   SEMANAS_VISIVEIS,
+  comAntecedenciaMinima,
   janelaDoPaciente,
   podeMarcarOutro,
   podeMexerNoAgendamento,
@@ -80,5 +81,25 @@ describe('podeMexerNoAgendamento', () => {
 
   it('a antecedência é a que a constante diz', () => {
     expect(HORAS_DE_ANTECEDENCIA).toBe(1)
+  })
+})
+
+describe('comAntecedenciaMinima', () => {
+  // A MESMA regra vale para marcar e para mexer, de propósito: se o paciente
+  // não pode trocar faltando menos de uma hora — porque a clínica já separou a
+  // medicação —, também não faz sentido ele conseguir MARCAR nesse intervalo.
+  it('recusa horário que já passou', () => {
+    // AGORA é 15:00 em Brasília, dia 16.
+    expect(comAntecedenciaMinima('2026-11-16', '14:00', AGORA)).toBe(false)
+    expect(comAntecedenciaMinima('2026-11-16', '12:00', AGORA)).toBe(false)
+  })
+
+  it('recusa o que está perto demais', () => {
+    expect(comAntecedenciaMinima('2026-11-16', '15:30', AGORA)).toBe(false)
+  })
+
+  it('aceita a partir da antecedência mínima', () => {
+    expect(comAntecedenciaMinima('2026-11-16', '16:00', AGORA)).toBe(true)
+    expect(comAntecedenciaMinima('2026-11-18', '09:00', AGORA)).toBe(true)
   })
 })

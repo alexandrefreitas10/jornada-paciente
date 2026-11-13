@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { portalAuth } from '@/auth-portal'
+import { getPatient } from '@/lib/patients'
 import {
   agendamentosDoPaciente,
   agendamentosDoPeriodo,
@@ -14,6 +15,7 @@ import { motivoDeRecusa, vagasDoDia } from '@/lib/agenda-vagas'
 import { vivo, type Duracao } from '@/lib/agenda-grade'
 import {
   AVISO_EM_CIMA_DA_HORA,
+  comAntecedenciaMinima,
   janelaDoPaciente,
   podeMarcarOutro,
   podeMexerNoAgendamento,
@@ -39,9 +41,20 @@ async function pacienteDaSessao(): Promise<number | null> {
   return typeof id === 'number' ? id : null
 }
 
-/** Quem pode usar a aba: piloto liberado E folha na aba Prescrições. */
+/**
+ * Quem pode usar a aba: piloto liberado, paciente ATIVO, e folha na aba
+ * Prescrições.
+ *
+ * A conferência de arquivado/excluído existe porque a página do portal já faz
+ * isso e a rota não fazia: uma sessão aberta antes do arquivamento continuaria
+ * marcando. Portão que vale numa porta e não na outra não é portão.
+ */
 async function podeUsar(patientId: number): Promise<boolean> {
   if (!pacientePodeVerAgenda(patientId)) return false
+  const paciente = await getPatient(patientId)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const p = paciente as any
+  if (!paciente || p.deleted_at || p.archived_at) return false
   return temPrescricao(patientId)
 }
 
@@ -83,12 +96,17 @@ export async function GET() {
     bloqueiosPorDia.set(b.dia, lista)
   }
 
+  const agoraParaVagas = new Date()
   const dias: { dia: string; vagas10: string[]; vagas40: string[] }[] = []
   for (let d: string | null = de; d && d <= ate; d = proximoDia(d)) {
     const ocupadas = ocupadasPorDia.get(d) ?? []
     const bloqueados = bloqueiosPorDia.get(d) ?? []
-    const vagas10 = vagasDoDia(d, 10, ocupadas, bloqueados)
-    const vagas40 = vagasDoDia(d, 40, ocupadas, bloqueados)
+    // Sem este filtro, um paciente abrindo a agenda às 15h12 enxerga os
+    // horários das 12h, 13h e 14h DO MESMO DIA como livres — e marca no
+    // passado. A mesma antecedência que trava a troca vale para marcar.
+    const cabe = (h: string) => comAntecedenciaMinima(d, h, agoraParaVagas)
+    const vagas10 = vagasDoDia(d, 10, ocupadas, bloqueados).filter(cabe)
+    const vagas40 = vagasDoDia(d, 40, ocupadas, bloqueados).filter(cabe)
     if (vagas10.length || vagas40.length) dias.push({ dia: d, vagas10, vagas40 })
   }
 
@@ -138,6 +156,15 @@ export async function POST(request: Request) {
   }
 
   const agora = new Date()
+  // A tela não oferece horário no passado, mas a tela não é a trava: sem esta
+  // conferência, o pedido direto marcaria ontem.
+  if (!comAntecedenciaMinima(dia, hora, agora)) {
+    return NextResponse.json(
+      { error: 'Esse horário está muito próximo. Escolha outro com pelo menos uma hora de antecedência.' },
+      { status: 409 },
+    )
+  }
+
   const meus = await agendamentosDoPaciente(patientId, de, ate)
 
   // Trocar de horário: a linha antiga vira `remarcou` e nasce uma nova. Assim

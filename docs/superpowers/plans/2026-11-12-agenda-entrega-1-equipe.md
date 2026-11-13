@@ -434,3 +434,22 @@ Entrega 1 pronta: 21 commits, 975 testes, type-check limpo, revisão de conjunto
 Não criei tabela nova: o projeto já registra exclusão de paciente e de arquivo em `audit_logs`, e um segundo lugar seria mais um para alguém esquecer de consultar.
 
 `desmarcado_por` continua existindo para responder "quem soltou **este** horário, agora" — é conveniência de leitura, não histórico.
+
+---
+
+# Entrega 2 (aba do paciente) — no ar em piloto fechado, 13/11/2026
+
+Construída direto, a pedido do dono, **sem a revisão independente** que a Entrega 1 teve. Os testes cobrem as regras (1021 no total), mas a leitura de fora que achou oito defeitos na Entrega 1 não aconteceu aqui.
+
+**Piloto:** variável `AGENDA_PORTAL_PACIENTES` no Render. Ausente = **ninguém**; `96` = só o paciente de teste; `todos` = fim do piloto.
+
+## ⚠️ Obrigatório antes de abrir para TODOS os pacientes
+
+1. **Travar "um agendamento por vez" no banco.** Hoje a conferência é lida e depois gravada, sem transação: dois toques no mesmo instante passam os dois. Com um paciente no piloto, exige ele competindo consigo mesmo e o resultado é segurar dois horários — a equipe vê e desmarca. Com cinquenta pessoas marcando, vira rotina. Conserto: `pg_advisory_xact_lock(patient_id)` com a conferência e o INSERT na mesma transação, como já se faz em `bloquearEDesmarcar`.
+2. **Rodar a revisão independente da Entrega 2**, no mesmo formato da Entrega 1.
+3. (Já feito na Entrega 1, segue valendo) afirmação do índice na subida e teto do GET.
+
+## Corrigidos antes de o piloto começar
+
+- **A agenda oferecia horário no passado.** Às 15h12, os horários das 12h, 13h e 14h do mesmo dia apareciam livres. Agora vale a mesma antecedência mínima de 1h que trava a troca — no servidor e na tela.
+- **Paciente arquivado ou excluído continuava marcando** por uma sessão aberta antes. A rota agora confere, como a página já fazia.

@@ -102,6 +102,21 @@ export function podeMarcarOutro(meus: AgendamentoDoPaciente[], agora: Date): boo
  * `AVISO_EM_CIMA_DA_HORA`.
  */
 export function podeMexerNoAgendamento(dia: string, hora: string, agora: Date): boolean {
+  return comAntecedenciaMinima(dia, hora, agora)
+}
+
+/**
+ * Esse horário está longe o bastante para o paciente mexer nele — seja para
+ * MARCAR, seja para trocar ou desmarcar?
+ *
+ * A mesma regra vale para os dois casos, de propósito. Se ele não pode trocar
+ * faltando menos de uma hora, porque a clínica já separou a medicação e
+ * organizou a sala, também não faz sentido conseguir MARCAR dentro desse
+ * intervalo. E horário que já passou é o caso extremo disso: sem esta conta,
+ * a agenda oferecia a um paciente às 15h12 os horários das 12h, 13h e 14h
+ * **do mesmo dia** — ele marcaria no passado.
+ */
+export function comAntecedenciaMinima(dia: string, hora: string, agora: Date): boolean {
   const faltam = instanteDe(dia, hora) - agora.getTime()
   return faltam >= HORAS_DE_ANTECEDENCIA * 3_600_000
 }
