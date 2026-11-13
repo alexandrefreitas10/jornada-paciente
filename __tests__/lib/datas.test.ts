@@ -1,6 +1,5 @@
 import {
-  dataBrasilia, fmtDiaPuro, fmtInstante, fmtInstanteComHora, somarDiasAoDia,
-} from '@/lib/datas'
+  dataBrasilia, fmtDiaPuro, fmtInstante, fmtInstanteComHora, somarDiasAoDia, diasEntre } from '@/lib/datas'
 
 // O defeito que estes testes travam: a aba Relatórios › Estética mostrava as
 // datas UM DIA ANTES do que está no banco. `2026-08-01` é um dia de calendário;
@@ -149,5 +148,33 @@ describe('prazo de tratamento encerrado: a fronteira que estava errada', () => {
 
   it('sem data de início não encerra por prazo', () => {
     expect(encerrado('', SEMANAS, new Date('2030-01-01T12:00:00Z'))).toBe(false)
+  })
+})
+
+describe('diasEntre', () => {
+  // Existe para a rota poder recusar um intervalo absurdo. Sem teto, uma única
+  // requisição autenticada pede anos de agendamentos de uma vez.
+  it('conta os dias entre duas datas, incluindo as pontas', () => {
+    expect(diasEntre('2026-11-16', '2026-11-16')).toBe(1)
+    expect(diasEntre('2026-11-16', '2026-11-22')).toBe(7)
+  })
+
+  it('atravessa mês e ano sem perder um dia', () => {
+    expect(diasEntre('2026-12-28', '2027-01-03')).toBe(7)
+  })
+
+  it('conta certo em ano bissexto', () => {
+    // 2028 é bissexto: 29/02 existe, então de 28/02 a 01/03 são 3 dias.
+    expect(diasEntre('2028-02-28', '2028-03-01')).toBe(3)
+  })
+
+  it('atravessa o horário de verão sem somar nem perder dia', () => {
+    // Em UTC não há mudança de hora; se alguém trocar por data local, esta
+    // conta passa a dar 7,04 ou 6,96 e o arredondamento mente.
+    expect(diasEntre('2026-10-15', '2026-10-21')).toBe(7)
+  })
+
+  it('intervalo invertido devolve zero em vez de número negativo', () => {
+    expect(diasEntre('2026-11-22', '2026-11-16')).toBe(0)
   })
 })

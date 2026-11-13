@@ -110,3 +110,23 @@ export function fmtInstanteComHora(valor: string | Date | null | undefined): str
   }).replace(':', 'h')
   return `${fmtInstante(d)} ${hora}`
 }
+
+/**
+ * Quantos dias um intervalo de calendário cobre, contando as duas pontas.
+ *
+ * Existe para a rota da agenda poder recusar um pedido absurdo: sem teto, uma
+ * requisição autenticada pede anos de agendamentos numa tacada.
+ *
+ * A conta é feita em UTC de propósito. Em data local, a entrada e a saída do
+ * horário de verão fazem um intervalo de sete dias valer 7,04 ou 6,96 — e o
+ * arredondamento esconde o erro em vez de revelar.
+ *
+ * Intervalo invertido devolve 0, não número negativo: quem chama compara com
+ * um limite, e um negativo passaria pela comparação como se fosse pequeno.
+ */
+export function diasEntre(de: string, ate: string): number {
+  const inicio = Date.parse(`${de}T00:00:00Z`)
+  const fim = Date.parse(`${ate}T00:00:00Z`)
+  if (Number.isNaN(inicio) || Number.isNaN(fim) || fim < inicio) return 0
+  return Math.round((fim - inicio) / 86_400_000) + 1
+}

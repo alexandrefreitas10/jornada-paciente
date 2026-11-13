@@ -10,6 +10,7 @@ import {
 } from '@/lib/agenda-db'
 import { decidirGravacao, motivoDeRecusa } from '@/lib/agenda-vagas'
 import { vivo } from '@/lib/agenda-grade'
+import { diasEntre } from '@/lib/datas'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,6 +24,9 @@ function diaValido(s: unknown): s is string {
 
 const horaValida = (s: unknown): s is string => typeof s === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(s)
 
+/** Teto do intervalo que a rota aceita de uma vez. */
+const MAX_DIAS_CONSULTA = 62
+
 export async function GET(req: NextRequest) {
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })
@@ -32,6 +36,17 @@ export async function GET(req: NextRequest) {
   if (!diaValido(de) || !diaValido(ate))
     return NextResponse.json({ error: 'Informe "de" e "ate" no formato AAAA-MM-DD.' }, { status: 400 })
   if (de > ate) return NextResponse.json({ error: 'A data inicial não pode ser depois da final.' }, { status: 400 })
+
+  // Teto no SERVIDOR, não no cliente: a tela só pede dia ou semana, mas a rota
+  // é alcançável por qualquer sessão da equipe, e sem isto devolveria anos de
+  // agendamentos numa tacada. Dois meses cobrem a visão de mês dos relatórios
+  // com folga; a janela do paciente, menor, será imposta à parte na Entrega 2.
+  if (diasEntre(de, ate) > MAX_DIAS_CONSULTA) {
+    return NextResponse.json(
+      { error: 'Período longo demais: no máximo ' + MAX_DIAS_CONSULTA + ' dias por consulta.' },
+      { status: 400 },
+    )
+  }
 
   const [agendamentos, bloqueios] = await Promise.all([
     agendamentosDoPeriodo(de, ate),

@@ -859,6 +859,38 @@ async function runMigrations() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `).catch(() => {})
+  // Bloqueio invertido (`ate` antes de `de`) não bloqueia nada e ninguém nota.
+  // A rota já recusa, mas ela não é a única porta possível para esta tabela.
+  await sql.unsafe(`
+    ALTER TABLE agenda_bloqueios ADD CONSTRAINT agenda_bloqueios_intervalo_check CHECK (ate > de)
+  `).catch(() => {})
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // O índice acima é a ÚNICA coisa que impede duas pessoas no mesmo horário —
+  // conferir disponibilidade antes de gravar não resolve concorrência. Mas a
+  // criação dele usa `.catch(() => {})`, como todo o resto deste arquivo: se
+  // falhar por timeout, a aplicação sobe SEM a trava e nada avisa.
+  //
+  // Então confere e registra. Fica barulhento num lugar que a clínica olha
+  // (tela de Erros) em vez de silencioso num log de servidor que ninguém abre.
+  //
+  // A gravação é INSERT direto, e não `logSystemError`: aquele módulo importa
+  // este, e importar de volta criaria um ciclo.
+  await (async () => {
+    const [achado] = await sql<{ existe: boolean }[]>`
+      SELECT EXISTS (
+        SELECT 1 FROM pg_indexes
+        WHERE schemaname = current_schema() AND indexname = 'agendamento_fatia_viva'
+      ) AS existe`
+    if (achado?.existe) return
+    await sql`
+      INSERT INTO system_errors (source, message, context)
+      VALUES (
+        'agenda.indice-ausente',
+        'O índice agendamento_fatia_viva não existe. Sem ele, duas pessoas podem marcar o mesmo horário.',
+        ${sql.json({ indice: 'agendamento_fatia_viva', tabela: 'agendamentos' })}
+      )`
+  })().catch(() => {})
 }
 
 export default sql
