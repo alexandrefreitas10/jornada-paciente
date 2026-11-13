@@ -184,16 +184,25 @@ export async function bloquearEDesmarcar(dados: {
     // Só agendado/atendido segura horário. FOR UPDATE segura só as linhas que
     // JÁ EXISTEM (ninguém muda o status delas no meio). NÃO impede um agendamento
     // novo de entrar na janela bloqueada: trava de linha não é trava de predicado.
-    // Por isso há a varredura depois do commit, abaixo.
+    // Por isso há a varredura depois do commit, abaixo. Fora de transação este
+    // FOR UPDATE não faz nada (a trava solta no fim do SELECT); fica só porque
+    // a função é a mesma. Quem protege lá é o filtro de status do UPDATE.
     const vivos = await tx<Agendamento[]>`
       SELECT ${COLUNAS_AGENDAMENTO} FROM agendamentos
       WHERE dia = ${dados.dia}::date AND status IN ('agendado', 'atendido')
       ORDER BY hora, id FOR UPDATE`
     const ids = atingidosPeloBloqueio({ dia: dados.dia, de: dados.de, ate: dados.ate }, vivos)
     if (ids.length === 0) return []
-    const atingidos = vivos.filter((a) => ids.includes(a.id))
-    await tx`UPDATE agendamentos SET status = 'desmarcou', desmarcado_por = ${desmarcadoPor}
-             WHERE id = ANY(${ids}::int[])`
+    // O filtro de status repete a condição do SELECT: na varredura não há trava
+    // segurando a linha, e sem ele um 'faltou' marcado nesse meio tempo seria
+    // atropelado. Só conta como derrubado quem o UPDATE de fato mudou.
+    const mudadas = await tx<{ id: number }[]>`
+      UPDATE agendamentos SET status = 'desmarcou', desmarcado_por = ${desmarcadoPor}
+      WHERE id = ANY(${ids}::int[]) AND status IN ('agendado', 'atendido')
+      RETURNING id`
+    const feitos = new Set(mudadas.map((m) => m.id))
+    const atingidos = vivos.filter((a) => feitos.has(a.id))
+    if (atingidos.length === 0) return []
     const nomes = new Map<number, string>()
     const linhas = await tx<{ id: number; name: string }[]>`
       SELECT id, name FROM patients WHERE id = ANY(${atingidos.map((a) => a.patient_id)}::int[])`
@@ -214,7 +223,14 @@ export async function bloquearEDesmarcar(dados: {
   // de este existir pode ter inserido dentro da janela. Sem derrubar e listar
   // esse paciente, a sala fica fechada com gente marcada e a equipe não sabe
   // quem avisar. Não fecha a janela por completo (o INSERT ainda pode cair
-  // depois daqui), mas a reduz de segundos para microssegundos.
-  const retardatarios = await derrubar(sql)
+  // depois daqui), mas a reduz de segundos para milissegundos.
+  // Se a varredura falhar, o bloqueio e a primeira passagem JÁ estão gravados:
+  // devolve a lista parcial, porque os nomes são o que a equipe precisa na mão.
+  let retardatarios: Desmarcado[] = []
+  try {
+    retardatarios = await derrubar(sql)
+  } catch (erro) {
+    console.error('agenda: varredura pós-bloqueio falhou; devolvendo só a primeira lista', erro)
+  }
   return { bloqueio, desmarcados: [...desmarcados, ...retardatarios] }
 }
