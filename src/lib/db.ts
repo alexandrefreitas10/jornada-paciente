@@ -803,6 +803,44 @@ async function runMigrations() {
   await sql.unsafe(`
     CREATE INDEX IF NOT EXISTS antes_depois_created_at_idx ON antes_depois (created_at DESC)
   `).catch(() => {})
+  // Agenda da sala de aplicação. `dia` é DATE: dia puro de calendário, nunca
+  // convertido por fuso. Só `created_at` é instante.
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS agendamentos (
+      id SERIAL PRIMARY KEY,
+      patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      dia DATE NOT NULL,
+      hora TIME NOT NULL,
+      duracao SMALLINT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'agendado',
+      encaixe BOOLEAN NOT NULL DEFAULT false,
+      criado_por TEXT,
+      desmarcado_por TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(() => {})
+  // A trava contra duas pessoas na mesma fatia é ESTE índice, não a leitura:
+  // checar antes de gravar não resolve concorrência, dois pedidos no mesmo
+  // segundo passam os dois pela checagem. Parcial em dois eixos:
+  //  - `status IN ('agendado','atendido')`: só agendamento vivo segura a fatia;
+  //    remarcado e desmarcado ficam para o relatório e soltam o horário.
+  //  - `AND NOT encaixe`: o encaixe da equipe é a exceção autorizada que pode
+  //    dobrar a fatia. Sem este recorte o índice proibiria o que a spec permite.
+  await sql.unsafe(`
+    CREATE UNIQUE INDEX IF NOT EXISTS agendamento_fatia_viva
+      ON agendamentos (dia, hora) WHERE status IN ('agendado','atendido') AND NOT encaixe
+  `).catch(() => {})
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS agenda_bloqueios (
+      id SERIAL PRIMARY KEY,
+      dia DATE NOT NULL,
+      de TIME NOT NULL,
+      ate TIME NOT NULL,
+      motivo TEXT,
+      criado_por TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(() => {})
 }
 
 export default sql
