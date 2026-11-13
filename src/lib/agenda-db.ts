@@ -1,5 +1,6 @@
 import sql, { initSchema } from '@/lib/db'
 import { DURACOES, type Duracao } from './agenda-grade'
+import { atingidosPeloBloqueio } from './agenda-vagas'
 
 // Gravação e leitura da agenda. Só servidor.
 //
@@ -146,4 +147,67 @@ export async function bloqueiosDoPeriodo(de: string, ate: string): Promise<Bloqu
     FROM agenda_bloqueios
     WHERE dia BETWEEN ${de}::date AND ${ate}::date
     ORDER BY dia, "de", id`
+}
+
+export interface Desmarcado {
+  id: number
+  patientId: number
+  nome: string
+  hora: string
+  duracao: Duracao
+}
+
+/**
+ * Grava o bloqueio e desmarca quem estava dentro dele, numa transação só. Sem
+ * ela, uma falha no meio deixaria a sala fechada com paciente ainda marcado, e
+ * repetir o pedido duplicaria o bloqueio. Só há dois desfechos: bloqueio +
+ * todos desmarcados, ou nada.
+ * `desmarcado_por` vira "clínica — <nome>": o prefixo distingue do paciente que
+ * desmarca sozinho, e o nome responde depois quem decidiu fechar a sala. Sem
+ * nome, grava só "clínica" em vez de quebrar.
+ * Devolve quem foi derrubado: é a lista que a equipe usa para avisar no WhatsApp.
+ */
+export async function bloquearEDesmarcar(dados: {
+  dia: string
+  de: string
+  ate: string
+  motivo?: string | null
+  criadoPor: string | null
+}): Promise<{ bloqueio: BloqueioGravado; desmarcados: Desmarcado[] }> {
+  await initSchema()
+  const nomeFuncionario = dados.criadoPor?.trim()
+  const desmarcadoPor = nomeFuncionario ? `clínica — ${nomeFuncionario}` : 'clínica'
+  return sql.begin(async (tx) => {
+    const [bloqueio] = await tx<BloqueioGravado[]>`
+      INSERT INTO agenda_bloqueios (dia, de, ate, motivo, criado_por)
+      VALUES (${dados.dia}::date, ${dados.de}::time, ${dados.ate}::time,
+              ${dados.motivo ?? null}, ${dados.criadoPor})
+      RETURNING id, to_char(dia, 'YYYY-MM-DD') AS dia, to_char(de, 'HH24:MI') AS de,
+                to_char(ate, 'HH24:MI') AS ate, motivo, criado_por`
+    // Só agendado/atendido segura horário; FOR UPDATE impede que outro pedido
+    // mude essas linhas entre a leitura e a desmarcação.
+    const vivos = await tx<Agendamento[]>`
+      SELECT ${COLUNAS_AGENDAMENTO} FROM agendamentos
+      WHERE dia = ${dados.dia}::date AND status IN ('agendado', 'atendido')
+      ORDER BY hora, id FOR UPDATE`
+    const ids = atingidosPeloBloqueio({ dia: dados.dia, de: dados.de, ate: dados.ate }, vivos)
+    if (ids.length === 0) return { bloqueio, desmarcados: [] }
+    const atingidos = vivos.filter((a) => ids.includes(a.id))
+    await tx`UPDATE agendamentos SET status = 'desmarcou', desmarcado_por = ${desmarcadoPor}
+             WHERE id = ANY(${ids}::int[])`
+    const nomes = new Map<number, string>()
+    const linhas = await tx<{ id: number; name: string }[]>`
+      SELECT id, name FROM patients WHERE id = ANY(${atingidos.map((a) => a.patient_id)}::int[])`
+    for (const l of linhas) nomes.set(l.id, l.name)
+    return {
+      bloqueio,
+      desmarcados: atingidos.map((a) => ({
+        id: a.id,
+        patientId: a.patient_id,
+        nome: nomes.get(a.patient_id) ?? '(paciente removido)',
+        hora: a.hora,
+        duracao: a.duracao,
+      })),
+    }
+  })
 }

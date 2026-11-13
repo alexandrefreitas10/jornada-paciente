@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
-import sql from '@/lib/db'
-import { agendamentosDoPeriodo, criarBloqueio, mudarStatus } from '@/lib/agenda-db'
-import { atingidosPeloBloqueio } from '@/lib/agenda-vagas'
+import { bloquearEDesmarcar } from '@/lib/agenda-db'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,39 +26,7 @@ export async function POST(req: NextRequest) {
   // `ate` é exclusivo; faixa vazia ou invertida não bloquearia nada e esconderia o erro.
   if (de >= ate) return NextResponse.json({ error: 'A hora final precisa ser depois da inicial.' }, { status: 400 })
 
-  const bloqueio = await criarBloqueio({ dia, de, ate, motivo, criadoPor: session.user.name ?? null })
-
-  // Só agendado/atendido segura horário; quem já desmarcou/remarcou/faltou não
-  // tem o que perder e não deve entrar na lista de quem avisar.
-  const vivos = (await agendamentosDoPeriodo(dia, dia)).filter(
-    (a) => a.status === 'agendado' || a.status === 'atendido',
-  )
-  const ids = atingidosPeloBloqueio({ dia, de, ate }, vivos)
-  const atingidos = vivos.filter((a) => ids.includes(a.id))
-
-  // Cancelar é o que impede o paciente de ver, no portal, um horário em dia de
-  // sala fechada, e libera ele para marcar outro.
-  for (const a of atingidos) await mudarStatus(a.id, 'desmarcou', 'clínica')
-
-  const nomes = new Map<number, string>()
-  if (atingidos.length > 0) {
-    const linhas = await sql<{ id: number; name: string }[]>`
-      SELECT id, name FROM patients WHERE id = ANY(${atingidos.map((a) => a.patient_id)}::int[])`
-    for (const l of linhas) nomes.set(l.id, l.name)
-  }
-
-  // A equipe avisa os pacientes por WhatsApp; a lista é como ela sabe quem.
-  return NextResponse.json(
-    {
-      bloqueio,
-      desmarcados: atingidos.map((a) => ({
-        id: a.id,
-        patientId: a.patient_id,
-        nome: nomes.get(a.patient_id) ?? '(paciente removido)',
-        hora: a.hora,
-        duracao: a.duracao,
-      })),
-    },
-    { status: 201 },
-  )
+  const resultado = await bloquearEDesmarcar({ dia, de, ate, motivo, criadoPor: session.user.name ?? null })
+  // A equipe avisa os pacientes por WhatsApp; `desmarcados` é como ela sabe quem.
+  return NextResponse.json(resultado, { status: 201 })
 }
