@@ -393,7 +393,7 @@ Entrega 1 pronta: 21 commits, 975 testes, type-check limpo, revisão de conjunto
 
 - **Bloquear não é à prova de corrida.** Trava de linha não é trava de predicado: marcação cuja leitura de bloqueios aconteceu antes do commit ainda pode cair dentro. Mitigado por varredura pós-commit (janela de milissegundos, lista da equipe completa) e registro na tela de Erros. Rever na Entrega 2.
 - **As quatro cadeiras são garantidas por aritmética, não por restrição.** Cai se um soro passar de 40 min ou o número de cadeiras mudar.
-- **20 de novembro fecha uma sexta que a clínica atende.** Feriado nacional desde a Lei 14.759/2023. O dono foi perguntado e ainda não respondeu; o teste em `agenda-grade.test.ts` falha de propósito se removerem `11-20`.
+- **20 de novembro fecha uma sexta.** Feriado nacional desde a Lei 14.759/2023, e **o dono confirmou em 13/11/2026 que a clínica fecha**. O teste em `agenda-grade.test.ts` guarda isso.
 
 ---
 
@@ -423,7 +423,7 @@ Entrega 1 pronta: 21 commits, 975 testes, type-check limpo, revisão de conjunto
 - Reviver para `agendado` não reconfere — declarado na confirmação da tela.
 - Falta teste do caminho `?paciente` + `?item` sem pré-seleção.
 - Links de paciente usam `<a href>` (padrão do projeto).
-- **20 de novembro: o dono ainda não respondeu se fecham.**
+- ~~20 de novembro~~ — **CONFIRMADO pelo dono em 13/11/2026: a clínica fecha.** O código já estava assim; a decisão deixou de ser suposição.
 
 ## Limite novo, aberto nesta rodada
 
