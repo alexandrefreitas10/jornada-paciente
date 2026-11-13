@@ -359,3 +359,38 @@ Cada uma ganha seu próprio plano, escrito depois que esta estiver no ar e testa
 - **Entrega 3 — Relatórios › Agendamentos.** Mês inteiro, filtro por período e status, histórico por paciente.
 
 A ordem importa: a Entrega 1 deixa a equipe exercitar a regra das fatias com gente de verdade **antes** de qualquer paciente tocar nela. Se a aritmética das cadeiras não corresponder à rotina da sala, é muito mais barato descobrir com o Carlos do que com 50 pacientes marcando sozinhos.
+
+---
+
+# O que ficou para depois (Entrega 1 concluída em 13/11/2026)
+
+Entrega 1 pronta: 21 commits, 975 testes, type-check limpo, revisão de conjunto aprovada.
+
+## ⚠️ Obrigatório ANTES da Entrega 2 — antes de qualquer paciente marcar sozinho
+
+1. **Afirmar na subida que o índice único existe.** `CREATE UNIQUE INDEX` usa o `.catch(() => {})` da casa. Se ele falhar por timeout, a aplicação sobe **sem a única trava real** contra duas pessoas no mesmo horário, e nada avisa. Hoje é aceitável porque só a equipe marca; com paciente marcando sozinho, não é. Conferir `pg_indexes` na subida e reportar por `logSystemError`.
+2. **Limitar o intervalo do `GET /api/agenda` no servidor.** A janela de quatro semanas do paciente precisa ser imposta no servidor, não no cliente.
+
+## Revisitar quando o volume crescer
+
+- Índice em `agendamentos(dia)` e em `patient_id` — hoje ~9 mil linhas/ano, varredura é mais barata. Rever na Entrega 3, que varre anos.
+- `GET /api/patients` devolve a tabela inteira para a busca de paciente do encaixe. Um endpoint `?q=` é o conserto certo, em mudança própria.
+
+## Adiados com justificativa (não são defeitos conhecidos)
+
+- `CHECK (ate > de)` em `agenda_bloqueios` — a rota já recusa e é a única escritora.
+- Alinhamento de `hora` — `horaValida` garante segundos zerados; desalinhamento só por encaixe deliberado, e aparece como linha própria.
+- Listas de status/duração duplicadas entre TS e SQL — acrescentar status é ato deliberado que tocaria os dois.
+- `INDICE_FATIA` e o nome do índice são duas cópias — se divergirem, colisão vira 500 em vez de 409: feio e barulhento, não silencioso.
+- PATCH com dois campos são dois UPDATEs — a tela manda um campo por vez.
+- DELETE sobrescreve `desmarcado_por` — inalcançável pela tela hoje; acrescentar `AND status <> 'desmarcou'` quando o paciente ganhar botão de desmarcar.
+- Reviver para `agendado` não reconfere — o índice ainda pega colisão, e a confirmação na tela declara que bloqueio não é reconferido.
+- Contagem do rodapé enumera status por fora; `vivo(status: string)` alargou o tipo; `page.tsx` reescreve `is_admin || can_estoque`.
+- `aviso` da troca de duração não é limpo; links de paciente usam `<a href>`.
+- Fatia só com `faltou` fora da grade imprime a frase de recusa sob o card.
+
+## Limites conhecidos, por decisão
+
+- **Bloquear não é à prova de corrida.** Trava de linha não é trava de predicado: marcação cuja leitura de bloqueios aconteceu antes do commit ainda pode cair dentro. Mitigado por varredura pós-commit (janela de milissegundos, lista da equipe completa) e registro na tela de Erros. Rever na Entrega 2.
+- **As quatro cadeiras são garantidas por aritmética, não por restrição.** Cai se um soro passar de 40 min ou o número de cadeiras mudar.
+- **20 de novembro fecha uma sexta que a clínica atende.** Feriado nacional desde a Lei 14.759/2023. O dono foi perguntado e ainda não respondeu; o teste em `agenda-grade.test.ts` falha de propósito se removerem `11-20`.
