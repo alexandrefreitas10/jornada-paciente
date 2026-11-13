@@ -120,6 +120,9 @@ function SaidaForm() {
   // Form state
   const [patientId, setPatientId] = useState('')
   const [patientSearch, setPatientSearch] = useState('')
+  // Nome do paciente do atalho da Agenda que NÃO foi pré-selecionado porque já havia
+  // um carrinho pendente (ver a regra no useEffect).
+  const [carrinhoPendenteDe, setCarrinhoPendenteDe] = useState<string | null>(null)
   const [observation, setObservation] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -133,8 +136,15 @@ function SaidaForm() {
       fetch('/api/patients').then(r => r.json()).then((patientsData) => {
         const lista: Patient[] = Array.isArray(patientsData) ? patientsData : []
         setPatients(lista)
-        if (lista.some(p => String(p.id) === pacienteParam)) setPatientId(pacienteParam)
-        setCart(loadCart())
+        const carrinho = loadCart()
+        const alvo = lista.find(p => String(p.id) === pacienteParam)
+        // Carrinho velho (abandonado de outro atendimento) + paciente já escolhido
+        // = itens gravados no paciente errado com um toque em "Finalizar". Escolher
+        // o paciente era a pausa em que alguém notava o carrinho; o atalho a
+        // removeria. Então, com carrinho pendente, NÃO pré-seleciona e explica.
+        if (alvo && carrinho.length === 0) setPatientId(pacienteParam)
+        else if (alvo) setCarrinhoPendenteDe(alvo.name)
+        setCart(carrinho)
         setStep('cart')
         setLoading(false)
       }).catch(() => setLoading(false))
@@ -152,9 +162,12 @@ function SaidaForm() {
       setPatients(Array.isArray(patientsData) ? patientsData : [])
       // Só pré-seleciona se o id existe na lista: id solto ou de paciente
       // arquivado não pode deixar a tela com um paciente "fantasma" escolhido.
-      if (pacienteParam && Array.isArray(patientsData) && patientsData.some((p: Patient) => String(p.id) === pacienteParam)) {
-        setPatientId(pacienteParam)
-      }
+      // Mesma regra do carrinho pendente: só pré-seleciona com o carrinho vazio.
+      const alvo: Patient | undefined = pacienteParam && Array.isArray(patientsData)
+        ? patientsData.find((p: Patient) => String(p.id) === pacienteParam)
+        : undefined
+      if (alvo && existingCart.length === 0) setPatientId(pacienteParam!)
+      else if (alvo) setCarrinhoPendenteDe(alvo.name)
 
       // If cart is active and this item came via QR scan, auto-add to cart
       if (existingCart.length > 0) {
@@ -421,6 +434,12 @@ function SaidaForm() {
         )}
 
         {scanError && <p className="text-sm text-red-600 text-center bg-red-50 rounded-xl px-4 py-2">{scanError}</p>}
+
+        {carrinhoPendenteDe && cart.length > 0 && !patientId && (
+          <p role="alert" className="text-sm text-amber-900 text-center bg-amber-50 border border-amber-300 rounded-xl px-4 py-2">
+            Há um carrinho pendente de outro atendimento. Finalize ou limpe antes de registrar a saída de <strong>{carrinhoPendenteDe}</strong>.
+          </p>
+        )}
 
         {/* Chegou pelo atalho da Agenda e ainda não há item: mostra quem é o paciente
             (o seletor abaixo só aparece com itens no carrinho). */}
