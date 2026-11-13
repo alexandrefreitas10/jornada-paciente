@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
+import { motivoDeRecusa } from '@/lib/agenda-vagas'
 import {
+  agendamentosDoPeriodo,
+  bloqueiosDoPeriodo,
   duracaoValida,
   ehFatiaOcupada,
   ehStatusAgendamento,
@@ -44,7 +47,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (status !== undefined) agendamento = await mudarStatus(id, status, session.user.name ?? null)
     if (duracao !== undefined && (status === undefined || agendamento)) agendamento = await mudarDuracao(id, duracao)
     if (!agendamento) return NextResponse.json({ error: 'Agendamento não encontrado.' }, { status: 404 })
-    return NextResponse.json({ agendamento })
+    // Trocar a duração pode empurrar o atendimento para depois do fechamento ou
+    // para dentro de um bloqueio. A equipe pode furar a regra, mas não sem saber:
+    // grava sempre e devolve o motivo como aviso (mesmo formato do POST forçado).
+    // A própria linha fica fora das ocupadas, senão ela se recusaria a si mesma.
+    let aviso: string | null = null
+    if (duracao !== undefined && (agendamento.status === 'agendado' || agendamento.status === 'atendido')) {
+      const [doDia, bloqueios] = await Promise.all([
+        agendamentosDoPeriodo(agendamento.dia, agendamento.dia),
+        bloqueiosDoPeriodo(agendamento.dia, agendamento.dia),
+      ])
+      const ocupadas = doDia.filter((a) => a.id !== id && (a.status === 'agendado' || a.status === 'atendido'))
+      aviso = motivoDeRecusa(agendamento.dia, agendamento.hora, agendamento.duracao, ocupadas, bloqueios)
+    }
+    return NextResponse.json({ agendamento, aviso })
   } catch (erro) {
     // Reviver (agendado) uma linha cuja fatia outro já retomou.
     if (ehFatiaOcupada(erro)) return NextResponse.json({ error: MSG_OCUPADO }, { status: 409 })
