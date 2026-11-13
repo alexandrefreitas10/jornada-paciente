@@ -125,13 +125,19 @@ export async function mudarStatus(
   const [linha] = await sql<Agendamento[]>`
     UPDATE agendamentos
     SET status = ${status},
-        -- Só grava a autoria na PRIMEIRA desmarcação. Desmarcar o que já está
-        -- desmarcado sobrescreveria quem soltou a vaga primeiro — e é
-        -- justamente esse nome que responde "quem tirou o paciente da agenda?"
-        -- meses depois. O segundo clique não acrescenta informação; apaga.
+        -- A autoria acompanha o ESTADO, não a ordem dos cliques.
+        --
+        -- Virou desmarcado: guarda quem foi, e mantém o primeiro nome se já
+        -- houver um — desmarcar o que já está desmarcado não acrescenta
+        -- informação, só apagaria quem soltou a vaga de verdade.
+        --
+        -- Saiu de desmarcado (alguém reviveu): LIMPA. Sem isso o nome antigo
+        -- fica grudado, e se a linha for desmarcada outra vez o sistema
+        -- atribui a quem desmarcou da primeira — acusando a pessoa errada
+        -- numa pergunta que só se faz quando alguém está reclamando.
         desmarcado_por = CASE
-          WHEN ${status}::text = 'desmarcou' AND desmarcado_por IS NULL THEN ${por}
-          ELSE desmarcado_por
+          WHEN ${status}::text = 'desmarcou' THEN COALESCE(desmarcado_por, ${por})
+          ELSE NULL
         END
     WHERE id = ${id}
     RETURNING ${COLUNAS_AGENDAMENTO}`
