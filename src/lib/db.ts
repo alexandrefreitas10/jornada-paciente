@@ -825,6 +825,18 @@ async function runMigrations() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `).catch(() => {})
+  // `CREATE TABLE IF NOT EXISTS` não faz nada se a tabela já existir, então um
+  // banco que recebeu a primeira versão (sem CHECK) nunca os ganharia. Estes
+  // ALTERs alcançam esse banco; os nomes são os que o Postgres dá aos CHECKs
+  // inline, então onde a tabela nasceu com eles o ADD falha por "já existe" e o
+  // .catch engole — idempotente. Com a tabela vazia a validação é instantânea.
+  await sql.unsafe(`
+    ALTER TABLE agendamentos ADD CONSTRAINT agendamentos_duracao_check CHECK (duracao IN (10, 40))
+  `).catch(() => {})
+  await sql.unsafe(`
+    ALTER TABLE agendamentos ADD CONSTRAINT agendamentos_status_check
+      CHECK (status IN ('agendado','atendido','faltou','remarcou','desmarcou'))
+  `).catch(() => {})
   // A trava contra duas pessoas na mesma fatia é ESTE índice, não a leitura:
   // checar antes de gravar não resolve concorrência, dois pedidos no mesmo
   // segundo passam os dois pela checagem. Parcial em dois eixos:

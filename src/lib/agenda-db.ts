@@ -18,6 +18,24 @@ export function ehStatusAgendamento(s: string): s is StatusAgendamento {
   return (STATUS_AGENDAMENTO as readonly string[]).includes(s)
 }
 
+/**
+ * Nome do índice único parcial de db.ts. Mora aqui, ao lado de quem o descreve,
+ * para o chamador não depender de uma string solta que o tsc não confere.
+ */
+const INDICE_FATIA = 'agendamento_fatia_viva'
+
+/**
+ * Reconhece a violação (23505) DESTE índice: a fatia já foi tomada por outro
+ * agendamento vivo. É situação normal de negócio ("horário já ocupado"), não
+ * falha — quem grava deve traduzir em resposta amigável, não deixar virar 500.
+ * 23505 de outra constraint, ou qualquer outro erro, dá `false`.
+ */
+export function ehFatiaOcupada(erro: unknown): boolean {
+  if (typeof erro !== 'object' || erro === null) return false
+  const e = erro as { code?: unknown; constraint_name?: unknown }
+  return e.code === '23505' && e.constraint_name === INDICE_FATIA
+}
+
 export interface Agendamento {
   id: number
   patient_id: number
@@ -54,7 +72,7 @@ export async function criarAgendamento(dados: {
   await initSchema()
   // Quem segura a fatia é o índice único parcial, não uma checagem prévia: se
   // outro pedido levou o horário no mesmo segundo, o INSERT estoura (23505) e
-  // quem chama traduz isso em "horário ocupado".
+  // quem chama usa `ehFatiaOcupada` para traduzir em "horário ocupado".
   const [linha] = await sql<Agendamento[]>`
     INSERT INTO agendamentos (patient_id, dia, hora, duracao, encaixe, criado_por)
     VALUES (${dados.patientId}, ${dados.dia}::date, ${dados.hora}::time, ${dados.duracao},
@@ -75,6 +93,10 @@ export async function agendamentosDoPeriodo(de: string, ate: string): Promise<Ag
 /**
  * `por` só é gravado ao desmarcar: é o nome de quem soltou o horário. Nos
  * outros status o campo fica como estava, para não apagar um registro antigo.
+ *
+ * Também pode estourar 23505 (`ehFatiaOcupada`): reviver uma linha
+ * `remarcou`/`desmarcou` para `agendado` quando a fatia foi retomada por outro
+ * nesse meio tempo.
  */
 export async function mudarStatus(
   id: number,

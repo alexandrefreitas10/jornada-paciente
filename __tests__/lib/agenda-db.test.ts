@@ -1,4 +1,4 @@
-import { duracaoValida, ehStatusAgendamento } from '@/lib/agenda-db'
+import { duracaoValida, ehStatusAgendamento, ehFatiaOcupada } from '@/lib/agenda-db'
 
 describe('duracaoValida', () => {
   it('aceita só 10 e 40', () => {
@@ -16,5 +16,20 @@ describe('ehStatusAgendamento', () => {
   })
   it.each(['cancelado', '', 'Agendado'])('recusa %p', (s) => {
     expect(ehStatusAgendamento(s)).toBe(false)
+  })
+})
+
+describe('ehFatiaOcupada', () => {
+  it('true para 23505 do índice da fatia', () => {
+    expect(ehFatiaOcupada({ code: '23505', constraint_name: 'agendamento_fatia_viva' })).toBe(true)
+  })
+  it('false para 23505 de outra constraint', () => {
+    expect(ehFatiaOcupada({ code: '23505', constraint_name: 'patients_pkey' })).toBe(false)
+  })
+  it('false para outro código, mesmo com o nome do índice', () => {
+    expect(ehFatiaOcupada({ code: '23514', constraint_name: 'agendamento_fatia_viva' })).toBe(false)
+  })
+  it.each([new Error('x'), null, undefined, 'texto', 42])('false para %p', (e) => {
+    expect(ehFatiaOcupada(e)).toBe(false)
   })
 })
