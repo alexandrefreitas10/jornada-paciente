@@ -16,6 +16,8 @@ export function NavMenu({ userName, isAdmin, canEstoque, canConciliacao }: Props
   const links = [
     { href: '/', label: 'Início' },
     ...(isAdmin ? [{ href: '/usuarios', label: 'Usuários' }] : []),
+    // Agenda é da equipe inteira: sem condição de permissão.
+    { href: '/agenda', label: 'Agenda' },
     { href: '/termos', label: 'Termos' },
     { href: '/implantes', label: 'Implantes' },
     // Sem condição de permissão: a aba Fotos é da equipe inteira (decisão do dono).

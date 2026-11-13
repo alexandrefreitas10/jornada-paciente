@@ -83,13 +83,29 @@ export async function criarAgendamento(dados: {
   return linha
 }
 
-/** Agendamentos com `de <= dia <= ate` (AAAA-MM-DD, ambos inclusos). */
-export async function agendamentosDoPeriodo(de: string, ate: string): Promise<Agendamento[]> {
+/** Agendamento + nome do paciente, para a tela montar a grade sem outra consulta. */
+export interface AgendamentoComNome extends Agendamento {
+  nome: string
+}
+
+/**
+ * Agendamentos com `de <= dia <= ate` (AAAA-MM-DD, ambos inclusos).
+ *
+ * O nome vem do JOIN, de propósito: a alternativa era o navegador baixar a lista
+ * inteira de pacientes só para rotular a grade de um dia, e isso é dado de saúde
+ * viajando à toa. LEFT JOIN para que um paciente removido não faça o
+ * agendamento sumir da tela; a pessoa continua marcada.
+ */
+export async function agendamentosDoPeriodo(de: string, ate: string): Promise<AgendamentoComNome[]> {
   await initSchema()
-  return sql<Agendamento[]>`
-    SELECT ${COLUNAS_AGENDAMENTO} FROM agendamentos
-    WHERE dia BETWEEN ${de}::date AND ${ate}::date
-    ORDER BY dia, hora, id`
+  return sql<AgendamentoComNome[]>`
+    SELECT a.id, a.patient_id, to_char(a.dia, 'YYYY-MM-DD') AS dia, to_char(a.hora, 'HH24:MI') AS hora,
+           a.duracao, a.status, a.encaixe, a.criado_por, a.desmarcado_por,
+           COALESCE(p.name, '(paciente removido)') AS nome
+    FROM agendamentos a
+    LEFT JOIN patients p ON p.id = a.patient_id
+    WHERE a.dia BETWEEN ${de}::date AND ${ate}::date
+    ORDER BY a.dia, a.hora, a.id`
 }
 
 /**

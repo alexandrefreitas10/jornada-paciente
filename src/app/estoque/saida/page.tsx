@@ -96,6 +96,8 @@ function ImplanteCard({ patientId, patientName }: { patientId: number | null; pa
 function SaidaForm() {
   const searchParams = useSearchParams()
   const itemId = searchParams.get('item')
+  // Atalho da Agenda: chega com o paciente que acabou de ser atendido.
+  const pacienteParam = searchParams.get('paciente')
 
   const [item, setItem] = useState<StockItem | null>(null)
   const [patients, setPatients] = useState<Patient[]>([])
@@ -123,7 +125,21 @@ function SaidaForm() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!itemId) { setLoading(false); return }
+    if (!itemId) {
+      // Atalho da Agenda chega só com o paciente (a enfermeira ainda não leu o QR
+      // de nenhum item). Sem isto a tela mostraria "Medicação não encontrada" e o
+      // atalho seria um beco sem saída. Sem ?paciente o comportamento é o de sempre.
+      if (!pacienteParam) { setLoading(false); return }
+      fetch('/api/patients').then(r => r.json()).then((patientsData) => {
+        const lista: Patient[] = Array.isArray(patientsData) ? patientsData : []
+        setPatients(lista)
+        if (lista.some(p => String(p.id) === pacienteParam)) setPatientId(pacienteParam)
+        setCart(loadCart())
+        setStep('cart')
+        setLoading(false)
+      }).catch(() => setLoading(false))
+      return
+    }
 
     const existingCart = loadCart()
 
@@ -134,6 +150,11 @@ function SaidaForm() {
       const loadedItem: StockItem = itemData
       setItem(loadedItem)
       setPatients(Array.isArray(patientsData) ? patientsData : [])
+      // Só pré-seleciona se o id existe na lista: id solto ou de paciente
+      // arquivado não pode deixar a tela com um paciente "fantasma" escolhido.
+      if (pacienteParam && Array.isArray(patientsData) && patientsData.some((p: Patient) => String(p.id) === pacienteParam)) {
+        setPatientId(pacienteParam)
+      }
 
       // If cart is active and this item came via QR scan, auto-add to cart
       if (existingCart.length > 0) {
@@ -152,7 +173,7 @@ function SaidaForm() {
 
       setLoading(false)
     }).catch(() => setLoading(false))
-  }, [itemId])
+  }, [itemId, pacienteParam])
 
   // QR Scanner
   const stopScanner = useCallback(() => {
@@ -302,7 +323,7 @@ function SaidaForm() {
     </div>
   )
 
-  if (!itemId || (!item && step !== 'cart')) return (
+  if ((!itemId && !pacienteParam) || (!item && step !== 'cart')) return (
     <div className="flex items-center justify-center min-h-screen bg-gray-50 p-6 text-center">
       <div>
         <p className="text-5xl mb-3">❌</p>
@@ -400,6 +421,14 @@ function SaidaForm() {
         )}
 
         {scanError && <p className="text-sm text-red-600 text-center bg-red-50 rounded-xl px-4 py-2">{scanError}</p>}
+
+        {/* Chegou pelo atalho da Agenda e ainda não há item: mostra quem é o paciente
+            (o seletor abaixo só aparece com itens no carrinho). */}
+        {cart.length === 0 && selectedPatient && (
+          <p className="text-sm text-violet-800 text-center bg-violet-50 border border-violet-200 rounded-xl px-4 py-2">
+            Paciente: <strong>{selectedPatient.name}</strong>. Escaneie o primeiro item.
+          </p>
+        )}
 
         {/* Paciente */}
         {cart.length > 0 && (
