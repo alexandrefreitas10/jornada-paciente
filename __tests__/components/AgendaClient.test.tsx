@@ -70,12 +70,42 @@ describe('AgendaClient', () => {
   })
 
   it('só o atendido mostra o atalho de saída dos ativos, com o paciente na URL', async () => {
-    render(<AgendaClient hoje={HOJE} />)
+    render(<AgendaClient hoje={HOJE} podeEstoque />)
     await screen.findByText('Marta Exemplo')
     const atalhos = screen.getAllByRole('link', { name: /registrar saída dos ativos/i })
     expect(atalhos).toHaveLength(1)
     expect(atalhos[0]).toHaveAttribute('href', '/estoque/saida?paciente=11')
     expect(within(linha('Otávio Modelo')).queryByRole('link', { name: /registrar saída/i })).not.toBeInTheDocument()
+  })
+
+  it('sem permissão de Estoque o atalho de saída não aparece', async () => {
+    render(<AgendaClient hoje={HOJE} podeEstoque={false} />)
+    await screen.findByText('Marta Exemplo')
+    expect(screen.queryByRole('link', { name: /registrar saída/i })).not.toBeInTheDocument()
+  })
+
+  it('remarcou sai da grade e a fatia passa a oferecer "Encaixar às"', async () => {
+    resposta = { agendamentos: [ag({ id: 8, patient_id: 81, nome: 'Wilson Remarcado', hora: '13:00', status: 'remarcou' })], bloqueios: [] }
+    render(<AgendaClient hoje={HOJE} />)
+    expect(await screen.findByRole('button', { name: 'Encaixar às 13:00' })).toBeInTheDocument()
+    expect(screen.queryByText('Wilson Remarcado')).not.toBeInTheDocument()
+  })
+
+  it('faltou continua visível, e a fatia dele também oferece "Encaixar às"', async () => {
+    resposta = { agendamentos: [ag({ id: 8, patient_id: 81, nome: 'Xênia Faltosa', hora: '13:00', status: 'faltou' })], bloqueios: [] }
+    render(<AgendaClient hoje={HOJE} />)
+    expect(await screen.findByText('Xênia Faltosa')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Encaixar às 13:00' })).toBeInTheDocument()
+  })
+
+  it('fatia dentro de um bloqueio não convida a encaixar; a anterior a ele convida', async () => {
+    resposta = { agendamentos: [], bloqueios: [{ id: 1, dia: HOJE, de: '15:00', ate: '16:00', motivo: null, criado_por: null }] }
+    render(<AgendaClient hoje={HOJE} />)
+    await screen.findByText(/Bloqueado das 15:00/)
+    expect(screen.queryByRole('button', { name: 'Encaixar às 15:30' })).not.toBeInTheDocument()
+    expect(within(screen.getByLabelText('Horário 15:30')).getByText(/bloqueado/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Encaixar às 14:50' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Encaixar às 16:00' })).toBeInTheDocument()
   })
 
   it('alternar para Semana pede um período de 7 dias (segunda a domingo)', async () => {

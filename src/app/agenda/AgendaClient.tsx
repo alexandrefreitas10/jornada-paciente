@@ -1,8 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { fatiasDoDia } from '@/lib/agenda-grade'
-import { atingidosPeloBloqueio } from '@/lib/agenda-vagas'
+import { fatiasDoDia, vivo } from '@/lib/agenda-grade'
+import { atingidosPeloBloqueio, motivoDeRecusa } from '@/lib/agenda-vagas'
 import { somarDiasAoDia } from '@/lib/datas'
 import type { AgendamentoComNome, BloqueioGravado, Desmarcado, StatusAgendamento } from '@/lib/agenda-db'
 
@@ -42,16 +42,13 @@ const minutos = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.sl
 const hhmm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`
 const semAcento = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
-// Só estes dois estados seguram a cadeira (mesma regra do servidor).
-const vivo = (s: StatusAgendamento) => s === 'agendado' || s === 'atendido'
-
 async function lerJson(r: Response) {
   return r.json().catch(() => ({}))
 }
 
 type Pendente = { id: number; para: StatusAgendamento }
 
-export function AgendaClient({ hoje }: { hoje: string }) {
+export function AgendaClient({ hoje, podeEstoque = false }: { hoje: string; podeEstoque?: boolean }) {
   const [modo, setModo] = useState<Modo>('dia')
   const [dia, setDia] = useState(hoje)
   const [agendamentos, setAgendamentos] = useState<AgendamentoComNome[]>([])
@@ -98,9 +95,12 @@ export function AgendaClient({ hoje }: { hoje: string }) {
     carregar()
   }, [carregar])
 
-  // Desmarcado some da grade (o horário ficou livre); o total aparece no rodapé.
-  const visiveis = useMemo(() => agendamentos.filter((a) => a.status !== 'desmarcou'), [agendamentos])
-  const desmarcadosNoPeriodo = agendamentos.length - visiveis.length
+  // A grade mostra quem segura o horário (vivo) e quem faltou (a equipe quer ver
+  // quem faltou hoje). remarcou/desmarcou soltaram a cadeira: somem daqui, senão o
+  // horário aparece ocupado justamente quando o sistema o considera livre. O
+  // total dos que saíram aparece no rodapé.
+  const visiveis = useMemo(() => agendamentos.filter((a) => vivo(a.status) || a.status === 'faltou'), [agendamentos])
+  const liberadosNoPeriodo = agendamentos.filter((a) => a.status === 'remarcou' || a.status === 'desmarcou').length
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async function chamar(url: string, init: RequestInit, aoOk?: (dados: any) => void) {
@@ -160,6 +160,7 @@ export function AgendaClient({ hoje }: { hoje: string }) {
       key={a.id}
       a={a}
       ocupado={ocupado}
+      podeEstoque={podeEstoque}
       pendente={pendente?.id === a.id ? pendente : null}
       onStatus={pedirStatus}
       onDuracao={mudarDuracao}
@@ -331,9 +332,9 @@ export function AgendaClient({ hoje }: { hoje: string }) {
           />
         )}
 
-        {desmarcadosNoPeriodo > 0 && (
+        {liberadosNoPeriodo > 0 && (
           <p className="text-xs text-gray-400">
-            {desmarcadosNoPeriodo} {desmarcadosNoPeriodo === 1 ? 'horário desmarcado' : 'horários desmarcados'} neste período (não aparecem na grade).
+            {liberadosNoPeriodo} {liberadosNoPeriodo === 1 ? 'horário remarcado ou desmarcado' : 'horários remarcados ou desmarcados'} neste período (não aparecem na grade).
           </p>
         )}
       </div>
@@ -342,10 +343,11 @@ export function AgendaClient({ hoje }: { hoje: string }) {
 }
 
 function CartaoAgendamento({
-  a, ocupado, pendente, onStatus, onDuracao, onConfirmar, onCancelar, onDesmarcar,
+  a, ocupado, podeEstoque, pendente, onStatus, onDuracao, onConfirmar, onCancelar, onDesmarcar,
 }: {
   a: AgendamentoComNome
   ocupado: boolean
+  podeEstoque: boolean
   pendente: Pendente | null
   onStatus: (a: AgendamentoComNome, para: StatusAgendamento) => void
   onDuracao: (a: AgendamentoComNome, d: Duracao) => void
@@ -366,7 +368,7 @@ function CartaoAgendamento({
           </span>
         )}
         <span className="text-xs text-gray-400">{a.duracao} min</span>
-        {a.status === 'atendido' && (
+        {a.status === 'atendido' && podeEstoque && (
           <a
             href={`/estoque/saida?paciente=${a.patient_id}`}
             className="ml-auto text-xs font-medium text-green-700 border border-green-300 bg-green-50 rounded-lg px-2 py-1 hover:bg-green-100"
@@ -453,7 +455,12 @@ function VisaoDia({
   // precisa existir: se só as fatias da grade aparecessem, quem foi encaixado
   // sumiria da tela.
   const horas = Array.from(new Set([...fatias, ...doDia.map((a) => a.hora)])).sort()
-  const bloqueado = (hora: string) => bloqueiosDoDia.find((b) => b.de <= hora && hora < b.ate)
+  // Quem decide se a fatia está livre é a MESMA régua do servidor (motivoDeRecusa),
+  // não uma regra refeita aqui: bloqueio vale para o atendimento inteiro, e
+  // refazer "começa dentro do bloqueio" convidaria a encaixar onde o servidor avisa.
+  // Dez minutos é o mínimo agendável; durações maiores o servidor avisa ao gravar.
+  const vivas = doDia.filter((a) => vivo(a.status))
+  const motivoLivre = (hora: string) => motivoDeRecusa(dia, hora, 10, vivas, bloqueiosDoDia)
 
   return (
     <section className="space-y-2">
@@ -471,7 +478,8 @@ function VisaoDia({
       <ol className="space-y-1.5">
         {horas.map((hora) => {
           const aqui = doDia.filter((a) => a.hora === hora)
-          const bloq = bloqueado(hora)
+          const temVivo = aqui.some((a) => vivo(a.status))
+          const motivo = temVivo ? null : motivoLivre(hora)
           return (
             <li key={hora} className="flex gap-3 items-start" aria-label={`Horário ${hora}`}>
               <span className="w-12 shrink-0 pt-2 text-sm font-mono text-gray-500">{hora}</span>
@@ -479,19 +487,22 @@ function VisaoDia({
                 {aqui.length > 0 ? (
                   <div className="space-y-1.5">
                     <ul className="space-y-1.5">{aqui.map((a) => cartao(a))}</ul>
-                    {aqui.length > 1 && (
-                      <p className="text-xs text-orange-700">{aqui.length} pessoas neste horário (encaixe).</p>
+                    {aqui.filter((a) => vivo(a.status)).length > 1 && (
+                      <p className="text-xs text-orange-700">{aqui.filter((a) => vivo(a.status)).length} pessoas neste horário (encaixe).</p>
                     )}
                   </div>
-                ) : bloq ? (
-                  <p className="text-sm text-gray-400 pt-2">Bloqueado</p>
-                ) : (
-                  <div className="flex items-center justify-between pt-1.5">
-                    <span className="text-sm text-gray-300">Livre</span>
-                    <button onClick={() => onEncaixarAqui(hora)} className="text-xs text-violet-600 hover:underline">
-                      Encaixar às {hora}
-                    </button>
-                  </div>
+                ) : null}
+                {!temVivo && (
+                  motivo ? (
+                    <p className="text-sm text-gray-400 pt-2">{motivo}</p>
+                  ) : (
+                    <div className="flex items-center justify-between pt-1.5">
+                      <span className="text-sm text-gray-300">Livre</span>
+                      <button onClick={() => onEncaixarAqui(hora)} className="text-xs text-violet-600 hover:underline">
+                        Encaixar às {hora}
+                      </button>
+                    </div>
+                  )
                 )}
               </div>
             </li>

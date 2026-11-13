@@ -41,6 +41,8 @@ describe('/estoque/saida com ?paciente', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Marta Exemplo')
     // sem paciente escolhido: o campo de busca aparece, e não o chip do paciente
     expect(screen.getByPlaceholderText('Buscar paciente...')).toBeInTheDocument()
-    expect(screen.queryByText('Paciente: Marta Exemplo', { exact: false })).not.toBeInTheDocument()
+    // o nome aparece UMA vez (no <strong> do alerta); com o paciente pré-selecionado
+    // apareceria também no chip violeta do campo Paciente
+    expect(screen.getAllByText('Marta Exemplo')).toHaveLength(1)
   })
 })

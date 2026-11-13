@@ -840,7 +840,7 @@ async function runMigrations() {
   // A trava contra duas pessoas na mesma fatia é ESTE índice, não a leitura:
   // checar antes de gravar não resolve concorrência, dois pedidos no mesmo
   // segundo passam os dois pela checagem. Parcial em dois eixos:
-  //  - `status IN ('agendado','atendido')`: só agendamento vivo segura a fatia;
+  //  - `status IN ('agendado','atendido')` (mesma regra de `vivo()` em agenda-grade.ts): só agendamento vivo segura a fatia;
   //    remarcado e desmarcado ficam para o relatório e soltam o horário.
   //  - `AND NOT encaixe`: o encaixe da equipe é a exceção autorizada que pode
   //    dobrar a fatia. Sem este recorte o índice proibiria o que a spec permite.

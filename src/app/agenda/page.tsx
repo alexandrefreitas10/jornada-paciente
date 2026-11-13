@@ -12,5 +12,9 @@ export default async function AgendaPage() {
   // A agenda é da equipe inteira: qualquer pessoa logada, sem permissão nova.
   // O "hoje" nasce no servidor, em Brasília, e desce como texto: calculado no
   // navegador dependeria do fuso da máquina de quem abre (e do relógio dela).
-  return <AgendaClient hoje={dataBrasilia(new Date())} />
+  // Só a ponte "registrar saída dos ativos" depende de outro módulo: quem não
+  // entra em Estoque não pode ver um atalho que termina em 403 depois do trabalho
+  // de escanear os itens. Mesma regra do menu.
+  const u = session.user as { is_admin?: boolean; can_estoque?: boolean }
+  return <AgendaClient hoje={dataBrasilia(new Date())} podeEstoque={!!(u.is_admin || u.can_estoque)} />
 }

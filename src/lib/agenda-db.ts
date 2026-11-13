@@ -204,6 +204,7 @@ export async function bloquearEDesmarcar(dados: {
     // Por isso há a varredura depois do commit, abaixo. Fora de transação este
     // FOR UPDATE não faz nada (a trava solta no fim do SELECT); fica só porque
     // a função é a mesma. Quem protege lá é o filtro de status do UPDATE.
+    // O `status IN` abaixo é a cópia SQL de `vivo()` em agenda-grade.ts (SQL não chama TS).
     const vivos = await tx<Agendamento[]>`
       SELECT ${COLUNAS_AGENDAMENTO} FROM agendamentos
       WHERE dia = ${dados.dia}::date AND status IN ('agendado', 'atendido')

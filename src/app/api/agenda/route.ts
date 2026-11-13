@@ -9,6 +9,7 @@ import {
   ehFatiaOcupada,
 } from '@/lib/agenda-db'
 import { decidirGravacao, motivoDeRecusa } from '@/lib/agenda-vagas'
+import { vivo } from '@/lib/agenda-grade'
 
 export const dynamic = 'force-dynamic'
 
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
 
   const [doDia, bloqueios] = await Promise.all([agendamentosDoPeriodo(dia, dia), bloqueiosDoPeriodo(dia, dia)])
   // Só agendado/atendido segura a cadeira; faltou/remarcou/desmarcou libera.
-  const ocupadas = doDia.filter((a) => a.status === 'agendado' || a.status === 'atendido')
+  const ocupadas = doDia.filter((a) => vivo(a.status))
   const decisao = decidirGravacao({ motivo: motivoDeRecusa(dia, hora, duracao, ocupadas, bloqueios), forcado })
   if (!decisao.grava) return NextResponse.json({ error: decisao.aviso }, { status: decisao.status })
 

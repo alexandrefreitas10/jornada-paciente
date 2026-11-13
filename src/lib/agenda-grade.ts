@@ -7,6 +7,17 @@ import { ehFeriadoNacional } from '@/lib/feriados'
 export const DURACOES = [10, 40] as const
 export type Duracao = (typeof DURACOES)[number]
 
+/**
+ * "Vivo" = o agendamento segura a fatia (agendado/atendido). faltou, remarcou e
+ * desmarcou soltam a cadeira. É a ÚNICA definição em TypeScript: tela e rotas
+ * usam esta. A outra cópia é o SQL (índice `agendamento_fatia_viva` em db.ts e
+ * os `status IN (...)` de agenda-db.ts), que não pode chamar uma função TS:
+ * quem mudar a regra aqui precisa mudar lá também.
+ */
+export function vivo(status: string): boolean {
+  return status === 'agendado' || status === 'atendido'
+}
+
 const FATIA = 10 // minutos: a menor unidade agendável
 
 // Expediente por dia da semana (0 = domingo), em minutos desde 00:00.
