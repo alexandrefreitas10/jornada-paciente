@@ -429,4 +429,8 @@ Entrega 1 pronta: 21 commits, 975 testes, type-check limpo, revisão de conjunto
 
 **Reviver um agendamento apaga que ele já esteve desmarcado.** A autoria agora acompanha o estado: ao sair de `desmarcou`, `desmarcado_por` é limpo. É o comportamento certo para "quem desmarcou **esta** linha", mas significa que a linha não guarda ter sido cancelada antes.
 
-O conserto de verdade é **histórico append-only de mudança de status** — uma linha por transição, em vez de um campo sobrescrito. Não cabia nesta entrega e vale avaliar na Entrega 3, que é quem precisa do histórico para o relatório.
+**RESOLVIDO na mesma rodada** (`9667baf`): a trilha que não se apaga passa a ficar em `audit_logs`, que já existe e já é append-only. Cada mudança de status vira uma linha, e o bloqueio grava **uma linha por paciente** derrubado — porque a pergunta que se faz é "por que a aplicação da fulana sumiu?", e a resposta é procurada na ficha dela.
+
+Não criei tabela nova: o projeto já registra exclusão de paciente e de arquivo em `audit_logs`, e um segundo lugar seria mais um para alguém esquecer de consultar.
+
+`desmarcado_por` continua existindo para responder "quem soltou **este** horário, agora" — é conveniência de leitura, não histórico.
