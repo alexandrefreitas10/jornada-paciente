@@ -106,17 +106,33 @@ export function podeMexerNoAgendamento(dia: string, hora: string, agora: Date): 
 }
 
 /**
- * Esse horário está longe o bastante para o paciente mexer nele — seja para
- * MARCAR, seja para trocar ou desmarcar?
+ * Esse horário está longe o bastante para o paciente DESMARCAR ou TROCAR?
  *
- * A mesma regra vale para os dois casos, de propósito. Se ele não pode trocar
- * faltando menos de uma hora, porque a clínica já separou a medicação e
- * organizou a sala, também não faz sentido conseguir MARCAR dentro desse
- * intervalo. E horário que já passou é o caso extremo disso: sem esta conta,
- * a agenda oferecia a um paciente às 15h12 os horários das 12h, 13h e 14h
- * **do mesmo dia** — ele marcaria no passado.
+ * Exige a antecedência mínima porque, perto da hora, a clínica já separou a
+ * medicação e organizou a sala — soltar a vaga aí perde o insumo.
+ *
+ * **Não vale para marcar.** As duas regras são diferentes de propósito (ver
+ * `aindaNaoComecou`), e já errei isso: eu tinha deduzido que, se não dá para
+ * trocar em cima da hora, também não daria para marcar. O dono corrigiu —
+ * marcar não desperdiça nada.
  */
 export function comAntecedenciaMinima(dia: string, hora: string, agora: Date): boolean {
   const faltam = instanteDe(dia, hora) - agora.getTime()
   return faltam >= HORAS_DE_ANTECEDENCIA * 3_600_000
+}
+
+/**
+ * Esse horário ainda não começou?
+ *
+ * É a regra de MARCAR, e ela é deliberadamente frouxa: decisão do dono em
+ * 13/11/2026 — *"para marcar o paciente pode marcar em cima da hora, não faz
+ * diferença, desde que tenha horário disponível"*. Quem aparece na clínica e
+ * encontra vaga em dez minutos pega a vaga.
+ *
+ * O único limite é o óbvio: horário que já começou não existe mais. Sem esta
+ * conta, a agenda oferecia a um paciente às 15h12 os horários das 12h, 13h e
+ * 14h **do mesmo dia**.
+ */
+export function aindaNaoComecou(dia: string, hora: string, agora: Date): boolean {
+  return instanteDe(dia, hora) > agora.getTime()
 }

@@ -1,6 +1,7 @@
 import {
   HORAS_DE_ANTECEDENCIA,
   SEMANAS_VISIVEIS,
+  aindaNaoComecou,
   comAntecedenciaMinima,
   janelaDoPaciente,
   podeMarcarOutro,
@@ -84,22 +85,39 @@ describe('podeMexerNoAgendamento', () => {
   })
 })
 
-describe('comAntecedenciaMinima', () => {
-  // A MESMA regra vale para marcar e para mexer, de propósito: se o paciente
-  // não pode trocar faltando menos de uma hora — porque a clínica já separou a
-  // medicação —, também não faz sentido ele conseguir MARCAR nesse intervalo.
-  it('recusa horário que já passou', () => {
-    // AGORA é 15:00 em Brasília, dia 16.
-    expect(comAntecedenciaMinima('2026-11-16', '14:00', AGORA)).toBe(false)
-    expect(comAntecedenciaMinima('2026-11-16', '12:00', AGORA)).toBe(false)
+
+describe('aindaNaoComecou — a regra de MARCAR', () => {
+  // Decisão do dono (13/11/2026): marcar pode ser em cima da hora, desde que
+  // haja vaga. Marcar não desperdiça nada; o que não pode é marcar num
+  // horário que já começou.
+  //
+  // É diferente de DESMARCAR, que exige uma hora: ali a medicação já foi
+  // separada, e soltar a vaga tarde demais perde o insumo.
+  it('aceita horário daqui a poucos minutos', () => {
+    // AGORA é 15:00 em Brasília. 15:10 é em dez minutos — pode.
+    expect(aindaNaoComecou('2026-11-16', '15:10', AGORA)).toBe(true)
   })
 
-  it('recusa o que está perto demais', () => {
-    expect(comAntecedenciaMinima('2026-11-16', '15:30', AGORA)).toBe(false)
+  it('aceita o horário que está quase começando', () => {
+    expect(aindaNaoComecou('2026-11-16', '15:01', AGORA)).toBe(true)
   })
 
-  it('aceita a partir da antecedência mínima', () => {
-    expect(comAntecedenciaMinima('2026-11-16', '16:00', AGORA)).toBe(true)
-    expect(comAntecedenciaMinima('2026-11-18', '09:00', AGORA)).toBe(true)
+  it('recusa o que já começou', () => {
+    expect(aindaNaoComecou('2026-11-16', '15:00', AGORA)).toBe(false)
+    expect(aindaNaoComecou('2026-11-16', '14:50', AGORA)).toBe(false)
+    expect(aindaNaoComecou('2026-11-16', '12:00', AGORA)).toBe(false)
+  })
+
+  it('aceita qualquer coisa nos próximos dias', () => {
+    expect(aindaNaoComecou('2026-11-18', '09:00', AGORA)).toBe(true)
+  })
+})
+
+describe('as duas regras são DIFERENTES, de propósito', () => {
+  it('um horário daqui a dez minutos: pode marcar, não pode desmarcar', () => {
+    // Este é o caso que separa as duas. Se alguém "simplificar" unificando as
+    // regras, um dos dois comportamentos quebra — e este teste acusa qual.
+    expect(aindaNaoComecou('2026-11-16', '15:10', AGORA)).toBe(true)
+    expect(podeMexerNoAgendamento('2026-11-16', '15:10', AGORA)).toBe(false)
   })
 })

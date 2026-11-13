@@ -15,7 +15,7 @@ import { motivoDeRecusa, vagasDoDia } from '@/lib/agenda-vagas'
 import { vivo, type Duracao } from '@/lib/agenda-grade'
 import {
   AVISO_EM_CIMA_DA_HORA,
-  comAntecedenciaMinima,
+  aindaNaoComecou,
   janelaDoPaciente,
   podeMarcarOutro,
   podeMexerNoAgendamento,
@@ -104,7 +104,7 @@ export async function GET() {
     // Sem este filtro, um paciente abrindo a agenda às 15h12 enxerga os
     // horários das 12h, 13h e 14h DO MESMO DIA como livres — e marca no
     // passado. A mesma antecedência que trava a troca vale para marcar.
-    const cabe = (h: string) => comAntecedenciaMinima(d, h, agoraParaVagas)
+    const cabe = (h: string) => aindaNaoComecou(d, h, agoraParaVagas)
     const vagas10 = vagasDoDia(d, 10, ocupadas, bloqueados).filter(cabe)
     const vagas40 = vagasDoDia(d, 40, ocupadas, bloqueados).filter(cabe)
     if (vagas10.length || vagas40.length) dias.push({ dia: d, vagas10, vagas40 })
@@ -158,9 +158,9 @@ export async function POST(request: Request) {
   const agora = new Date()
   // A tela não oferece horário no passado, mas a tela não é a trava: sem esta
   // conferência, o pedido direto marcaria ontem.
-  if (!comAntecedenciaMinima(dia, hora, agora)) {
+  if (!aindaNaoComecou(dia, hora, agora)) {
     return NextResponse.json(
-      { error: 'Esse horário está muito próximo. Escolha outro com pelo menos uma hora de antecedência.' },
+      { error: 'Esse horário já começou. Escolha outro.' },
       { status: 409 },
     )
   }
