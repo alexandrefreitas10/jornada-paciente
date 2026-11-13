@@ -58,3 +58,17 @@ export function motivoDeRecusa(
   if (bloqueios.some((b) => cruzaBloqueio(hora, duracao, b))) return 'Este horário está bloqueado na agenda.'
   return null
 }
+
+// Decide o que fazer com um pedido de gravação DEPOIS de saber se a regra barra
+// o horário. Só disponibilidade: quem pode pedir já foi decidido na rota.
+// `forcado` é o encaixe da equipe — fura a regra de propósito. O motivo nunca
+// some: se grava furando, volta como `aviso` para a tela mostrar; furar sem
+// perceber é o que não pode acontecer. `encaixe` é o que tira a linha do índice
+// único parcial; sem motivo não há regra furada, então não marca encaixe.
+export function decidirGravacao(p: { motivo: string | null; forcado: boolean }):
+  | { grava: true; status: 201; aviso: string | null; encaixe: boolean }
+  | { grava: false; status: 409; aviso: string; encaixe: false } {
+  if (p.motivo === null) return { grava: true, status: 201, aviso: null, encaixe: false }
+  if (p.forcado) return { grava: true, status: 201, aviso: p.motivo, encaixe: true }
+  return { grava: false, status: 409, aviso: p.motivo, encaixe: false }
+}
