@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
   const nomes = new Map<number, string>()
   if (atingidos.length > 0) {
     const linhas = await sql<{ id: number; name: string }[]>`
-      SELECT id, name FROM patients WHERE id IN ${sql(atingidos.map((a) => a.patient_id))}`
+      SELECT id, name FROM patients WHERE id = ANY(${atingidos.map((a) => a.patient_id)}::int[])`
     for (const l of linhas) nomes.set(l.id, l.name)
   }
 
