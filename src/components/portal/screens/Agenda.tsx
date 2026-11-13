@@ -9,7 +9,12 @@ import { ScreenHeader } from '../ui'
 // agenda a cada abertura do portal.
 
 interface DiaComVagas { dia: string; vagas10: string[]; vagas40: string[] }
-interface MeuAgendamento { id: number; dia: string; hora: string; duracao: number; podeMexer: boolean }
+interface MeuAgendamento {
+  id: number; dia: string; hora: string; duracao: number
+  /** Trocar pode ser em cima da hora; desmarcar exige antecedência. */
+  podeTrocar: boolean
+  podeDesmarcar: boolean
+}
 interface Dados {
   hoje: string
   dias: DiaComVagas[]
@@ -120,27 +125,41 @@ export function Agenda({ onBack }: { onBack: () => void }) {
                     {m.duracao === 40 ? 'Soroterapia — 40 minutos' : 'Aplicação — 10 minutos'}
                   </div>
 
-                  {m.podeMexer ? (
+                  {/* Os dois botões vivem permissões DIFERENTES: trocar pode
+                      ser em cima da hora, porque o paciente continua vindo;
+                      desmarcar não, porque a medicação já separada fica sem
+                      dono. Por isso não há um `if` só para os dois. */}
+                  {(m.podeTrocar || m.podeDesmarcar) && (
                     <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-                      <button
-                        onClick={() => { setEscolhendo({ trocar: m.id }); setDuracao(m.duracao as 10 | 40) }}
-                        style={{ flex: 1, border: `1px solid rgba(0,0,0,.16)`, background: C.white, borderRadius: 11, padding: 10, fontSize: 13, fontWeight: 700 }}
-                      >
-                        Trocar horário
-                      </button>
-                      <button
-                        onClick={() => desmarcar(m.id)}
-                        disabled={ocupado}
-                        style={{ flex: 1, border: '1px solid rgba(180,69,58,.45)', color: '#b4453a', background: C.white, borderRadius: 11, padding: 10, fontSize: 13, fontWeight: 700 }}
-                      >
-                        Desmarcar
-                      </button>
+                      {m.podeTrocar && (
+                        <button
+                          onClick={() => { setEscolhendo({ trocar: m.id }); setDuracao(m.duracao as 10 | 40) }}
+                          style={{ flex: 1, border: `1px solid rgba(0,0,0,.16)`, background: C.white, borderRadius: 11, padding: 10, fontSize: 13, fontWeight: 700 }}
+                        >
+                          Trocar horário
+                        </button>
+                      )}
+                      {m.podeDesmarcar && (
+                        <button
+                          onClick={() => desmarcar(m.id)}
+                          disabled={ocupado}
+                          style={{ flex: 1, border: '1px solid rgba(180,69,58,.45)', color: '#b4453a', background: C.white, borderRadius: 11, padding: 10, fontSize: 13, fontWeight: 700 }}
+                        >
+                          Desmarcar
+                        </button>
+                      )}
                     </div>
-                  ) : (
-                    // Dentro da última hora a tela TRAVA e diz o caminho, com o
-                    // texto exato que o dono escreveu.
+                  )}
+
+                  {/* Só o DESMARCAR manda para o grupo. Quando dá para trocar
+                      mas não para desmarcar, o recado é esse — e explicar
+                      que trocar continua valendo evita a pessoa achar que
+                      está sem saída. */}
+                  {!m.podeDesmarcar && (
                     <div role="note" style={{ marginTop: 14, background: '#fdf6e3', border: '1px solid #e8d9a8', borderRadius: 11, padding: '11px 12px', fontSize: 12, lineHeight: 1.5 }}>
-                      {dados.avisoEmCimaDaHora}
+                      {m.podeTrocar
+                        ? `Você ainda pode trocar o horário. Para desmarcar: ${dados.avisoEmCimaDaHora.toLowerCase()}`
+                        : dados.avisoEmCimaDaHora}
                     </div>
                   )}
                 </div>

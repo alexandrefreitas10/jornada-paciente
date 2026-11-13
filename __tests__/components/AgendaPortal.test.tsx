@@ -22,7 +22,7 @@ const SEM_NADA = {
 
 const COM_AGENDAMENTO = {
   ...SEM_NADA,
-  meus: [{ id: 7, dia: '2026-11-18', hora: '15:00', duracao: 10, podeMexer: true }],
+  meus: [{ id: 7, dia: '2026-11-18', hora: '15:00', duracao: 10, podeTrocar: true, podeDesmarcar: true }],
   podeMarcar: false,
 }
 
@@ -46,19 +46,23 @@ describe('Agenda do portal', () => {
     expect(screen.getByText(/uma aplicação por vez/)).toBeInTheDocument()
   })
 
-  it('dentro da última hora, TRAVA e mostra o caminho do grupo', async () => {
+  it('dentro da última hora: TROCAR continua, DESMARCAR manda para o grupo', async () => {
     // É o caso que mais incomoda o paciente: ele tenta e não consegue. Se a
     // tela não disser o que fazer, ele liga para a clínica — ou simplesmente
     // não aparece.
     global.fetch = responder({
       ...COM_AGENDAMENTO,
-      meus: [{ id: 7, dia: '2026-11-16', hora: '15:30', duracao: 10, podeMexer: false }],
+      meus: [{ id: 7, dia: '2026-11-16', hora: '15:30', duracao: 10, podeTrocar: true, podeDesmarcar: false }],
     })
     render(<Agenda onBack={jest.fn()} />)
 
-    expect(await screen.findByText(AVISO)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Trocar horário/ })).toBeNull()
+    // Trocar não perde o paciente; desmarcar perde. São permissões
+    // diferentes, e a tela precisa refletir isso — senão o paciente que só
+    // queria mudar de hora acha que está sem saída.
+    expect(await screen.findByRole('button', { name: /Trocar horário/ })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Desmarcar/ })).toBeNull()
+    expect(screen.getByRole('note')).toHaveTextContent(/ainda pode trocar/i)
+    expect(screen.getByRole('note')).toHaveTextContent(/grupo de suporte/i)
   })
 
   it('a escolha é por TEMPO, e o dia só aparece depois dela', async () => {

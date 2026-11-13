@@ -120,7 +120,11 @@ export async function GET() {
       dia: a.dia,
       hora: a.hora,
       duracao: a.duracao,
-      podeMexer: podeMexerNoAgendamento(a.dia, a.hora, agora),
+      // Duas permissões DIFERENTES, e a diferença é do negócio:
+      // trocar não perde o paciente (ele continua vindo, em outra hora),
+      // desmarcar perde — e aí a medicação já separada fica sem dono.
+      podeTrocar: aindaNaoComecou(a.dia, a.hora, agora),
+      podeDesmarcar: podeMexerNoAgendamento(a.dia, a.hora, agora),
     })),
     podeMarcar: podeMarcarOutro(meus, agora),
     avisoEmCimaDaHora: AVISO_EM_CIMA_DA_HORA,
@@ -173,8 +177,13 @@ export async function POST(request: Request) {
   if (typeof trocar === 'number' && !antigo) {
     return NextResponse.json({ error: 'Agendamento não encontrado.' }, { status: 404 })
   }
-  if (antigo && !podeMexerNoAgendamento(antigo.dia, antigo.hora, agora)) {
-    return NextResponse.json({ error: AVISO_EM_CIMA_DA_HORA }, { status: 409 })
+  // Trocar PODE ser em cima da hora (decisão do dono): o paciente continua
+   // vindo, só muda a hora. O limite é o horário antigo ainda não ter começado.
+  if (antigo && !aindaNaoComecou(antigo.dia, antigo.hora, agora)) {
+    return NextResponse.json(
+      { error: "Esse agendamento já começou. Fale no grupo de suporte pelo WhatsApp." },
+      { status: 409 },
+    )
   }
   if (!antigo && !podeMarcarOutro(meus, agora)) {
     return NextResponse.json(
