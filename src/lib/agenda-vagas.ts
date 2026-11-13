@@ -72,3 +72,16 @@ export function decidirGravacao(p: { motivo: string | null; forcado: boolean }):
   if (p.forcado) return { grava: true, status: 201, aviso: p.motivo, encaixe: true }
   return { grava: false, status: 409, aviso: p.motivo, encaixe: false }
 }
+
+// Quem perde o horário quando a sala fecha. Reusa `cruzaBloqueio` de propósito:
+// é a MESMA régua que decide o que se oferece. Se as duas divergissem, o
+// sistema ofereceria uma vaga que o próprio bloqueio derrubaria em seguida.
+// Pega também quem começa antes e invade o bloqueio (17:40 + 40 min vs 18:00).
+// `agendamentos` já deve ser só os vivos DO DIA do bloqueio; `dia` vai no tipo
+// para o chamador não misturar dias, mas a comparação é só por hora.
+export function atingidosPeloBloqueio(
+  bloqueio: Bloqueio & { dia: string },
+  agendamentos: { id: number; hora: string; duracao: Duracao }[],
+): number[] {
+  return agendamentos.filter((a) => cruzaBloqueio(a.hora, a.duracao, bloqueio)).map((a) => a.id)
+}
