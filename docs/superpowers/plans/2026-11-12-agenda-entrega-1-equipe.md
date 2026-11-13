@@ -394,3 +394,33 @@ Entrega 1 pronta: 21 commits, 975 testes, type-check limpo, revisão de conjunto
 - **Bloquear não é à prova de corrida.** Trava de linha não é trava de predicado: marcação cuja leitura de bloqueios aconteceu antes do commit ainda pode cair dentro. Mitigado por varredura pós-commit (janela de milissegundos, lista da equipe completa) e registro na tela de Erros. Rever na Entrega 2.
 - **As quatro cadeiras são garantidas por aritmética, não por restrição.** Cai se um soro passar de 40 min ou o número de cadeiras mudar.
 - **20 de novembro fecha uma sexta que a clínica atende.** Feriado nacional desde a Lei 14.759/2023. O dono foi perguntado e ainda não respondeu; o teste em `agenda-grade.test.ts` falha de propósito se removerem `11-20`.
+
+---
+
+# Atualização — rodada de pendências (13/11/2026, mesma sessão)
+
+**Os dois obrigatórios antes da Entrega 2 estão FEITOS** (`63d2a87`):
+
+1. ✅ A aplicação reclama na tela de Erros se o índice único não existir.
+2. ✅ Teto de 62 dias no `GET /api/agenda`, imposto no servidor.
+
+**Também fechados:**
+
+- `CHECK (ate > de)` em `agenda_bloqueios`.
+- **Teste que amarra o SQL ao TypeScript** (`__tests__/lib/agenda-sql-bate-com-ts.test.ts`): nome do índice, lista de status, lista de durações e o recorte parcial do índice. Lê o SQL como texto — não é elegante, e é de propósito: a alternativa era não ter ligação nenhuma. Provado quebrando.
+- Desmarcar o que já estava desmarcado não sobrescreve mais a autoria original.
+- Contagem do rodapé derivada em vez de reenumerada; `vivo()` exaustivo no tipo; `aviso` limpo a cada ação.
+- `semAcento` virou módulo próprio com teste. O escape unicode se perdia em toda ferramenta do caminho e voltava a virar caractere invisível — a faixa agora é montada por número.
+- `podeEstoque` saiu para `src/lib/permissoes.ts`, puro e testável. Em `authz.ts` era intestável: aquele arquivo importa `@/auth` e a suíte morre no carregamento.
+
+**Estado: 72 suítes, 993 testes, type-check limpo. Nada mesclado, nada publicado.**
+
+## Ainda em aberto
+
+- Índice em `agendamentos(dia)` e `patient_id` — rever na Entrega 3, que varre anos.
+- `GET /api/patients` devolve a tabela inteira para a busca do encaixe; um `?q=` é o conserto, em mudança própria.
+- PATCH com status e duração são dois UPDATEs (a tela manda um por vez).
+- Reviver para `agendado` não reconfere — declarado na confirmação da tela.
+- Falta teste do caminho `?paciente` + `?item` sem pré-seleção.
+- Links de paciente usam `<a href>` (padrão do projeto).
+- **20 de novembro: o dono ainda não respondeu se fecham.**
