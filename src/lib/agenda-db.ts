@@ -1,6 +1,7 @@
 import sql, { initSchema } from '@/lib/db'
 import { DURACOES, type Duracao } from './agenda-grade'
 import { atingidosPeloBloqueio } from './agenda-vagas'
+import { logSystemError } from './system-errors'
 
 // Gravação e leitura da agenda. Só servidor.
 //
@@ -230,7 +231,15 @@ export async function bloquearEDesmarcar(dados: {
   try {
     retardatarios = await derrubar(sql)
   } catch (erro) {
-    console.error('agenda: varredura pós-bloqueio falhou; devolvendo só a primeira lista', erro)
+    // Vai para a tela de Erros (que a clínica abre), não para o log do servidor:
+    // quem a varredura desmarcou antes de falhar fica fora da lista, e só
+    // alguém saber disso permite avisar o paciente. Sem nome de paciente.
+    await logSystemError('agenda.bloqueio.varredura-falhou', erro instanceof Error ? erro.message : String(erro), {
+      dia: dados.dia,
+      de: dados.de,
+      ate: dados.ate,
+      bloqueioId: bloqueio.id,
+    })
   }
   return { bloqueio, desmarcados: [...desmarcados, ...retardatarios] }
 }
