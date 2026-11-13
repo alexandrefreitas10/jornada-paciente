@@ -59,6 +59,7 @@ export function Home({ data, go }: { data: PortalData; go: (s: Screen) => void }
         <QA label="Medicações" tone="gold" icon={<IconCapsule color={C.goldIcon} />} onClick={() => go('med')} />
         <QA label="Prescrições" tone="gold" icon={<IconDoc color={C.goldIcon} />} onClick={() => go('prescricoes')} />
         <QA label="Termos" tone="sage" icon={<IconDoc color={C.sageText} />} onClick={() => go('termos')} />
+        {data.podeVerAgenda && <QA label="Agenda" tone="sage" icon={<IconBell color={C.sageText} />} onClick={() => go('agenda')} />}
         {data.hasEstetica && <QA label="Estética" tone="gold" icon={<IconSparkle color={C.goldIcon} />} onClick={() => go('estetica')} />}
       </div>
     </div>

@@ -3,6 +3,7 @@
 export type Screen =
   | 'home' | 'fotos' | 'exames' | 'bio' | 'tabela'
   | 'dieta' | 'med' | 'termos' | 'estetica' | 'prescricoes' | 'perfil' | 'ouvidoria'
+  | 'agenda'
 
 export interface PortalFile {
   id: number
@@ -69,6 +70,8 @@ export interface PortalData {
   tasksDone: number
   tasksTotal: number
   hasEstetica: boolean
+  /** Aba Agenda: folha em Prescrições E liberado no piloto. */
+  podeVerAgenda: boolean
   photos: PortalFile[]
   /** Fotos da tabela de papel do Instituto, enviadas pela aba Evolução do card.
    *  Mais recente primeiro. */

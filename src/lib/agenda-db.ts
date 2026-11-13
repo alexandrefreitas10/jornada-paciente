@@ -96,6 +96,36 @@ export interface AgendamentoComNome extends Agendamento {
  * viajando à toa. LEFT JOIN para que um paciente removido não faça o
  * agendamento sumir da tela; a pessoa continua marcada.
  */
+/** Os agendamentos de UM paciente dentro de um intervalo. Para o portal. */
+export async function agendamentosDoPaciente(
+  patientId: number,
+  de: string,
+  ate: string,
+): Promise<Agendamento[]> {
+  await initSchema()
+  return sql<Agendamento[]>`
+    SELECT ${COLUNAS_AGENDAMENTO} FROM agendamentos
+    WHERE patient_id = ${patientId} AND dia BETWEEN ${de}::date AND ${ate}::date
+    ORDER BY dia, hora, id`
+}
+
+/**
+ * O paciente tem folha na aba Prescrições?
+ *
+ * É o portão da aba Agenda, decidido pelo dono: qualquer arquivo serve, e o
+ * sistema NÃO lê o conteúdo — quem é de injetável se combina no grupo.
+ */
+export async function temPrescricao(patientId: number): Promise<boolean> {
+  await initSchema()
+  const [linha] = await sql<{ existe: boolean }[]>`
+    SELECT EXISTS (
+      SELECT 1 FROM patient_files
+      WHERE patient_id = ${patientId}
+        AND file_type = 'prescricao'
+        AND deleted_at IS NULL
+    ) AS existe`
+  return !!linha?.existe
+}
 export async function agendamentosDoPeriodo(de: string, ate: string): Promise<AgendamentoComNome[]> {
   await initSchema()
   return sql<AgendamentoComNome[]>`

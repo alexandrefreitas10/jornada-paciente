@@ -12,6 +12,8 @@ import sql from '@/lib/db'
 import { portalAuth } from '@/auth-portal'
 import { findPortalUserByPatientId } from '@/lib/patient-portal'
 import { hasAnsweredNps } from '@/lib/feedback'
+import { temPrescricao } from '@/lib/agenda-db'
+import { pacientePodeVerAgenda } from '@/lib/agenda-piloto'
 import { PortalApp } from '@/components/portal/PortalApp'
 import { logoutPortal } from './actions'
 import type { PortalData, PortalFile } from '@/components/portal/types'
@@ -58,6 +60,12 @@ export default async function PortalPatientPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (!patient || (patient as any).deleted_at || (patient as any).archived_at) redirect('/portal/login')
 
+  // A aba Agenda só nasce para quem tem folha na aba Prescrições — portão
+  // decidido pelo dono — e, enquanto o piloto durar, só para quem estiver na
+  // lista do ambiente. As duas condições são conferidas AQUI e de novo na
+  // rota: esconder o atalho não protege nada sozinho.
+  const podeVerAgenda = pacientePodeVerAgenda(patientId) && (await temPrescricao(patientId))
+
   const withUrls = async (files: typeof photos): Promise<PortalFile[]> =>
     Promise.all(files.map(async (f) => ({
       id: f.id, original_name: f.original_name, created_at: f.created_at,
@@ -83,6 +91,7 @@ export default async function PortalPatientPage() {
     tasksDone: patient.completed_task_keys.length,
     tasksTotal: ALL_TASK_KEYS.length,
     hasEstetica: sessions.length > 0,
+    podeVerAgenda,
     photos: pPhotos,
     tabelas: pTabelas,
     // Normaliza a data aqui, na fronteira: o postgres.js devolve `Date` em

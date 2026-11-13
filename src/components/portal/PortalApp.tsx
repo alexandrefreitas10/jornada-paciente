@@ -14,6 +14,7 @@ import { Med } from './screens/Med'
 import { Termos } from './screens/Termos'
 import { Estetica } from './screens/Estetica'
 import { Prescricoes } from './screens/Prescricoes'
+import { Agenda } from './screens/Agenda'
 import { Perfil } from './screens/Perfil'
 import { Ouvidoria } from './screens/Ouvidoria'
 
@@ -71,6 +72,7 @@ export function PortalApp({ data, onLogout }: { data: PortalData; onLogout: () =
           {screen === 'termos' && <Termos data={data} onBack={back} />}
           {screen === 'estetica' && <Estetica data={data} onBack={back} />}
           {screen === 'prescricoes' && <Prescricoes data={data} onBack={back} />}
+          {screen === 'agenda' && <Agenda onBack={back} />}
           {screen === 'perfil' && <Perfil data={data} go={go} onLogout={handleLogout} onBack={back} />}
           {screen === 'ouvidoria' && <Ouvidoria data={data} onBack={() => setScreen('perfil')} />}
         </div>
