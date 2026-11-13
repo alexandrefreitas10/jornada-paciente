@@ -424,3 +424,9 @@ Entrega 1 pronta: 21 commits, 975 testes, type-check limpo, revisão de conjunto
 - Falta teste do caminho `?paciente` + `?item` sem pré-seleção.
 - Links de paciente usam `<a href>` (padrão do projeto).
 - **20 de novembro: o dono ainda não respondeu se fecham.**
+
+## Limite novo, aberto nesta rodada
+
+**Reviver um agendamento apaga que ele já esteve desmarcado.** A autoria agora acompanha o estado: ao sair de `desmarcou`, `desmarcado_por` é limpo. É o comportamento certo para "quem desmarcou **esta** linha", mas significa que a linha não guarda ter sido cancelada antes.
+
+O conserto de verdade é **histórico append-only de mudança de status** — uma linha por transição, em vez de um campo sobrescrito. Não cabia nesta entrega e vale avaliar na Entrega 3, que é quem precisa do histórico para o relatório.
