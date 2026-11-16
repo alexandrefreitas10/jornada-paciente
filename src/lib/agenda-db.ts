@@ -207,6 +207,31 @@ export async function agendamentosFuturosDoPaciente(
 }
 
 /**
+ * TUDO o que um paciente já teve, mais recente primeiro. Para a sub-aba
+ * Relatórios › Agendamentos.
+ *
+ * SEM TETO, nem no passado nem no futuro, e sem filtro de status — ao
+ * contrário de `agendamentosDoPeriodo`, que a rota da equipe limita a 62 dias.
+ * A diferença é a pergunta: "o que aconteceu no período" pode varrer a clínica
+ * inteira e precisa de teto; "o histórico desta pessoa" é naturalmente
+ * pequeno, e cortá-lo esconderia justamente o que o dono quer ver.
+ *
+ * O LEFT JOIN é o mesmo de `agendamentosDoPeriodo`: paciente removido continua
+ * aparecendo como '(paciente removido)' em vez de sumir com o histórico junto.
+ */
+export async function historicoDoPaciente(patientId: number): Promise<AgendamentoComNome[]> {
+  await initSchema()
+  return sql<AgendamentoComNome[]>`
+    SELECT a.id, a.patient_id, to_char(a.dia, 'YYYY-MM-DD') AS dia, to_char(a.hora, 'HH24:MI') AS hora,
+           a.duracao, a.status, a.encaixe, a.criado_por, a.desmarcado_por,
+           COALESCE(p.name, '(paciente removido)') AS nome
+    FROM agendamentos a
+    LEFT JOIN patients p ON p.id = a.patient_id
+    WHERE a.patient_id = ${patientId}
+    ORDER BY a.dia DESC, a.hora DESC, a.id DESC`
+}
+
+/**
  * O paciente tem folha na aba Prescrições?
  *
  * É o portão da aba Agenda, decidido pelo dono: qualquer arquivo serve, e o
