@@ -56,6 +56,83 @@ function servidorComPatch(respostaPatch: { ok: boolean; status: number; corpo: u
   return chamadas
 }
 
+/** Dublê que responde diferente para o período e para o histórico de um paciente. */
+function servidorComHistorico(historico: unknown[]) {
+  const urls: string[] = []
+  const fn = jest.fn(async (url: unknown) => {
+    const u = String(url)
+    urls.push(u)
+    if (u.startsWith('/api/reports/agendamentos/')) {
+      return { ok: true, status: 200, json: async () => ({ agendamentos: historico }) }
+    }
+    return { ok: true, status: 200, json: async () => ({ agendamentos: AGENDAMENTOS, bloqueios: [] }) }
+  })
+  global.fetch = fn as unknown as typeof fetch
+  return urls
+}
+
+const HISTORICO_ANTIGO = [
+  { id: 90, patient_id: 12, nome: 'Paciente Inventado', dia: '2026-03-02', hora: '15:00', duracao: 10, status: 'atendido', encaixe: false, criado_por: 'Recepção', desmarcado_por: null },
+  { id: 91, patient_id: 12, nome: 'Paciente Inventado', dia: '2026-02-24', hora: '15:00', duracao: 40, status: 'remarcou', encaixe: false, criado_por: 'Recepção', desmarcado_por: null },
+]
+
+describe('Relatórios › Agendamentos — histórico de um paciente', () => {
+  it('escolher um paciente busca o histórico completo dele', async () => {
+    const urls = servidorComHistorico(HISTORICO_ANTIGO)
+    const user = userEvent.setup()
+    render(<Agendamentos patients={PACIENTES} />)
+    await screen.findByRole('table')
+
+    await user.selectOptions(screen.getByLabelText('Paciente'), '12')
+
+    await waitFor(() => {
+      expect(urls.some((u) => u === '/api/reports/agendamentos/12')).toBe(true)
+    })
+    // Agendamento de março, muito fora de qualquer período de quatro semanas.
+    expect(await screen.findByText(/seg 02\/03/)).toBeInTheDocument()
+  })
+
+  it('no modo paciente, os campos de período somem', async () => {
+    servidorComHistorico(HISTORICO_ANTIGO)
+    const user = userEvent.setup()
+    render(<Agendamentos patients={PACIENTES} />)
+    await screen.findByRole('table')
+    expect(screen.getByLabelText('De')).toBeInTheDocument()
+
+    await user.selectOptions(screen.getByLabelText('Paciente'), '12')
+
+    // Filtrar o histórico de uma pessoa por data responderia a pergunta errada.
+    await waitFor(() => expect(screen.queryByLabelText('De')).toBeNull())
+    expect(screen.queryByLabelText('Até')).toBeNull()
+  })
+
+  it('paciente sem nenhum agendamento diz isso', async () => {
+    servidorComHistorico([])
+    const user = userEvent.setup()
+    render(<Agendamentos patients={PACIENTES} />)
+    await screen.findByRole('table')
+
+    await user.selectOptions(screen.getByLabelText('Paciente'), '34')
+
+    expect(await screen.findByText(/nunca teve agendamento/i)).toBeInTheDocument()
+  })
+
+  it('voltar para todos os pacientes devolve a lista do período', async () => {
+    servidorComHistorico(HISTORICO_ANTIGO)
+    const user = userEvent.setup()
+    render(<Agendamentos patients={PACIENTES} />)
+    await screen.findByRole('table')
+
+    await user.selectOptions(screen.getByLabelText('Paciente'), '12')
+    await screen.findByText(/seg 02\/03/)
+
+    await user.selectOptions(screen.getByLabelText('Paciente'), '')
+
+    expect(await screen.findByLabelText('De')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Todos \(4\)/ })).toBeInTheDocument()
+  })
+})
+
 describe('Relatórios › Agendamentos — corrigir o status', () => {
   const SELECT_DA_FALTA = 'Status de Outra Pessoa Inventada, qua 11/11 14:00'
 

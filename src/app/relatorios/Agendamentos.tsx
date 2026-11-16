@@ -41,14 +41,13 @@ function rotuloDoDia(dia: string): string {
   return `${DIAS_SEMANA[d.getUTCDay()]} ${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}`
 }
 
-// `patients` chega já aqui, e não só quando a visão por paciente existir, para
-// a assinatura do componente não mudar no meio da entrega.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function Agendamentos({ patients }: { patients: { id: number; name: string }[] }) {
   const padrao = periodoPadrao()
   const [de, setDe] = useState(padrao.de)
   const [ate, setAte] = useState(padrao.ate)
   const [filtro, setFiltro] = useState<FiltroStatus>('todos')
+  /** Id do paciente escolhido, ou '' para a visão de período. */
+  const [paciente, setPaciente] = useState('')
   const [lista, setLista] = useState<AgendamentoComNome[]>([])
   const [erro, setErro] = useState<string | null>(null)
   const [carregando, setCarregando] = useState(true)
@@ -58,7 +57,13 @@ export function Agendamentos({ patients }: { patients: { id: number; name: strin
   const carregar = useCallback(async () => {
     setCarregando(true)
     try {
-      const r = await fetch(`/api/agenda?de=${de}&ate=${ate}`)
+      // Duas perguntas diferentes, duas rotas. "O que aconteceu no período"
+      // varre a clínica e tem teto de 62 dias no servidor; "o histórico desta
+      // pessoa" não tem teto, porque é naturalmente pequeno e cortá-lo
+      // esconderia justamente o que o dono abriu a aba para ver.
+      const r = await fetch(
+        paciente ? `/api/reports/agendamentos/${paciente}` : `/api/agenda?de=${de}&ate=${ate}`,
+      )
       const corpo = await r.json().catch(() => ({}))
       if (!r.ok) {
         // A mensagem é do SERVIDOR: ele recusa período acima de 62 dias com um
@@ -76,7 +81,7 @@ export function Agendamentos({ patients }: { patients: { id: number; name: strin
     } finally {
       setCarregando(false)
     }
-  }, [de, ate])
+  }, [de, ate, paciente])
 
   useEffect(() => { carregar() }, [carregar])
 
@@ -129,19 +134,40 @@ export function Agendamentos({ patients }: { patients: { id: number; name: strin
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
         <div>
-          <label htmlFor="rel-ag-de" className="block text-xs font-medium text-gray-600 mb-1">De</label>
-          <input
-            id="rel-ag-de" type="date" value={de} onChange={(e) => setDe(e.target.value)}
+          <label htmlFor="rel-ag-paciente" className="block text-xs font-medium text-gray-600 mb-1">Paciente</label>
+          <select
+            id="rel-ag-paciente" value={paciente}
+            onChange={(e) => { setPaciente(e.target.value); setFiltro('todos') }}
             className="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-violet-400"
-          />
+          >
+            <option value="">Todos os pacientes</option>
+            {patients.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
         </div>
-        <div>
-          <label htmlFor="rel-ag-ate" className="block text-xs font-medium text-gray-600 mb-1">Até</label>
-          <input
-            id="rel-ag-ate" type="date" value={ate} onChange={(e) => setAte(e.target.value)}
-            className="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-violet-400"
-          />
-        </div>
+
+        {/* Os campos de período só existem na visão de período. Filtrar o
+            histórico de uma pessoa por data responderia a pergunta errada:
+            quem abre o histórico quer ver tudo o que ela já teve. */}
+        {!paciente && (
+          <>
+            <div>
+              <label htmlFor="rel-ag-de" className="block text-xs font-medium text-gray-600 mb-1">De</label>
+              <input
+                id="rel-ag-de" type="date" value={de} onChange={(e) => setDe(e.target.value)}
+                className="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-violet-400"
+              />
+            </div>
+            <div>
+              <label htmlFor="rel-ag-ate" className="block text-xs font-medium text-gray-600 mb-1">Até</label>
+              <input
+                id="rel-ag-ate" type="date" value={ate} onChange={(e) => setAte(e.target.value)}
+                className="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-violet-400"
+              />
+            </div>
+          </>
+        )}
       </div>
 
       {/* Os mesmos botões contam e filtram. Dois controles separados mostrariam
@@ -170,7 +196,9 @@ export function Agendamentos({ patients }: { patients: { id: number; name: strin
       {carregando && <p className="text-sm text-gray-400">Carregando...</p>}
 
       {!carregando && !erro && lista.length === 0 && (
-        <p className="text-sm text-gray-500 py-8 text-center">Nenhum agendamento neste período.</p>
+        <p className="text-sm text-gray-500 py-8 text-center">
+          {paciente ? 'Esta pessoa nunca teve agendamento.' : 'Nenhum agendamento neste período.'}
+        </p>
       )}
 
       {/* A tabela NÃO depende de `erro`. Um erro ao corrigir o status de uma
