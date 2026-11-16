@@ -10,15 +10,14 @@ import { logSystemError } from './system-errors'
 // DATE vira meia-noite local e voltar disso para AAAA-MM-DD depende do fuso de
 // quem roda o servidor. Texto não tem fuso.
 
-export const STATUS_AGENDAMENTO = ['agendado', 'atendido', 'faltou', 'remarcou', 'desmarcou'] as const
-export type StatusAgendamento = (typeof STATUS_AGENDAMENTO)[number]
+// Os status moram em `agenda-status.ts`, que é puro. Reexportados aqui para
+// quem já importava daqui não precisar mudar — e porque, para código de
+// servidor, este continua sendo o lugar natural de procurar.
+export { STATUS_AGENDAMENTO, ehStatusAgendamento, type StatusAgendamento } from './agenda-status'
+import type { StatusAgendamento } from './agenda-status'
 
 export function duracaoValida(n: number): n is Duracao {
   return (DURACOES as readonly number[]).includes(n)
-}
-
-export function ehStatusAgendamento(s: string): s is StatusAgendamento {
-  return (STATUS_AGENDAMENTO as readonly string[]).includes(s)
 }
 
 /**

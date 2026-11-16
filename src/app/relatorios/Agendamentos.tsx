@@ -1,11 +1,11 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import type { AgendamentoComNome, StatusAgendamento } from '@/lib/agenda-db'
-import { STATUS_AGENDAMENTO } from '@/lib/agenda-db'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { AgendamentoComNome } from '@/lib/agenda-db'
+import { STATUS_AGENDAMENTO, type StatusAgendamento } from '@/lib/agenda-status'
 import { COR_STATUS, ROTULO_STATUS } from '@/lib/agenda-rotulos'
-import { filtrarPorStatus, resumoDoPeriodo, type FiltroStatus } from '@/lib/agenda-relatorio'
-import { dataBrasilia, somarDiasAoDia } from '@/lib/datas'
+import { filtrarPorStatus, periodoPadrao, resumoDoPeriodo, type FiltroStatus } from '@/lib/agenda-relatorio'
+import { dataBrasilia } from '@/lib/datas'
 
 // Relatórios › Agendamentos. É aqui que aparece tudo o que a grade da agenda
 // esconde — quem faltou, quem desmarcou, quem remarcou — porque a grade mostra
@@ -14,35 +14,37 @@ import { dataBrasilia, somarDiasAoDia } from '@/lib/datas'
 // foi desmarcado ou faltou, atendido, tudo".
 
 /** Quantos dias à frente o período padrão alcança. */
-const DIAS_A_FRENTE = 31
-
 /**
- * O período padrão, em horário da CLÍNICA.
+ * Hoje no fuso da CLÍNICA, que é de onde o período padrão sai.
  *
- * `dataBrasilia` resolve o fuso; só depois é seguro recortar o texto para
- * achar o primeiro do mês. O caminho fácil — `new Date().getMonth()` — usa o
- * relógio de quem abriu: acerta no computador da recepção e erra no celular
- * de quem está fora, além de tornar o teste dependente do ambiente.
- *
- * Vai até 31 dias À FRENTE, não até hoje: gerenciar agendamento é mais sobre
- * a semana que vem do que sobre a passada.
+ * `dataBrasilia` resolve o fuso; a conta do período em si vive em
+ * `agenda-relatorio.ts`, pura e testada dia a dia contra o teto do servidor.
+ * O caminho fácil — `new Date().getMonth()` — usa o relógio de quem abriu:
+ * acerta no computador da recepção e erra no celular de quem está fora, além
+ * de deixar o teste dependente do ambiente.
  */
-function periodoPadrao(): { de: string; ate: string } {
-  const hoje = dataBrasilia(new Date())
-  return { de: hoje.slice(0, 8) + '01', ate: somarDiasAoDia(hoje, DIAS_A_FRENTE) ?? hoje }
+function hojeNaClinica(): string {
+  return dataBrasilia(new Date())
 }
 
 const DIAS_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
 
-/** Dia lido em UTC: `AAAA-MM-DD` é dia de calendário, não instante. */
-function rotuloDoDia(dia: string): string {
+/**
+ * Dia lido em UTC: `AAAA-MM-DD` é dia de calendário, não instante.
+ *
+ * `comAno` existe para o histórico de um paciente, que não tem teto no
+ * passado: sem o ano, "ter 10/11" de 2025 e de 2026 ficam idênticos na tela,
+ * e a pergunta que se faz nessa aba é justamente "quando foi que ela faltou".
+ */
+function rotuloDoDia(dia: string, comAno = false): string {
   const d = new Date(`${dia}T00:00:00Z`)
   if (Number.isNaN(d.getTime())) return dia
-  return `${DIAS_SEMANA[d.getUTCDay()]} ${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+  const base = `${DIAS_SEMANA[d.getUTCDay()]} ${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+  return comAno ? `${base}/${d.getUTCFullYear()}` : base
 }
 
 export function Agendamentos({ patients }: { patients: { id: number; name: string }[] }) {
-  const padrao = periodoPadrao()
+  const padrao = periodoPadrao(hojeNaClinica())
   const [de, setDe] = useState(padrao.de)
   const [ate, setAte] = useState(padrao.ate)
   const [filtro, setFiltro] = useState<FiltroStatus>('todos')
@@ -51,10 +53,23 @@ export function Agendamentos({ patients }: { patients: { id: number; name: strin
   const [lista, setLista] = useState<AgendamentoComNome[]>([])
   const [erro, setErro] = useState<string | null>(null)
   const [carregando, setCarregando] = useState(true)
+  /** Contador de buscas: só a mais recente pode escrever na tela. */
+  const vezAtual = useRef(0)
   /** Id da linha cuja correção está em trânsito, para não aceitar dois cliques. */
   const [salvando, setSalvando] = useState<number | null>(null)
 
-  const carregar = useCallback(async () => {
+  const carregar = useCallback(async ({ manterAviso = false } = {}) => {
+    // GUARDA DE SEQUÊNCIA. Trocar de paciente e voltar dispara duas buscas; se
+    // a primeira responder por último, ela sobrescreve a lista certa e o dono
+    // lê o histórico de uma pessoa como se fosse o período — com os números do
+    // topo contados em cima da lista errada, e nada avisando. Só a busca mais
+    // recente pode escrever na tela.
+    // Campo de data vazio no meio da edição não vira pedido: o servidor
+    // responderia 400 com linguagem de API ("Informe "de" e "ate" no formato
+    // AAAA-MM-DD") e a tabela sumiria enquanto a pessoa ainda está digitando.
+    if (!paciente && (!de || !ate)) return
+
+    const minhaVez = ++vezAtual.current
     setCarregando(true)
     try {
       // Duas perguntas diferentes, duas rotas. "O que aconteceu no período"
@@ -65,6 +80,7 @@ export function Agendamentos({ patients }: { patients: { id: number; name: strin
         paciente ? `/api/reports/agendamentos/${paciente}` : `/api/agenda?de=${de}&ate=${ate}`,
       )
       const corpo = await r.json().catch(() => ({}))
+      if (minhaVez !== vezAtual.current) return
       if (!r.ok) {
         // A mensagem é do SERVIDOR: ele recusa período acima de 62 dias com um
         // texto que explica o limite. Trocar por um genérico faria o dono ler
@@ -74,12 +90,15 @@ export function Agendamentos({ patients }: { patients: { id: number; name: strin
         return
       }
       setLista(corpo.agendamentos ?? [])
-      setErro(null)
+      if (!manterAviso) setErro(null)
     } catch {
+      if (minhaVez !== vezAtual.current) return
       setErro('Não consegui carregar os agendamentos.')
       setLista([])
     } finally {
-      setCarregando(false)
+      // `carregando` só sai no pedido mais recente: senão a busca velha
+      // apagaria o "Carregando..." da nova.
+      if (minhaVez === vezAtual.current) setCarregando(false)
     }
   }, [de, ate, paciente])
 
@@ -108,9 +127,19 @@ export function Agendamentos({ patients }: { patients: { id: number; name: strin
       const corpo = await r.json().catch(() => ({}))
       if (!r.ok) {
         setErro(corpo.error ?? 'Não consegui mudar o status.')
+        // Recarrega mantendo o aviso. Tanto o 404 (a linha sumiu) quanto o 409
+        // (a fatia foi retomada por outro) significam "o mundo mudou desde que
+        // esta tela carregou". Sem recarregar, a linha fantasma fica listada,
+        // contada nos números, e clicável para dar o mesmo erro de novo — a
+        // tela parece travada.
+        await carregar({ manterAviso: true })
         return
       }
-      setLista((atual) => atual.map((a) => (a.id === id ? { ...a, status } : a)))
+      setLista((atual) => atual.map((a) => (a.id === id ? { ...a, ...(corpo.agendamento ?? { status }) } : a)))
+      // O servidor grava mesmo quando o horário não cabe (dia fechado,
+      // bloqueio, fora do expediente) e devolve o motivo. Guardar esse aviso
+      // no servidor e não mostrar aqui seria o mesmo que não ter aviso.
+      setErro(corpo.aviso ?? null)
     } catch {
       setErro('A conexão caiu. O status não foi mudado.')
     } finally {
@@ -221,7 +250,7 @@ export function Agendamentos({ patients }: { patients: { id: number; name: strin
               {visiveis.map((a) => (
                 <tr key={a.id} className="border-b border-gray-100 align-top">
                   <td className="py-2 pr-3 whitespace-nowrap text-gray-700">
-                    {rotuloDoDia(a.dia)} <span className="font-semibold">{a.hora}</span>
+                    {rotuloDoDia(a.dia, !!paciente)} <span className="font-semibold">{a.hora}</span>
                   </td>
                   <td className="py-2 pr-3">
                     <a href={`/pacientes/${a.patient_id}`} className="font-medium text-gray-900 hover:text-violet-700">

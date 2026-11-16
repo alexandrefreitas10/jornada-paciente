@@ -1,5 +1,6 @@
 import { STATUS_AGENDAMENTO } from '@/lib/agenda-db'
-import { filtrarPorStatus, resumoDoPeriodo } from '@/lib/agenda-relatorio'
+import { filtrarPorStatus, periodoPadrao, resumoDoPeriodo } from '@/lib/agenda-relatorio'
+import { diasEntre } from '@/lib/datas'
 
 const LISTA = [
   { status: 'atendido' },
@@ -55,5 +56,29 @@ describe('filtro por status', () => {
     // aqui abriria espaço para a lista filtrada e a original saírem de sincronia.
     const [primeiro] = filtrarPorStatus(LISTA, 'faltou')
     expect(primeiro).toBe(LISTA[2])
+  })
+})
+
+describe('período padrão', () => {
+  it('nunca passa do teto que o servidor aceita, em nenhum dia do ano', () => {
+    // O servidor recusa acima de 62 dias (MAX_DIAS_CONSULTA em
+    // src/app/api/agenda/route.ts). Se esta conta estourar, a aba abre com
+    // "Período longo demais" — e só em alguns dias do mês, que é a falha que
+    // ninguém reproduz. Varre 2026 e 2028 (bissexto) dia a dia.
+    for (const ano of [2026, 2028]) {
+      for (let mes = 1; mes <= 12; mes++) {
+        const ultimo = new Date(Date.UTC(ano, mes, 0)).getUTCDate()
+        for (let d = 1; d <= ultimo; d++) {
+          const hoje = `${ano}-${String(mes).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+          const { de, ate } = periodoPadrao(hoje)
+          expect(diasEntre(de, ate)).toBeLessThanOrEqual(62)
+        }
+      }
+    }
+  })
+
+  it('começa no primeiro dia do mês de hoje', () => {
+    expect(periodoPadrao('2026-11-16').de).toBe('2026-11-01')
+    expect(periodoPadrao('2026-11-30').de).toBe('2026-11-01')
   })
 })

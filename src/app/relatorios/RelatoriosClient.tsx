@@ -1040,7 +1040,7 @@ function TermosRelatorio() {
 
 // ── Componente principal ─────────────────────────────────────────────────────
 
-export function RelatoriosClient({ patients }: { patients: PatientOption[] }) {
+export function RelatoriosClient({ patients, patientsComArquivados }: { patients: PatientOption[]; patientsComArquivados: PatientOption[] }) {
   const [tab, setTab] = useState<Tab>('resumo_paciente')
 
   const tabs: { key: Tab; label: string }[] = [
@@ -1081,7 +1081,7 @@ export function RelatoriosClient({ patients }: { patients: PatientOption[] }) {
       {tab === 'resumo_paciente' && <ResumoPaciente />}
       {tab === 'em_tratamento' && <EmTratamento />}
       {tab === 'estetica' && <Estetica />}
-      {tab === 'agendamentos' && <Agendamentos patients={patients} />}
+      {tab === 'agendamentos' && <Agendamentos patients={patientsComArquivados} />}
       {tab === 'termos' && <TermosRelatorio />}
       {tab === 'cards' && <CardsCreated />}
       {tab === 'itens' && <ItensSent patients={patients} />}

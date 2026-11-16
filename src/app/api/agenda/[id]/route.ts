@@ -84,8 +84,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // para dentro de um bloqueio. A equipe pode furar a regra, mas não sem saber:
     // grava sempre e devolve o motivo como aviso (mesmo formato do POST forçado).
     // A própria linha fica fora das ocupadas, senão ela se recusaria a si mesma.
+    // Vale para a DURAÇÃO e para o STATUS. Mudar o status para um status vivo
+    // pode pôr gente numa sala fechada: é o que acontece ao reviver um
+    // `desmarcou` que o bloqueio de um feriado derrubou. A sub-aba de
+    // Relatórios é o primeiro lugar do sistema onde isso é possível — a grade
+    // esconde `desmarcou`/`remarcou` —, e sem este aviso a gravação é
+    // silenciosa, resultando num paciente marcado para um dia em que a clínica
+    // não abre. Grava assim mesmo (a equipe pode furar a regra), mas sabendo.
     let aviso: string | null = null
-    if (duracao !== undefined && vivo(agendamento.status)) {
+    if ((duracao !== undefined || status !== undefined) && vivo(agendamento.status)) {
       const [doDia, bloqueios] = await Promise.all([
         agendamentosDoPeriodo(agendamento.dia, agendamento.dia),
         bloqueiosDoPeriodo(agendamento.dia, agendamento.dia),

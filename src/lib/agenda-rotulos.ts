@@ -1,4 +1,4 @@
-import type { StatusAgendamento } from './agenda-db'
+import type { StatusAgendamento } from './agenda-status'
 
 // Como o status aparece para quem usa: palavra e cor.
 //

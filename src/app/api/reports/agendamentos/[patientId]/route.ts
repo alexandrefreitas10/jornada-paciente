@@ -11,8 +11,20 @@ export const dynamic = 'force-dynamic'
 // pessoa, o volume é pequeno por natureza, e cortar por data esconderia
 // exatamente o que o relatório serve para mostrar.
 //
-// Autorização igual às outras rotas de relatório deste projeto: sessão da
-// equipe. O portão de administrador é a senha da tela de Relatórios.
+// Autorização igual às outras rotas de relatório deste projeto: QUALQUER
+// sessão da equipe.
+//
+// ATENÇÃO, porque é fácil concluir o contrário: **não existe portão de
+// administrador em Relatórios.** O componente `AdminGate` está declarado em
+// `src/app/relatorios/RelatoriosClient.tsx` e nunca é renderizado; a página
+// não confere `is_admin`; e `src/components/NavMenu.tsx` mostra "Relatórios"
+// para a equipe inteira, sem condição (ao contrário de Estoque e Conciliação,
+// que têm). O "Área restrita ao administrador" no cabeçalho é só texto.
+//
+// Isto não é regressão nem buraco novo: quem tem sessão da equipe já alcança
+// a ficha do paciente e `GET /api/agenda`, e esta rota não expõe nada além
+// disso. Está escrito aqui para ninguém auditar segurança daqui a seis meses
+// e concluir que Relatórios é área restrita quando não é.
 
 export async function GET(
   _req: Request,

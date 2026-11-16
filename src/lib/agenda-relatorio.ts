@@ -1,4 +1,5 @@
-import { STATUS_AGENDAMENTO, type StatusAgendamento } from './agenda-db'
+import { STATUS_AGENDAMENTO, type StatusAgendamento } from './agenda-status'
+import { somarDiasAoDia } from './datas'
 
 // Os números e o filtro da sub-aba Relatórios › Agendamentos. PURO: sem banco,
 // sem React, sem rede — recebe a lista que a rota já devolveu.
@@ -33,6 +34,29 @@ export function resumoDoPeriodo(lista: { status: string }[]): ResumoDoPeriodo {
     }
   }
   return resumo
+}
+
+/**
+ * Quantos dias à frente o período padrão alcança.
+ *
+ * ARITMÉTICA FRÁGIL, e por isso está escrita aqui junto de quem depende dela
+ * (mesma disciplina das 4 cadeiras da sala). O servidor recusa período acima
+ * de `MAX_DIAS_CONSULTA` (62) dias. O pior caso do padrão é abrir a aba no dia
+ * 31 de um mês de 31 dias: de 01 até 31+31 dá exatamente 62 dias — passa, com
+ * **folga zero**. Subir este número, ou baixar o teto do servidor, faz a aba
+ * abrir com "Período longo demais" só em alguns dias do mês, que é o tipo de
+ * falha que ninguém consegue reproduzir. `periodoPadraoCabe` tranca isso.
+ */
+export const DIAS_A_FRENTE = 31
+
+/**
+ * O período padrão do relatório, em dia de calendário.
+ *
+ * `hoje` entra pronto (já resolvido no fuso da clínica por quem chama): esta
+ * função é pura e não tem opinião sobre relógio.
+ */
+export function periodoPadrao(hoje: string): { de: string; ate: string } {
+  return { de: hoje.slice(0, 8) + '01', ate: somarDiasAoDia(hoje, DIAS_A_FRENTE) ?? hoje }
 }
 
 /** Devolve os MESMOS objetos da lista, nunca cópias: a tela usa o id deles. */

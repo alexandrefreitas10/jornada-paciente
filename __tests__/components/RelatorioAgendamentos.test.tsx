@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Agendamentos } from '@/app/relatorios/Agendamentos'
 
@@ -117,6 +117,40 @@ describe('Relatórios › Agendamentos — histórico de um paciente', () => {
     expect(await screen.findByText(/nunca teve agendamento/i)).toBeInTheDocument()
   })
 
+  it('resposta atrasada da busca antiga não sobrescreve a lista certa', async () => {
+    // O dono escolhe uma pessoa e volta para "Todos" em menos de um segundo.
+    // Saem dois pedidos. Se o do histórico voltar DEPOIS, sem guarda a tela
+    // fica em modo período — com os campos De/Até à vista — mostrando o
+    // histórico daquela pessoa, e os números do topo contados em cima dele.
+    // O dono lê aquilo como se fosse o período.
+    let soltarHistorico: (() => void) | null = null
+    global.fetch = jest.fn(async (url: unknown) => {
+      if (String(url).startsWith('/api/reports/agendamentos/')) {
+        await new Promise<void>((r) => { soltarHistorico = r })
+        return { ok: true, status: 200, json: async () => ({ agendamentos: HISTORICO_ANTIGO }) }
+      }
+      return { ok: true, status: 200, json: async () => ({ agendamentos: AGENDAMENTOS, bloqueios: [] }) }
+    }) as unknown as typeof fetch
+
+    const user = userEvent.setup()
+    render(<Agendamentos patients={PACIENTES} />)
+    await screen.findByRole('table')
+
+    await user.selectOptions(screen.getByLabelText('Paciente'), '12')
+    await waitFor(() => expect(soltarHistorico).not.toBeNull())
+    await user.selectOptions(screen.getByLabelText('Paciente'), '')
+    await screen.findByLabelText('De')
+
+    // Agora o histórico, que já não interessa, finalmente responde — e o
+    // `act` espera essa atualização ATERRISSAR. Sem ele o teste examinaria a
+    // tela antes da resposta atrasada chegar e passaria mesmo com o defeito.
+    await act(async () => { soltarHistorico!() })
+
+    // A lista do período continua. O agendamento de março NÃO entra.
+    expect(screen.queryByText(/seg 02\/03/)).toBeNull()
+    expect(screen.getByRole('button', { name: /Todos \(4\)/ })).toBeInTheDocument()
+  })
+
   it('voltar para todos os pacientes devolve a lista do período', async () => {
     servidorComHistorico(HISTORICO_ANTIGO)
     const user = userEvent.setup()
@@ -170,6 +204,27 @@ describe('Relatórios › Agendamentos — corrigir o status', () => {
     expect(screen.getByRole('button', { name: /Faltou \(0\)/ })).toBeInTheDocument()
   })
 
+  it('reviver para um dia fechado grava E mostra o aviso', async () => {
+    // A rota grava assim mesmo — a equipe pode furar a regra — mas devolve o
+    // motivo. Guardar esse aviso no servidor e não mostrar na tela seria o
+    // mesmo que não ter aviso nenhum.
+    servidorComPatch({
+      ok: true, status: 200,
+      corpo: {
+        agendamento: { ...AGENDAMENTOS[1], status: 'agendado' },
+        aviso: 'A clínica não abre neste dia.',
+      },
+    })
+    const user = userEvent.setup()
+    render(<Agendamentos patients={PACIENTES} />)
+
+    await user.selectOptions(await screen.findByLabelText(SELECT_DA_FALTA), 'agendado')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/não abre neste dia/i)
+    // E gravou mesmo: a linha acompanhou.
+    expect(await screen.findByLabelText(SELECT_DA_FALTA)).toHaveValue('agendado')
+  })
+
   it('se o agendamento sumiu (404), avisa e não finge que gravou', async () => {
     // Sem isto o <select> fica mostrando o valor novo e o dono acredita que
     // corrigiu — justamente na tela que ele abre para conferir.
@@ -180,6 +235,14 @@ describe('Relatórios › Agendamentos — corrigir o status', () => {
     await user.selectOptions(await screen.findByLabelText(SELECT_DA_FALTA), 'atendido')
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/não encontrado/i)
+    // E a lista é buscada de novo: a linha fantasma tem que sair da tela, em
+    // vez de continuar listada, contada nos números e clicável para dar o
+    // mesmo erro outra vez.
+    await waitFor(() => {
+      const buscas = (global.fetch as unknown as jest.Mock).mock.calls
+        .filter(([, init]) => (init as RequestInit | undefined)?.method === undefined)
+      expect(buscas.length).toBeGreaterThan(1)
+    })
     // Voltou ao que era: a linha continua sendo uma falta.
     expect(await screen.findByLabelText(SELECT_DA_FALTA)).toHaveValue('faltou')
     expect(screen.getByRole('button', { name: /Faltou \(1\)/ })).toBeInTheDocument()
