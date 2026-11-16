@@ -23,6 +23,7 @@ function paciente(p: Partial<PatientListItem> & { id: number; name: string }): P
     created_by: null,
     completed_count: 0,
     tem_prescricao: false,
+    tem_aviso: false,
     ...p,
   }
 }
@@ -106,5 +107,49 @@ describe('lista de pacientes — quem já tem folha de prescrição', () => {
     await user.type(screen.getByPlaceholderText(/Buscar paciente/), 'bru')
     expect(screen.getByText('Bruno Lemos')).toBeInTheDocument()
     expect(screen.queryByText('Ana Prado')).toBeNull()
+  })
+})
+
+describe('lista de pacientes — quem já tem aviso no celular', () => {
+  // Só a própria pessoa pode ligar o aviso, no aparelho dela: não existe
+  // chave do nosso lado. Então o que a equipe precisa da lista é enxergar de
+  // quem ainda falta, em vez de perguntar aos 193 um a um.
+  const COM_AVISO: PatientListItem[] = [
+    paciente({ id: 1, name: 'Ana Prado', tipo: 'nutrologia', tem_aviso: true }),
+    paciente({ id: 2, name: 'Bruno Lemos', tipo: 'nutrologia', tem_aviso: false }),
+    paciente({ id: 3, name: 'Carla Dias', tipo: 'estetica', tem_aviso: false }),
+  ]
+
+  it('marca só o card de quem tem', () => {
+    render(<PatientSearch patients={COM_AVISO} />)
+    expect(within(cardDe('Ana Prado')).getByText(/aviso/i)).toBeInTheDocument()
+    expect(within(cardDe('Bruno Lemos')).queryByText(/aviso/i)).toBeNull()
+  })
+
+  it('filtra quem ainda não tem, com a contagem', async () => {
+    const user = userEvent.setup()
+    render(<PatientSearch patients={COM_AVISO} />)
+
+    // A lista abre filtrada em nutrologia, então a contagem de aviso é dentro
+    // do tipo escolhido — igual à de prescrição. Para contar os três, é
+    // preciso abrir o tipo primeiro.
+    await user.click(grupo(/tipo de paciente/i).getByRole('button', { name: /^Todos/ }))
+    expect(grupo(/aviso/i).getByRole('button', { name: /^Sem aviso \(2\)/ })).toBeInTheDocument()
+
+    await user.click(grupo(/aviso/i).getByRole('button', { name: /^Sem aviso/ }))
+    expect(screen.queryByText('Ana Prado')).toBeNull()
+    expect(screen.getByText('Bruno Lemos')).toBeInTheDocument()
+    expect(screen.getByText('Carla Dias')).toBeInTheDocument()
+  })
+
+  it('convive com o filtro de tipo', async () => {
+    const user = userEvent.setup()
+    render(<PatientSearch patients={COM_AVISO} />)
+
+    await user.click(grupo(/tipo de paciente/i).getByRole('button', { name: /^Estética/ }))
+    await user.click(grupo(/aviso/i).getByRole('button', { name: /^Sem aviso/ }))
+
+    expect(screen.getByText('Carla Dias')).toBeInTheDocument()
+    expect(screen.queryByText('Bruno Lemos')).toBeNull()
   })
 })

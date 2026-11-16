@@ -2,6 +2,14 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Agenda } from '@/components/portal/screens/Agenda'
 
+// O jsdom não tem service worker, então o convite de avisos se esconderia
+// sozinho (e com razão: navegador sem suporte não recebe push). Aqui o que se
+// mede é QUANDO o convite é oferecido; se ele pode ser oferecido é assunto de
+// `ConviteDeAviso.test.tsx`.
+jest.mock('@/components/portal/usarAvisosPush', () => ({
+  usarAvisosPush: () => ({ estado: 'desligado', ocupado: false, ligar: jest.fn(), desligar: jest.fn() }),
+}))
+
 // Nomes e dados INVENTADOS.
 const AVISO = 'Para remarcar com menos de 1h de antecedência, favor avisar no grupo de suporte pelo WhatsApp.'
 
@@ -122,6 +130,27 @@ describe('Agenda do portal', () => {
     await waitFor(() => {
       expect(chamadas).toEqual(['GET', 'POST', 'GET'])
     })
+  })
+
+  it('depois de MARCAR, convida a ligar os avisos — e não antes', async () => {
+    // O convite vivia no Perfil, que o paciente não abre: o pedido existia e
+    // ninguém via, e sobrava para a recepcionista pedir um a um no WhatsApp.
+    // Aqui ele chega no momento em que se explica sozinho — a pessoa acabou
+    // de escolher um horário que lhe importa.
+    global.fetch = responder(SEM_NADA)
+    const user = userEvent.setup()
+    render(<Agenda onBack={jest.fn()} />)
+
+    await user.click(await screen.findByRole('button', { name: /Marcar minha aplicação/ }))
+    await user.click(screen.getByText('10 minutos'))
+    await user.click(screen.getByText('16'))
+    // Antes de marcar, nada de convite: pedir sem contexto queima a única
+    // chance que existe por pessoa.
+    expect(screen.queryByText(/Quer ser avisado/i)).toBeNull()
+
+    await user.click(screen.getByText('14:10'))
+
+    expect(await screen.findByText(/Quer ser avisado/i)).toBeInTheDocument()
   })
 
   it('manda o pedido com o que foi escolhido', async () => {

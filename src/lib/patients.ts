@@ -25,6 +25,16 @@ export interface PatientListItem extends PatientRow {
    * quase duzentos pacientes.
    */
   tem_prescricao: boolean
+  /**
+   * Tem pelo menos um aparelho com aviso ligado.
+   *
+   * POR QUE A EQUIPE PRECISA VER ISSO: a permissão de notificação só pode ser
+   * dada pela própria pessoa, num toque dentro do aparelho dela — não existe
+   * chave do nosso lado, nem do lado da Apple ou do Google. Então a lista é o
+   * único jeito de a clínica saber de quem ainda falta, em vez de perguntar a
+   * todos. Um "não" no navegador é definitivo, então vale perguntar certo.
+   */
+  tem_aviso: boolean
 }
 
 /**
@@ -33,7 +43,7 @@ export interface PatientListItem extends PatientRow {
  * sem trazê-lo do banco seria uma promessa que o tipo faz e o dado não cumpre —
  * `sql<T[]>` é conversão de tipo, não conferência, então ninguém avisaria.
  */
-export interface ArchivedPatientItem extends Omit<PatientListItem, 'tem_prescricao'> {
+export interface ArchivedPatientItem extends Omit<PatientListItem, 'tem_prescricao' | 'tem_aviso'> {
   archive_reason: string | null
   archived_by: string | null
   archive_event_at: Date | string | null
@@ -67,7 +77,10 @@ export async function listPatients(): Promise<PatientListItem[]> {
              WHERE f.patient_id = p.id
                AND f.file_type = ${TIPO_FOLHA_PRESCRICAO}
                AND f.deleted_at IS NULL
-           ) AS tem_prescricao
+           ) AS tem_prescricao,
+           EXISTS (
+             SELECT 1 FROM push_subscriptions s WHERE s.patient_id = p.id
+           ) AS tem_aviso
     FROM patients p
     LEFT JOIN task_completions tc ON tc.patient_id = p.id
     WHERE p.deleted_at IS NULL AND p.archived_at IS NULL

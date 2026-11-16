@@ -56,6 +56,14 @@ export function PatientCard({ patient }: Props) {
                 📋 prescrição
               </span>
             )}
+            {patient.tem_aviso && (
+              <span
+                title="Já ligou os avisos no celular. Só a própria pessoa pode ligar, no aparelho dela."
+                className="flex-shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200"
+              >
+                🔔 aviso
+              </span>
+            )}
           </div>
           <div className="text-xs text-gray-500 mb-2">
             {patient.start_date && `Início: ${fmtDiaPuro(patient.start_date)}`}

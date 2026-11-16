@@ -3,6 +3,7 @@
 import React from 'react'
 import { C, serif, shadowCard } from '../theme'
 import { ScreenHeader } from '../ui'
+import { ConviteDeAviso } from '../ConviteDeAviso'
 
 // A tela busca os próprios dados em vez de recebê-los pelo `PortalData`: quem
 // não tem a aba (a maioria, durante o piloto) não paga por uma consulta de
@@ -36,6 +37,8 @@ export function Agenda({ onBack }: { onBack: () => void }) {
   const [dados, setDados] = React.useState<Dados | null>(null)
   const [erro, setErro] = React.useState<string | null>(null)
   const [ocupado, setOcupado] = React.useState(false)
+  /** Liga o convite de avisos, que só aparece logo depois de marcar. */
+  const [acabouDeMarcar, setAcabouDeMarcar] = React.useState(false)
 
   // null = ninguém escolhendo. Guarda o id quando está TROCANDO um horário.
   const [escolhendo, setEscolhendo] = React.useState<{ trocar: number | null } | null>(null)
@@ -75,6 +78,10 @@ export function Agenda({ onBack }: { onBack: () => void }) {
       }
       await carregar()
       setEscolhendo(null); setDuracao(null); setDiaEscolhido(null)
+      // Só depois de MARCAR, nunca ao desmarcar: o convite para ligar os
+      // avisos só faz sentido quando a pessoa acabou de escolher um horário
+      // que lhe importa. Quem acabou de desmarcar não quer ser lembrado.
+      if (init.method === 'POST') setAcabouDeMarcar(true)
       return true
     } catch {
       setErro('A conexão caiu. Tente de novo.')
@@ -177,6 +184,12 @@ export function Agenda({ onBack }: { onBack: () => void }) {
                 </div>
               ))
             )}
+
+            {/* O convite de avisos, no único momento em que ele se explica
+                sozinho: a pessoa acabou de escolher um horário. Ele próprio
+                decide se aparece — some para quem já ligou e para quem já
+                recusou no navegador, porque ali a chance já foi gasta. */}
+            {acabouDeMarcar && <ConviteDeAviso />}
 
             {dados.podeMarcar && (
               <button
