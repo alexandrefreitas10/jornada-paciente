@@ -2,6 +2,7 @@ import sql, { initSchema } from '@/lib/db'
 import { DURACOES, vivo, type Duracao } from './agenda-grade'
 import { podeMarcarOutro } from './agenda-paciente'
 import { atingidosPeloBloqueio } from './agenda-vagas'
+import { TIPO_FOLHA_PRESCRICAO } from './folha-prescricao'
 import { logSystemError } from './system-errors'
 
 // Gravação e leitura da agenda. Só servidor.
@@ -242,7 +243,7 @@ export async function temPrescricao(patientId: number): Promise<boolean> {
     SELECT EXISTS (
       SELECT 1 FROM patient_files
       WHERE patient_id = ${patientId}
-        AND file_type = 'prescricao'
+        AND file_type = ${TIPO_FOLHA_PRESCRICAO}
         AND deleted_at IS NULL
     ) AS existe`
   return !!linha?.existe

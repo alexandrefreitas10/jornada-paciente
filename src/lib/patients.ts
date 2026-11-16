@@ -1,5 +1,6 @@
 import sql, { initSchema } from './db'
 import { ehTipoPaciente, tipoDe } from './tipo-paciente'
+import { TIPO_FOLHA_PRESCRICAO } from './folha-prescricao'
 
 export interface PatientRow {
   id: number
@@ -59,15 +60,12 @@ export async function listPatients(): Promise<PatientListItem[]> {
   const rows = await sql<PatientListItem[]>`
     SELECT p.*, COUNT(tc.id)::int as completed_count,
            EXISTS (
-             -- 'prescricao' é a aba Prescrições. NÃO vale 'prescription', que
-             -- é o anexo da aba Evolução: são dois tipos parecidos e só o
-             -- primeiro abre a agenda no portal (ver temPrescricao em
-             -- src/lib/agenda-db.ts). Incluir o outro aqui faria a lista dizer
-             -- "liberado" para quem a agenda continua barrando — o pior erro
-             -- possível justamente nesta tela.
+             -- Mesma condição do portão da agenda (temPrescricao, em
+             -- agenda-db.ts), e o tipo vem da constante compartilhada para os
+             -- dois não poderem divergir em silêncio. Ver folha-prescricao.ts.
              SELECT 1 FROM patient_files f
              WHERE f.patient_id = p.id
-               AND f.file_type = 'prescricao'
+               AND f.file_type = ${TIPO_FOLHA_PRESCRICAO}
                AND f.deleted_at IS NULL
            ) AS tem_prescricao
     FROM patients p
