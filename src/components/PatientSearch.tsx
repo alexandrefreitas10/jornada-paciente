@@ -14,17 +14,39 @@ export function PatientSearch({ patients }: Props) {
   // Começa na nutrologia, que é a lista que o dono sempre viu. Quem é só
   // estética não some: tem a própria aba, com a contagem ao lado.
   const [tipo, setTipo] = useState<TipoPaciente | 'todos'>('nutrologia')
+  // Filtro SEPARADO do de tipo, e os dois valem ao mesmo tempo. Substituir um
+  // pelo outro tiraria da equipe a pergunta que ela mais vai fazer nas próximas
+  // semanas: "de quem da nutrologia ainda falta subir a folha?".
+  const [prescricao, setPrescricao] = useState<'todos' | 'com' | 'sem'>('todos')
+
+  const casaTipo = (p: PatientListItem) => tipo === 'todos' || tipoDe(p.tipo) === tipo
+  const casaPrescricao = (p: PatientListItem) =>
+    prescricao === 'todos' || (prescricao === 'com' ? p.tem_prescricao : !p.tem_prescricao)
+
+  // Cada contagem é feita com o OUTRO filtro já aplicado. Contar sobre a lista
+  // inteira faria o botão prometer um número e a tela entregar outro ao clicar
+  // — e número que não bate é pior que número nenhum: a pessoa para de
+  // confiar na lista toda, não só naquele botão.
+  const porPrescricao = patients.filter(casaPrescricao)
+  const porTipo = patients.filter(casaTipo)
 
   const contagem = {
-    todos: patients.length,
-    nutrologia: patients.filter(p => tipoDe(p.tipo) === 'nutrologia').length,
-    estetica: patients.filter(p => tipoDe(p.tipo) === 'estetica').length,
+    todos: porPrescricao.length,
+    nutrologia: porPrescricao.filter(p => tipoDe(p.tipo) === 'nutrologia').length,
+    estetica: porPrescricao.filter(p => tipoDe(p.tipo) === 'estetica').length,
+  }
+  const contagemPrescricao = {
+    todos: porTipo.length,
+    com: porTipo.filter(p => p.tem_prescricao).length,
+    sem: porTipo.filter(p => !p.tem_prescricao).length,
   }
 
-  const doTipo = tipo === 'todos' ? patients : patients.filter(p => tipoDe(p.tipo) === tipo)
+  const visiveis = patients.filter(p => casaTipo(p) && casaPrescricao(p))
+  // A busca por nome NÃO entra nas contagens: ela é consulta passageira, não
+  // um recorte da lista como os dois filtros.
   const filtered = query.trim()
-    ? doTipo.filter((p) => p.name.toLowerCase().includes(query.toLowerCase()))
-    : doTipo
+    ? visiveis.filter((p) => p.name.toLowerCase().includes(query.toLowerCase()))
+    : visiveis
 
   return (
     <>
@@ -60,7 +82,10 @@ export function PatientSearch({ patients }: Props) {
       {/* Sempre visível, a pedido do dono: o filtro também SINALIZA que os
           cards de hoje são todos da nutrologia, o que antes não aparecia em
           lugar nenhum da tela. */}
-      <div className="flex gap-2 mb-4 flex-wrap">
+      {/* Os dois grupos têm nome acessível porque ambos ganharam um botão
+          "Todos": sem o nome, nem a equipe no leitor de tela nem o teste
+          conseguem dizer de qual "Todos" se está falando. */}
+      <div role="group" aria-label="Filtrar por tipo de paciente" className="flex gap-2 mb-2 flex-wrap">
           {(['nutrologia', 'estetica', 'todos'] as const).map(t => (
             <button
               key={t}
@@ -71,6 +96,25 @@ export function PatientSearch({ patients }: Props) {
               }`}
             >
               {t === 'todos' ? 'Todos' : ROTULO_TIPO[t]} ({contagem[t]})
+            </button>
+          ))}
+      </div>
+
+      <div role="group" aria-label="Filtrar por prescrição" className="flex gap-2 mb-4 flex-wrap">
+          {([
+            ['todos', 'Todos'],
+            ['com', 'Com prescrição'],
+            ['sem', 'Sem prescrição'],
+          ] as const).map(([valor, rotulo]) => (
+            <button
+              key={valor}
+              onClick={() => setPrescricao(valor)}
+              aria-pressed={prescricao === valor}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                prescricao === valor ? 'bg-emerald-600 text-white' : 'text-gray-500 hover:bg-gray-50 border border-gray-200'
+              }`}
+            >
+              {rotulo} ({contagemPrescricao[valor]})
             </button>
           ))}
       </div>

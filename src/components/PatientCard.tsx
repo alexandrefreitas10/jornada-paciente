@@ -40,7 +40,23 @@ export function PatientCard({ patient }: Props) {
           {patient.name.charAt(0).toUpperCase()}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="font-semibold text-gray-800 truncate">{patient.name}</div>
+          {/* A marca é em quem TEM a folha, não em quem falta: hoje quase
+              ninguém tem, e etiquetar a maioria encheria a lista de ruído.
+              Conforme a equipe sobe as folhas, a marca cresce — o avanço fica
+              visível de relance, que é para isso que ela existe.
+              O texto não promete "pode marcar": a aba Agenda ainda depende de
+              o paciente estar ativo e da variável AGENDA_PORTAL_PACIENTES. */}
+          <div className="flex items-center gap-2">
+            <div className="font-semibold text-gray-800 truncate">{patient.name}</div>
+            {patient.tem_prescricao && (
+              <span
+                title="Tem folha na aba Prescrições — é o que faz a aba Agenda aparecer no portal deste paciente."
+                className="flex-shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200"
+              >
+                📋 prescrição
+              </span>
+            )}
+          </div>
           <div className="text-xs text-gray-500 mb-2">
             {patient.start_date && `Início: ${fmtDiaPuro(patient.start_date)}`}
             {patient.duration && ` · ${patient.duration} sem.`}

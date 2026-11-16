@@ -15,9 +15,11 @@ jest.mock('next/link', () => {
   }
 })
 
-// Nome INVENTADO. `tipo` e `created_by` entraram em `PatientListItem` depois
-// que este teste foi escrito, e faltarem aqui era o que travava o
-// `tsc --noEmit` em quatro linhas.
+// Nome INVENTADO. `tipo`, `created_by` e `tem_prescricao` entraram em
+// `PatientListItem` depois que este teste foi escrito, e faltarem aqui era o
+// que travava o `tsc --noEmit` em quatro linhas.
+// A marca de prescrição no card é exercitada em `PatientSearch.test.tsx`, que
+// renderiza cards de verdade com e sem a folha.
 const patient: PatientListItem = {
   id: 1,
   name: 'Maria Souza',
@@ -29,6 +31,7 @@ const patient: PatientListItem = {
   created_at: '2026-06-01',
   created_by: null,
   completed_count: 7,
+  tem_prescricao: false,
 }
 
 describe('PatientCard', () => {

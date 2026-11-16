@@ -16,9 +16,23 @@ export interface PatientRow {
 
 export interface PatientListItem extends PatientRow {
   completed_count: number
+  /**
+   * Tem pelo menos uma folha na aba **Prescrições**.
+   *
+   * Existe porque é esse o portão que faz a aba Agenda aparecer no portal do
+   * paciente. Sem isto a equipe só descobre abrindo ficha por ficha, e são
+   * quase duzentos pacientes.
+   */
+  tem_prescricao: boolean
 }
 
-export interface ArchivedPatientItem extends PatientListItem {
+/**
+ * `tem_prescricao` fica de fora: a consulta de arquivados não busca esse campo,
+ * e paciente arquivado não enxerga o portal de qualquer forma. Herdar o campo
+ * sem trazê-lo do banco seria uma promessa que o tipo faz e o dado não cumpre —
+ * `sql<T[]>` é conversão de tipo, não conferência, então ninguém avisaria.
+ */
+export interface ArchivedPatientItem extends Omit<PatientListItem, 'tem_prescricao'> {
   archive_reason: string | null
   archived_by: string | null
   archive_event_at: Date | string | null
@@ -43,7 +57,19 @@ export interface PatientInput {
 export async function listPatients(): Promise<PatientListItem[]> {
   await initSchema()
   const rows = await sql<PatientListItem[]>`
-    SELECT p.*, COUNT(tc.id)::int as completed_count
+    SELECT p.*, COUNT(tc.id)::int as completed_count,
+           EXISTS (
+             -- 'prescricao' é a aba Prescrições. NÃO vale 'prescription', que
+             -- é o anexo da aba Evolução: são dois tipos parecidos e só o
+             -- primeiro abre a agenda no portal (ver temPrescricao em
+             -- src/lib/agenda-db.ts). Incluir o outro aqui faria a lista dizer
+             -- "liberado" para quem a agenda continua barrando — o pior erro
+             -- possível justamente nesta tela.
+             SELECT 1 FROM patient_files f
+             WHERE f.patient_id = p.id
+               AND f.file_type = 'prescricao'
+               AND f.deleted_at IS NULL
+           ) AS tem_prescricao
     FROM patients p
     LEFT JOIN task_completions tc ON tc.patient_id = p.id
     WHERE p.deleted_at IS NULL AND p.archived_at IS NULL
