@@ -21,6 +21,18 @@ const config: Config = {
       moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1' },
     },
     {
+      // Rotas de API. Ambiente node, como as libs, mas em pasta própria porque
+      // aqui o banco é dublê e o que se mede é a rota inteira — autorização,
+      // status HTTP e corpo da resposta.
+      displayName: 'api',
+      testEnvironment: 'node',
+      testMatch: ['**/__tests__/api/**/*.test.ts'],
+      testPathIgnorePatterns: IGNORAR,
+      modulePathIgnorePatterns: IGNORAR,
+      transform: { '^.+\\.(ts|tsx)$': ['ts-jest', {}] },
+      moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1' },
+    },
+    {
       displayName: 'components',
       testEnvironment: 'jsdom',
       testMatch: ['**/__tests__/components/**/*.test.tsx'],

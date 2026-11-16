@@ -95,6 +95,35 @@ describe('Agenda do portal', () => {
     expect(screen.queryByText('18')).toBeNull()
   })
 
+  it('perdeu a corrida pelo horário: avisa E recarrega a lista', async () => {
+    // Dois pacientes tocam no mesmo horário. Quem perde recebe 409 — e antes a
+    // tela só mostrava o aviso, deixando o horário morto na cara da pessoa.
+    // Ela toca de novo, leva o mesmo 409, e conclui que o portal não funciona.
+    const chamadas: string[] = []
+    global.fetch = jest.fn(async (_url: unknown, init?: RequestInit) => {
+      const metodo = init?.method ?? 'GET'
+      chamadas.push(metodo)
+      if (metodo === 'POST') {
+        return { ok: false, status: 409, json: async () => ({ error: 'Esse horário acabou de ser ocupado. Escolha outro.' }) }
+      }
+      return { ok: true, json: async () => SEM_NADA }
+    }) as unknown as typeof fetch
+    const user = userEvent.setup()
+    render(<Agenda onBack={jest.fn()} />)
+
+    await user.click(await screen.findByRole('button', { name: /Marcar minha aplicação/ }))
+    await user.click(screen.getByText('10 minutos'))
+    await user.click(screen.getByText('16'))
+    await user.click(screen.getByText('14:10'))
+
+    // O aviso continua na tela...
+    expect(await screen.findByRole('alert')).toHaveTextContent(/acabou de ser ocupado/i)
+    // ...e a lista de horários foi buscada de novo, para o horário morto sair.
+    await waitFor(() => {
+      expect(chamadas).toEqual(['GET', 'POST', 'GET'])
+    })
+  })
+
   it('manda o pedido com o que foi escolhido', async () => {
     const fetchMock = responder(SEM_NADA)
     global.fetch = fetchMock

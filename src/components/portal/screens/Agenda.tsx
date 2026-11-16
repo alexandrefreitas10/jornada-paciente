@@ -42,12 +42,16 @@ export function Agenda({ onBack }: { onBack: () => void }) {
   const [duracao, setDuracao] = React.useState<10 | 40 | null>(null)
   const [diaEscolhido, setDiaEscolhido] = React.useState<string | null>(null)
 
-  const carregar = React.useCallback(async () => {
+  // `manterAviso` existe para o caso de perder a corrida por um horário: a
+  // lista precisa ser rebuscada (o horário morto tem de sair da tela), mas o
+  // aviso que explica o que aconteceu não pode ser apagado junto — senão a
+  // pessoa vê os horários mudarem sozinhos sem nenhuma razão aparente.
+  const carregar = React.useCallback(async (manterAviso = false) => {
     try {
       const r = await fetch('/api/portal/agenda')
       if (!r.ok) { setErro('Não consegui carregar sua agenda.'); return }
       setDados(await r.json())
-      setErro(null)
+      if (!manterAviso) setErro(null)
     } catch {
       setErro('Não consegui carregar sua agenda.')
     }
@@ -60,7 +64,15 @@ export function Agenda({ onBack }: { onBack: () => void }) {
     try {
       const r = await fetch(url, init)
       const corpo = await r.json().catch(() => ({}))
-      if (!r.ok) { setErro(corpo.error ?? 'Não deu certo. Tente de novo.'); return false }
+      if (!r.ok) {
+        setErro(corpo.error ?? 'Não deu certo. Tente de novo.')
+        // 409 é sempre "o mundo mudou desde que esta tela carregou": o horário
+        // foi ocupado, o agendamento já começou, já existe um marcado. Recarrega
+        // para a tela refletir o mundo de agora, senão a pessoa só pode tocar de
+        // novo no mesmo botão morto e levar o mesmo erro.
+        if (r.status === 409) await carregar(true)
+        return false
+      }
       await carregar()
       setEscolhendo(null); setDuracao(null); setDiaEscolhido(null)
       return true

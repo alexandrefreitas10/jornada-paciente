@@ -104,9 +104,24 @@ export interface PedidoDoPaciente {
   duracao: Duracao
   /** Id do agendamento que está sendo trocado, ou `null` para marcar novo. */
   trocarId: number | null
-  janela: { de: string; ate: string }
+  /** Hoje (AAAA-MM-DD) no fuso da clínica. A conferência olha daqui pra frente. */
+  hoje: string
   agora: Date
 }
+
+/**
+ * Namespace da trava por paciente (advisory lock de 2 argumentos).
+ *
+ * `pg_advisory_xact_lock(id)` com UM argumento vive num espaço de chaves único
+ * para todo o banco — o mesmo que `src/lib/stock.ts` já usa com ids de item.
+ * Paciente 96 e item de estoque 96 seriam a MESMA trava: ninguém travaria
+ * errado de propósito, mas uma baixa de estoque demorada seguraria a marcação
+ * de um paciente sem relação nenhuma, e o motivo seria invisível.
+ *
+ * Com dois argumentos o espaço é separado, como já faz
+ * `src/app/api/treinamento/sessions/[id]/finish/route.ts`.
+ */
+const TRAVA_AGENDA_PACIENTE = 74701
 
 export type ResultadoDoPedido =
   | { ok: true; agendamento: Agendamento }
@@ -122,22 +137,27 @@ export type ResultadoDoPedido =
  * em piloto isso exige ele competindo consigo mesmo; com a clínica inteira
  * marcando, vira rotina.
  *
- * `pg_advisory_xact_lock(patient_id)` serializa por PACIENTE: dois pedidos do
- * mesmo paciente entram em fila, pedidos de pacientes diferentes não se
- * atrapalham. A trava solta sozinha no fim da transação, inclusive se der erro.
+ * O advisory lock serializa por PACIENTE: dois pedidos do mesmo paciente entram
+ * em fila, pedidos de pacientes diferentes não se atrapalham. A trava solta
+ * sozinha no fim da transação, inclusive se der erro.
  *
  * A outra trava — duas PESSOAS na mesma fatia — continua sendo o índice único
  * parcial, que é de outra natureza e já existe.
+ *
+ * DAQUI PRA FRENTE, SEM TETO: a leitura é `dia >= hoje`, não a janela de quatro
+ * semanas que o paciente enxerga. A revisão da Entrega 2 achou isto: a equipe
+ * marca para daqui a cinco semanas, a conferência olhava só quatro, e a trava
+ * não servia de nada porque protegia uma pergunta estreita demais. Trava em
+ * volta de conferência incompleta dá sensação de garantia e não garante.
  */
 export async function marcarComTravaDoPaciente(p: PedidoDoPaciente): Promise<ResultadoDoPedido> {
   await initSchema()
   return sql.begin(async (tx) => {
-    await tx`SELECT pg_advisory_xact_lock(${p.patientId})`
+    await tx`SELECT pg_advisory_xact_lock(${TRAVA_AGENDA_PACIENTE}, ${p.patientId})`
 
     const meus = await tx<Agendamento[]>`
       SELECT ${COLUNAS_AGENDAMENTO} FROM agendamentos
-      WHERE patient_id = ${p.patientId}
-        AND dia BETWEEN ${p.janela.de}::date AND ${p.janela.ate}::date`
+      WHERE patient_id = ${p.patientId} AND dia >= ${p.hoje}::date`
 
     const antigo = p.trocarId === null
       ? null
@@ -162,16 +182,27 @@ export async function marcarComTravaDoPaciente(p: PedidoDoPaciente): Promise<Res
   }) as Promise<ResultadoDoPedido>
 }
 
-/** Os agendamentos de UM paciente dentro de um intervalo. Para o portal. */
-export async function agendamentosDoPaciente(
+/**
+ * Os agendamentos de UM paciente de hoje pra frente. Para o portal.
+ *
+ * SEM TETO NO FUTURO, de propósito. A versão anterior recebia a janela de
+ * quatro semanas que o paciente enxerga, e era o mesmo furo descrito em
+ * `marcarComTravaDoPaciente`: um horário marcado pela equipe mais à frente
+ * ficava invisível para o portal, que então dizia "nenhuma aplicação marcada" e
+ * liberava marcar outra. O que o paciente pode VER à frente e o que ele JÁ TEM
+ * marcado são perguntas diferentes; só a primeira tem janela.
+ *
+ * O passado fica fora porque nada do lado do paciente depende dele — histórico
+ * é assunto da aba Relatórios, da equipe.
+ */
+export async function agendamentosFuturosDoPaciente(
   patientId: number,
-  de: string,
-  ate: string,
+  hoje: string,
 ): Promise<Agendamento[]> {
   await initSchema()
   return sql<Agendamento[]>`
     SELECT ${COLUNAS_AGENDAMENTO} FROM agendamentos
-    WHERE patient_id = ${patientId} AND dia BETWEEN ${de}::date AND ${ate}::date
+    WHERE patient_id = ${patientId} AND dia >= ${hoje}::date
     ORDER BY dia, hora, id`
 }
 

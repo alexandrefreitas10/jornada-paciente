@@ -453,3 +453,43 @@ Construída direto, a pedido do dono, **sem a revisão independente** que a Entr
 
 - **A agenda oferecia horário no passado.** Às 15h12, os horários das 12h, 13h e 14h do mesmo dia apareciam livres. Agora vale a mesma antecedência mínima de 1h que trava a troca — no servidor e na tela.
 - **Paciente arquivado ou excluído continuava marcando** por uma sessão aberta antes. A rota agora confere, como a página já fazia.
+
+## Correção da revisão independente da Entrega 2 (16/11/2026)
+
+A revisão rodou sobre `8a89781..1b21a0e`, antes de abrir a aba para todos os
+pacientes, e achou dois defeitos que nenhum teste pegava. Corrigidos, com testes
+que falham sem o conserto:
+
+1. **"Um por vez" olhava só quatro semanas.** A pergunta "o que ele pode ver à
+   frente" foi usada como se fosse "o que ele já tem marcado". Horário posto
+   pela equipe mais à frente ficava invisível, o portal dizia "nenhuma aplicação
+   marcada", e o paciente marcava o segundo. A trava por paciente não pegava
+   porque protegia a conferência estreita. Agora a leitura é `dia >= hoje`, sem
+   teto, nos três pontos (GET, POST e dentro da transação).
+2. **Aplicação do dia que já aconteceu continuava como "sua próxima".** `vivo()`
+   olha o status, não o relógio. Às 18h a aplicação das 14h aparecia com o
+   recado "avise no grupo" e o botão de marcar logo abaixo. Para todo paciente,
+   depois de toda aplicação. Agora `meus` exige vivo **e** ainda não começado.
+
+Também: resposta de recusa virou função (um `Response` só se lê uma vez — a
+segunda recusa do processo dava 500); 409 recarrega a lista, para o horário
+morto sair da tela; mudanças feitas pelo paciente gravam auditoria, como as da
+equipe; e a trava por paciente passou a usar advisory lock de 2 argumentos.
+
+**Correção ao texto do item 1 da lista acima desta seção:** ele dizia que a
+trava seria `pg_advisory_xact_lock(patient_id)` "como já se faz em
+`bloquearEDesmarcar`". Está errado em duas coisas. `bloquearEDesmarcar` não usa
+advisory lock nenhum — usa `SELECT ... FOR UPDATE`, que é trava de linha e tem
+outras garantias (não impede linha nova entrando na janela; é por isso que
+existe a varredura depois do commit). E a forma de 1 argumento divide espaço de
+chaves com `src/lib/stock.ts`: paciente 96 e item de estoque 96 seriam a mesma
+trava.
+
+### Ainda pendente (adiado de propósito)
+
+- Índice em `agendamentos(patient_id, dia)`. A leitura nova não tem teto no
+  futuro; na escala de hoje é varredura de tabela pequena, mas é o próximo
+  gargalo quando a tabela crescer.
+- Nenhum teste exercita `marcarComTravaDoPaciente` de verdade: a função precisa
+  de Postgres e a suíte não tem banco. A trava e o `dia >= hoje` dentro da
+  transação estão cobertos só por leitura de código.

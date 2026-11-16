@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { portalAuth } from '@/auth-portal'
 import { getPatient } from '@/lib/patients'
+import { logAudit } from '@/lib/audit'
 import {
-  agendamentosDoPaciente,
+  agendamentosFuturosDoPaciente,
   agendamentosDoPeriodo,
   bloqueiosDoPeriodo,
   marcarComTravaDoPaciente,
@@ -58,7 +59,37 @@ async function podeUsar(patientId: number): Promise<boolean> {
   return temPrescricao(patientId)
 }
 
-const NEGADO = NextResponse.json({ error: 'Agenda não disponível.' }, { status: 403 })
+/**
+ * FUNÇÃO, não constante. O corpo de um `Response` se lê UMA vez: um objeto só,
+ * montado no carregamento do módulo e devolvido em toda recusa, dava 403 na
+ * primeira e erro 500 em todas as seguintes do mesmo processo — e o processo
+ * atende todos os pacientes.
+ */
+function negado() {
+  return NextResponse.json({ error: 'Agenda não disponível.' }, { status: 403 })
+}
+
+/**
+ * Rastro de auditoria das mudanças feitas pelo PACIENTE.
+ *
+ * Toda mudança da equipe grava uma linha; as do portal não gravavam nenhuma. A
+ * pergunta "quem soltou esse horário?" ficava sem resposta exatamente no caso
+ * em que alguém está reclamando. `logAudit` engole o próprio erro, então isto
+ * nunca derruba a ação do paciente.
+ */
+async function registrarDoPaciente(
+  agendamento: { id: number; patient_id: number; dia: string; hora: string },
+  oQueMudou: string,
+) {
+  await logAudit({
+    userName: 'o próprio paciente (portal)',
+    action: 'UPDATE',
+    entityType: 'agendamento',
+    entityId: agendamento.id,
+    patientId: agendamento.patient_id,
+    details: agendamento.dia + ' ' + agendamento.hora + ' — ' + oQueMudou,
+  })
+}
 
 /**
  * O que a tela do paciente precisa: a janela, o que ele já tem marcado, e os
@@ -71,15 +102,17 @@ const NEGADO = NextResponse.json({ error: 'Agenda não disponível.' }, { status
 export async function GET() {
   const patientId = await pacienteDaSessao()
   if (!patientId) return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })
-  if (!(await podeUsar(patientId))) return NEGADO
+  if (!(await podeUsar(patientId))) return negado()
 
   const hoje = dataBrasilia(new Date())
   const { de, ate } = janelaDoPaciente(hoje)
 
+  // `de`/`ate` valem para as VAGAS (o que ele pode escolher). O que ele já tem
+  // marcado é lido sem teto no futuro — ver `agendamentosFuturosDoPaciente`.
   const [todos, bloqueios, meus] = await Promise.all([
     agendamentosDoPeriodo(de, ate),
     bloqueiosDoPeriodo(de, ate),
-    agendamentosDoPaciente(patientId, de, ate),
+    agendamentosFuturosDoPaciente(patientId, hoje),
   ])
 
   const ocupadasPorDia = new Map<string, { hora: string }[]>()
@@ -115,7 +148,13 @@ export async function GET() {
     hoje,
     janela: { de, ate },
     dias,
-    meus: meus.filter((a) => vivo(a.status)).map((a) => ({
+    // Vivo E AINDA POR VIR. Sem a segunda metade, a aplicação das 14h ficava na
+    // tela às 18h como "Sua próxima aplicação", junto do recado "para desmarcar
+    // avise no grupo" (porque as duas permissões já eram falsas) e do botão de
+    // marcar logo abaixo. Três coisas que se contradizem, para todo paciente,
+    // depois de toda aplicação — e o empurrão para o WhatsApp que esta aba
+    // existe para acabar. `vivo` olha o status; não olha o relógio.
+    meus: meus.filter((a) => vivo(a.status) && aindaNaoComecou(a.dia, a.hora, agora)).map((a) => ({
       id: a.id,
       dia: a.dia,
       hora: a.hora,
@@ -141,7 +180,7 @@ function proximoDia(dia: string): string | null {
 export async function POST(request: Request) {
   const patientId = await pacienteDaSessao()
   if (!patientId) return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })
-  if (!(await podeUsar(patientId))) return NEGADO
+  if (!(await podeUsar(patientId))) return negado()
 
   const { dia, hora, duracao, trocar } = await request.json().catch(() => ({})) as {
     dia?: string; hora?: string; duracao?: number; trocar?: number
@@ -169,7 +208,9 @@ export async function POST(request: Request) {
     )
   }
 
-  const meus = await agendamentosDoPaciente(patientId, de, ate)
+  // Sem teto no futuro: a conferência de "um por vez" tem de ver o horário que
+  // a equipe marcou além das quatro semanas, senão o paciente marca o segundo.
+  const meus = await agendamentosFuturosDoPaciente(patientId, hoje)
 
   // Trocar de horário: a linha antiga vira `remarcou` e nasce uma nova. Assim
   // o relatório da clínica guarda as duas, como a spec pede.
@@ -211,7 +252,7 @@ export async function POST(request: Request) {
     const r = await marcarComTravaDoPaciente({
       patientId, dia, hora, duracao: duracao as Duracao,
       trocarId: antigo?.id ?? null,
-      janela: { de, ate },
+      hoje,
       agora,
     })
     if (!r.ok) {
@@ -222,6 +263,10 @@ export async function POST(request: Request) {
             { status: 409 },
           )
     }
+    await registrarDoPaciente(
+      r.agendamento,
+      antigo ? `trocou (antes ${antigo.dia} ${antigo.hora})` : 'marcou pelo portal',
+    )
     return NextResponse.json({ agendamento: r.agendamento }, { status: 201 })
   } catch (erro) {
     // Outro PACIENTE pegou a fatia entre a conferência e a gravação. A
@@ -241,14 +286,16 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   const patientId = await pacienteDaSessao()
   if (!patientId) return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })
-  if (!(await podeUsar(patientId))) return NEGADO
+  if (!(await podeUsar(patientId))) return negado()
 
   const { id } = await request.json().catch(() => ({})) as { id?: number }
   if (!Number.isInteger(id)) return NextResponse.json({ error: 'Agendamento inválido.' }, { status: 400 })
 
+  // Sem janela aqui: a janela limita onde ele pode MARCAR. Desmarcar vale para
+  // qualquer agendamento futuro dele, inclusive um que a equipe pôs mais à
+  // frente — se a tela mostra, tem de dar para desmarcar.
   const hoje = dataBrasilia(new Date())
-  const { de, ate } = janelaDoPaciente(hoje)
-  const meus = await agendamentosDoPaciente(patientId, de, ate)
+  const meus = await agendamentosFuturosDoPaciente(patientId, hoje)
   // Só o PRÓPRIO: a busca é dentro dos agendamentos dele, então um id de
   // outra pessoa simplesmente não é encontrado.
   const alvo = meus.find((a) => a.id === id && vivo(a.status))
@@ -259,5 +306,6 @@ export async function DELETE(request: Request) {
   }
 
   await mudarStatus(alvo.id, 'desmarcou', 'o próprio paciente')
+  await registrarDoPaciente(alvo, 'desmarcou pelo portal')
   return NextResponse.json({ ok: true })
 }
