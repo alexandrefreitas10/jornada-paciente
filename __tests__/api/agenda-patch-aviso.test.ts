@@ -19,6 +19,13 @@ let sessaoAgora: { user?: { name?: string } } | null = { user: { name: 'Recepç�
 
 jest.mock('@/auth', () => ({ auth: jest.fn(async () => sessaoAgora) }))
 jest.mock('@/lib/audit', () => ({ logAudit: jest.fn(async () => undefined) }))
+// OBRIGATÓRIO em todo teste de rota que envie aviso: `push-envio` importa
+// `web-push`, que é ESM e o jest não consegue ler. Sem este dublê a suíte nem
+// começa — o erro é "unexpected token import", que não parece ter relação
+// nenhuma com o que se está testando.
+jest.mock('@/lib/push-envio', () => ({
+  avisarPaciente: jest.fn(async () => ({ enviados: 0, removidos: 0, falhas: 0 })),
+}))
 
 const LINHA = {
   id: 5, patient_id: 12, dia: '2026-11-20', hora: '15:00', duracao: 10,

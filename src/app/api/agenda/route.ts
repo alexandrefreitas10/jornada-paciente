@@ -11,6 +11,8 @@ import {
 import { decidirGravacao, motivoDeRecusa } from '@/lib/agenda-vagas'
 import { vivo } from '@/lib/agenda-grade'
 import { diasEntre } from '@/lib/datas'
+import { avisarPaciente } from '@/lib/push-envio'
+import { avisoHorarioDaClinica } from '@/lib/avisos-do-portal'
 
 export const dynamic = 'force-dynamic'
 
@@ -91,6 +93,11 @@ export async function POST(req: NextRequest) {
       encaixe: decisao.encaixe,
       criadoPor: session.user.name ?? null,
     })
+    // Quem marcou aqui foi a EQUIPE — o paciente não viu tela nenhuma
+    // confirmar, e até agora descobria pelo WhatsApp. A rota do portal
+    // (/api/portal/agenda) de propósito NÃO avisa: lá a pessoa acabou de ver
+    // a confirmação, e o aviso seria eco. `avisarPaciente` nunca lança.
+    await avisarPaciente(agendamento.patient_id, avisoHorarioDaClinica(agendamento.dia, agendamento.hora, false))
     return NextResponse.json({ agendamento, aviso: decisao.aviso }, { status: decisao.status })
   } catch (erro) {
     // Outro pedido levou a fatia entre a checagem e o INSERT: o índice único

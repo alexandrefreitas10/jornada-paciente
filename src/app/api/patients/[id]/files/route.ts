@@ -1,5 +1,8 @@
 import { NextRequest } from 'next/server'
 import { listPatientFiles, createPatientFile, updateFileSummary, setSummaryStatus, FileType } from '@/lib/patient-files'
+import { temPrescricao } from '@/lib/agenda-db'
+import { avisarPaciente } from '@/lib/push-envio'
+import { avisoAgendaLiberada, devoAvisarAgendaLiberada } from '@/lib/avisos-do-portal'
 import { uploadFile, getSignedDownloadUrl } from '@/lib/s3'
 import { randomUUID } from 'crypto'
 import { generateExamSummary } from '@/lib/exam-summary'
@@ -65,8 +68,20 @@ export async function POST(
     return Response.json({ error: `Erro S3: ${msg}` }, { status: 500 })
   }
 
+  // Perguntado ANTES de gravar: depois do INSERT toda folha parece a primeira
+  // ou nenhuma parece, dependendo de como se conta.
+  const jaTinhaFolha = await temPrescricao(Number(id))
+
   const record = await createPatientFile(Number(id), fileType, s3Key, file.name, null, createdBy)
   const url = await getSignedDownloadUrl(s3Key)
+
+  // A folha de prescrição é o que faz a aba Agenda aparecer no portal do
+  // paciente — e até aqui ela aparecia EM SILÊNCIO, com alguém da recepção
+  // avisando um a um pelo WhatsApp. `avisarPaciente` nunca lança: um aviso que
+  // não saiu não pode derrubar o upload que o disparou.
+  if (devoAvisarAgendaLiberada(fileType, jaTinhaFolha)) {
+    await avisarPaciente(Number(id), avisoAgendaLiberada())
+  }
 
   // Resumo de exame roda em segundo plano — exames longos levam minutos,
   // mais do que o limite de tempo do proxy para a requisição de upload.

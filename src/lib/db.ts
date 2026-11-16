@@ -859,6 +859,20 @@ async function runMigrations() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `).catch(() => {})
+  // Quais agendamentos já tiveram o lembrete da véspera enviado.
+  //
+  // A chave primária é o próprio agendamento, e é ela que garante a regra da
+  // spec ("um aviso por acontecimento, nunca repetido"): se o agendador
+  // repetir a chamada, ou alguém abrir a rota na mão, o INSERT bate na chave
+  // e nada é enviado de novo. Em CASCADE porque um lembrete de agendamento
+  // apagado não quer dizer nada.
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS lembretes_enviados (
+      agendamento_id INTEGER PRIMARY KEY REFERENCES agendamentos(id) ON DELETE CASCADE,
+      enviado_em     TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(() => {})
+
   // Bloqueio invertido (`ate` antes de `de`) não bloqueia nada e ninguém nota.
   // A rota já recusa, mas ela não é a única porta possível para esta tabela.
   await sql.unsafe(`

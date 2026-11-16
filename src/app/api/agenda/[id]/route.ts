@@ -3,6 +3,8 @@ import { auth } from '@/auth'
 import { logAudit } from '@/lib/audit'
 import { motivoDeRecusa } from '@/lib/agenda-vagas'
 import { vivo } from '@/lib/agenda-grade'
+import { avisarPaciente } from '@/lib/push-envio'
+import { avisoHorarioDaClinica } from '@/lib/avisos-do-portal'
 import {
   agendamentosDoPeriodo,
   bloqueiosDoPeriodo,
@@ -99,6 +101,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       ])
       const ocupadas = doDia.filter((a) => a.id !== id && vivo(a.status))
       aviso = motivoDeRecusa(agendamento.dia, agendamento.hora, agendamento.duracao, ocupadas, bloqueios)
+    }
+    // Só quando a linha volta a ser um compromisso FUTURO para o paciente —
+    // isto é, status 'agendado'. 'atendido' é o clique mais comum do dia da
+    // enfermeira e contaria à pessoa o que ela acabou de viver na cadeira;
+    // 'faltou' e 'remarcou' não mudam nada no calendário dela; e 'desmarcou'
+    // tem aviso HUMANO por decisão do dono, porque quem perde o horário
+    // precisa de alguém a quem perguntar o que houve.
+    if (status === 'agendado') {
+      await avisarPaciente(agendamento.patient_id, avisoHorarioDaClinica(agendamento.dia, agendamento.hora, true))
     }
     return NextResponse.json({ agendamento, aviso })
   } catch (erro) {
