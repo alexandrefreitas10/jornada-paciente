@@ -52,6 +52,8 @@ export function Agendamentos({ patients }: { patients: { id: number; name: strin
   const [lista, setLista] = useState<AgendamentoComNome[]>([])
   const [erro, setErro] = useState<string | null>(null)
   const [carregando, setCarregando] = useState(true)
+  /** Id da linha cuja correção está em trânsito, para não aceitar dois cliques. */
+  const [salvando, setSalvando] = useState<number | null>(null)
 
   const carregar = useCallback(async () => {
     setCarregando(true)
@@ -77,6 +79,39 @@ export function Agendamentos({ patients }: { patients: { id: number; name: strin
   }, [de, ate])
 
   useEffect(() => { carregar() }, [carregar])
+
+  /**
+   * Corrige o status de um agendamento antigo sem sair do relatório.
+   *
+   * Usa a MESMA rota que a grade da agenda usa, que já valida o status e já
+   * grava auditoria em nome de quem mexeu — então corrigir aqui deixa o mesmo
+   * rastro que corrigir lá.
+   *
+   * A linha só muda DEPOIS que o servidor confirma. Trocar antes (otimista)
+   * mostraria o valor novo mesmo quando a gravação falha, e esta é justamente
+   * a tela que o dono abre para conferir se está certo.
+   */
+  async function corrigirStatus(id: number, status: StatusAgendamento) {
+    setSalvando(id)
+    setErro(null)
+    try {
+      const r = await fetch(`/api/agenda/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      const corpo = await r.json().catch(() => ({}))
+      if (!r.ok) {
+        setErro(corpo.error ?? 'Não consegui mudar o status.')
+        return
+      }
+      setLista((atual) => atual.map((a) => (a.id === id ? { ...a, status } : a)))
+    } catch {
+      setErro('A conexão caiu. O status não foi mudado.')
+    } finally {
+      setSalvando(null)
+    }
+  }
 
   // O resumo é do PERÍODO, não do que está à vista: filtrar por "Faltou" não
   // pode mudar quantos atendidos houve. Por isso conta `lista`, não `visiveis`.
@@ -138,7 +173,12 @@ export function Agendamentos({ patients }: { patients: { id: number; name: strin
         <p className="text-sm text-gray-500 py-8 text-center">Nenhum agendamento neste período.</p>
       )}
 
-      {!erro && lista.length > 0 && (
+      {/* A tabela NÃO depende de `erro`. Um erro ao corrigir o status de uma
+          linha não pode fazer a lista inteira desaparecer — o dono perderia de
+          vista o que estava conferindo por causa de uma linha. O `!erro` só
+          vale para a mensagem de "nenhum agendamento", acima: período que
+          falhou ao carregar não é período vazio. */}
+      {lista.length > 0 && (
         <div className="overflow-x-auto">
           <table role="table" className="w-full text-sm">
             <thead>
@@ -165,9 +205,17 @@ export function Agendamentos({ patients }: { patients: { id: number; name: strin
                   </td>
                   <td className="py-2 pr-3 whitespace-nowrap text-gray-600">{a.duracao} min</td>
                   <td className="py-2 pr-3">
-                    <span className={`text-xs px-2 py-0.5 rounded-full border whitespace-nowrap ${COR_STATUS[a.status]}`}>
-                      {ROTULO_STATUS[a.status]}
-                    </span>
+                    <select
+                      aria-label={`Status de ${a.nome}, ${rotuloDoDia(a.dia)} ${a.hora}`}
+                      value={a.status}
+                      disabled={salvando === a.id}
+                      onChange={(e) => corrigirStatus(a.id, e.target.value as StatusAgendamento)}
+                      className={`text-xs px-2 py-1 rounded-full border whitespace-nowrap ${COR_STATUS[a.status]} disabled:opacity-50`}
+                    >
+                      {STATUS_AGENDAMENTO.map((s) => (
+                        <option key={s} value={s}>{ROTULO_STATUS[s]}</option>
+                      ))}
+                    </select>
                   </td>
                 </tr>
               ))}

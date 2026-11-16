@@ -34,6 +34,81 @@ function servidor(resposta: { ok?: boolean; status?: number; corpo: unknown }) {
 beforeEach(() => { jest.useRealTimers() })
 afterEach(() => { jest.useRealTimers() })
 
+/**
+ * Dublê que separa a busca do período (GET) da correção de status (PATCH).
+ * `respostaPatch` decide o que o servidor responde à correção.
+ */
+function servidorComPatch(respostaPatch: { ok: boolean; status: number; corpo: unknown }) {
+  const chamadas: { url: string; metodo: string; corpo?: unknown }[] = []
+  const fn = jest.fn(async (url: unknown, init?: RequestInit) => {
+    const metodo = init?.method ?? 'GET'
+    chamadas.push({
+      url: String(url),
+      metodo,
+      corpo: init?.body ? JSON.parse(init.body as string) : undefined,
+    })
+    if (metodo === 'PATCH') {
+      return { ok: respostaPatch.ok, status: respostaPatch.status, json: async () => respostaPatch.corpo }
+    }
+    return { ok: true, status: 200, json: async () => ({ agendamentos: AGENDAMENTOS, bloqueios: [] }) }
+  })
+  global.fetch = fn as unknown as typeof fetch
+  return chamadas
+}
+
+describe('Relatórios › Agendamentos — corrigir o status', () => {
+  const SELECT_DA_FALTA = 'Status de Outra Pessoa Inventada, qua 11/11 14:00'
+
+  it('mudar o status manda PATCH para o agendamento certo', async () => {
+    const chamadas = servidorComPatch({
+      ok: true, status: 200,
+      corpo: { agendamento: { ...AGENDAMENTOS[1], status: 'atendido' } },
+    })
+    const user = userEvent.setup()
+    render(<Agendamentos patients={PACIENTES} />)
+
+    const select = await screen.findByLabelText(SELECT_DA_FALTA)
+    await user.selectOptions(select, 'atendido')
+
+    await waitFor(() => {
+      const patch = chamadas.find((c) => c.metodo === 'PATCH')
+      expect(patch).toBeDefined()
+      expect(patch!.url).toBe('/api/agenda/2')
+      expect(patch!.corpo).toEqual({ status: 'atendido' })
+    })
+  })
+
+  it('depois de gravar, a linha e os números acompanham', async () => {
+    servidorComPatch({
+      ok: true, status: 200,
+      corpo: { agendamento: { ...AGENDAMENTOS[1], status: 'atendido' } },
+    })
+    const user = userEvent.setup()
+    render(<Agendamentos patients={PACIENTES} />)
+
+    expect(await screen.findByRole('button', { name: /Atendido \(2\)/ })).toBeInTheDocument()
+    await user.selectOptions(await screen.findByLabelText(SELECT_DA_FALTA), 'atendido')
+
+    expect(await screen.findByRole('button', { name: /Atendido \(3\)/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Faltou \(0\)/ })).toBeInTheDocument()
+  })
+
+  it('se o agendamento sumiu (404), avisa e não finge que gravou', async () => {
+    // Sem isto o <select> fica mostrando o valor novo e o dono acredita que
+    // corrigiu — justamente na tela que ele abre para conferir.
+    servidorComPatch({ ok: false, status: 404, corpo: { error: 'Agendamento não encontrado.' } })
+    const user = userEvent.setup()
+    render(<Agendamentos patients={PACIENTES} />)
+
+    await user.selectOptions(await screen.findByLabelText(SELECT_DA_FALTA), 'atendido')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/não encontrado/i)
+    // Voltou ao que era: a linha continua sendo uma falta.
+    expect(await screen.findByLabelText(SELECT_DA_FALTA)).toHaveValue('faltou')
+    expect(screen.getByRole('button', { name: /Faltou \(1\)/ })).toBeInTheDocument()
+  })
+})
+
 describe('Relatórios › Agendamentos — lista do período', () => {
   it('mostra cada agendamento com dia, hora, nome e status', async () => {
     servidor({ corpo: { agendamentos: AGENDAMENTOS, bloqueios: [] } })
@@ -43,10 +118,12 @@ describe('Relatórios › Agendamentos — lista do período', () => {
     // agendamentos, não pacientes.
     expect(await screen.findAllByText('Paciente Inventado', { selector: 'a' })).toHaveLength(2)
     expect(screen.getAllByText('Outra Pessoa Inventada', { selector: 'a' })).toHaveLength(2)
-    // O status aparece na palavra da clínica, não na do banco.
-    expect(screen.getAllByText('Atendido')).not.toHaveLength(0)
-    expect(screen.getByText('Faltou')).toBeInTheDocument()
-    expect(screen.getByText('Desmarcou')).toBeInTheDocument()
+    // O status de cada linha, na palavra da clínica e não na do banco.
+    expect(screen.getByLabelText('Status de Outra Pessoa Inventada, qua 11/11 14:00')).toHaveValue('faltou')
+    expect(screen.getByLabelText('Status de Paciente Inventado, qui 12/11 16:00')).toHaveValue('desmarcou')
+    // E o que a pessoa lê é "Faltou", não "faltou".
+    expect(screen.getAllByRole('option', { name: 'Faltou' }).length).toBeGreaterThan(0)
+    expect(screen.queryByRole('option', { name: 'faltou' })).toBeNull()
   })
 
   it('o nome do paciente é link para a ficha dele', async () => {
