@@ -5,8 +5,9 @@ import { RelatorioUltimaSemana } from '@/components/RelatorioUltimaSemana'
 import { fmtDiaPuro } from '@/lib/datas'
 import { EmTratamento } from './EmTratamento'
 import { Estetica } from './Estetica'
+import { Agendamentos } from './Agendamentos'
 
-type Tab = 'cards' | 'itens' | 'semana' | 'inativos' | 'concluidos' | 'fotos' | 'resumo_paciente' | 'termos' | 'em_tratamento' | 'estetica'
+type Tab = 'cards' | 'itens' | 'semana' | 'inativos' | 'concluidos' | 'fotos' | 'resumo_paciente' | 'termos' | 'em_tratamento' | 'estetica' | 'agendamentos'
 
 interface PatientOption { id: number; name: string }
 
@@ -1046,6 +1047,7 @@ export function RelatoriosClient({ patients }: { patients: PatientOption[] }) {
     { key: 'resumo_paciente', label: '🗒️ Resumo do Paciente' },
     { key: 'em_tratamento', label: '💊 Em tratamento' },
     { key: 'estetica', label: '✨ Estética' },
+    { key: 'agendamentos', label: '🗓️ Agendamentos' },
     { key: 'termos', label: '📝 Termos' },
     { key: 'cards', label: 'Cards criados' },
     { key: 'itens', label: 'Itens enviados' },
@@ -1079,6 +1081,7 @@ export function RelatoriosClient({ patients }: { patients: PatientOption[] }) {
       {tab === 'resumo_paciente' && <ResumoPaciente />}
       {tab === 'em_tratamento' && <EmTratamento />}
       {tab === 'estetica' && <Estetica />}
+      {tab === 'agendamentos' && <Agendamentos patients={patients} />}
       {tab === 'termos' && <TermosRelatorio />}
       {tab === 'cards' && <CardsCreated />}
       {tab === 'itens' && <ItensSent patients={patients} />}
