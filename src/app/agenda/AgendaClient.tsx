@@ -6,6 +6,7 @@ import { semAcento } from '@/lib/sem-acento'
 import { atingidosPeloBloqueio, motivoDeRecusa } from '@/lib/agenda-vagas'
 import { somarDiasAoDia } from '@/lib/datas'
 import type { AgendamentoComNome, BloqueioGravado, Desmarcado, StatusAgendamento } from '@/lib/agenda-db'
+import { COR_STATUS } from '@/lib/agenda-rotulos'
 
 // Tela da equipe. A enfermeira abre isto no começo do turno, com a sala cheia:
 // o que importa é ver quem está em cada horário e mudar o estado com um toque.
@@ -23,14 +24,6 @@ const STATUS_ESCOLHA: { valor: StatusAgendamento; rotulo: string }[] = [
   { valor: 'faltou', rotulo: 'Faltou' },
   { valor: 'remarcou', rotulo: 'Remarcou' },
 ]
-
-const COR_STATUS: Record<StatusAgendamento, string> = {
-  agendado: 'bg-violet-100 text-violet-800 border-violet-200',
-  atendido: 'bg-green-100 text-green-800 border-green-200',
-  faltou: 'bg-red-100 text-red-800 border-red-200',
-  remarcou: 'bg-amber-100 text-amber-800 border-amber-200',
-  desmarcou: 'bg-gray-100 text-gray-500 border-gray-200',
-}
 
 const DIAS_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
 
