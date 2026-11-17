@@ -81,6 +81,46 @@ describe('o portão do disparo', () => {
   it('segredo de tamanho diferente não derruba a rota', async () => {
     expect((await disparar('x')).status).toBe(401)
   })
+
+  it('espaço ou quebra de linha grudada no valor não impede o disparo', async () => {
+    // A causa real de duas falhas seguidas em produção: copiar o valor de um
+    // painel costuma trazer um espaço ou um "\n" invisível junto. Os dois
+    // lados "parecem" iguais na tela e não são — e ninguém descobre olhando.
+    // Espaço em volta nunca faz parte de um segredo, então ignorar é seguro.
+    expect((await disparar(` ${SEGREDO} `)).status).toBe(200)
+    expect((await disparar(`${SEGREDO}\n`)).status).toBe(200)
+    expect((await disparar(`\n${SEGREDO}`)).status).toBe(200)
+  })
+
+  it('sujeira no valor do AMBIENTE também é ignorada', async () => {
+    // O mesmo acidente acontece do outro lado: o valor salvo no painel do
+    // app é que pode estar com o espaço.
+    process.env.CRON_SECRET = `${SEGREDO}\n`
+    expect((await disparar(SEGREDO)).status).toBe(200)
+  })
+
+  it('segredo diferente de verdade continua recusado', async () => {
+    // Aparar espaço não pode virar frouxidão: o que muda é só a borda.
+    expect((await disparar(`${SEGREDO}x`)).status).toBe(401)
+    expect((await disparar(SEGREDO.toUpperCase())).status).toBe(401)
+  })
+
+  it('recusa anota o TAMANHO de cada lado na tela de Erros, nunca o conteúdo', async () => {
+    // Sem isto, "401" é tudo o que se sabe, e a diferença é invisível. Com o
+    // tamanho dos dois lados, um caractere a mais aparece na hora. O conteúdo
+    // nunca é gravado: a tela de Erros é lida pela clínica.
+    const { logSystemError } = jest.requireMock('@/lib/system-errors') as { logSystemError: jest.Mock }
+    logSystemError.mockClear()
+    await disparar('valor-errado')
+
+    expect(logSystemError).toHaveBeenCalled()
+    const [chave, mensagem, dados] = logSystemError.mock.calls[0] as [string, string, Record<string, unknown>]
+    expect(chave).toMatch(/lembretes/)
+    const tudo = JSON.stringify([chave, mensagem, dados])
+    expect(tudo).not.toContain(SEGREDO)
+    expect(tudo).not.toContain('valor-errado')
+    expect(dados).toMatchObject({ tamanhoRecebido: 12, tamanhoEsperado: SEGREDO.length })
+  })
 })
 
 describe('o envio', () => {

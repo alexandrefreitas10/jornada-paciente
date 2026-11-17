@@ -20,12 +20,23 @@ export const dynamic = 'force-dynamic'
 // O segredo vai no CABEÇALHO, nunca na URL: URL aparece em log de servidor, em
 // histórico e em referer.
 
-/** Comparação em tempo constante, para o segredo não vazar pelo relógio. */
+/**
+ * Comparação em tempo constante, para o segredo não vazar pelo relógio.
+ *
+ * Os dois lados são APARADOS antes de comparar. Não é frouxidão: espaço e
+ * quebra de linha nunca fazem parte de um segredo, e colar um valor de um
+ * painel traz esse lixo invisível junto o tempo todo. Foi o que derrubou as
+ * duas primeiras tentativas em produção — os valores "pareciam" iguais na
+ * tela e não eram, e ninguém descobre isso olhando. O que muda é só a borda:
+ * um caractere a mais no meio continua recusado.
+ */
 function segredoConfere(enviado: string | null, esperado: string): boolean {
-  if (!enviado || enviado.length !== esperado.length) return false
+  const a = enviado?.trim()
+  const b = esperado.trim()
+  if (!a || a.length !== b.length) return false
   let diferenca = 0
-  for (let i = 0; i < enviado.length; i++) {
-    diferenca |= enviado.charCodeAt(i) ^ esperado.charCodeAt(i)
+  for (let i = 0; i < a.length; i++) {
+    diferenca |= a.charCodeAt(i) ^ b.charCodeAt(i)
   }
   return diferenca === 0
 }
@@ -35,7 +46,20 @@ export async function POST(req: NextRequest) {
   if (!esperado) {
     return NextResponse.json({ error: 'Disparo não configurado.' }, { status: 503 })
   }
-  if (!segredoConfere(req.headers.get('x-cron-secret'), esperado)) {
+  const recebido = req.headers.get('x-cron-secret')
+  if (!segredoConfere(recebido, esperado)) {
+    // O TAMANHO dos dois lados, nunca o conteúdo. Sem isto, "401" é tudo o
+    // que se sabe e a diferença é invisível; com o tamanho, um caractere a
+    // mais aparece na hora. A tela de Erros é lida pela clínica, então o
+    // segredo em si não pode encostar nela.
+    await logSystemError(
+      'lembretes.disparo.nao-autorizado',
+      'Chamada recusada: o segredo recebido não confere com o do ambiente.',
+      {
+        tamanhoRecebido: recebido?.trim().length ?? 0,
+        tamanhoEsperado: esperado.trim().length,
+      },
+    )
     return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 })
   }
 
