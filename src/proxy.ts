@@ -16,6 +16,14 @@ export default auth(async (req) => {
     pathname.startsWith('/portal/login') ||
     pathname.startsWith('/portal/ativar') ||
     pathname.startsWith('/api/portal') ||
+    // O agendador não tem sessão: ele prova quem é com o CRON_SECRET, e quem
+    // confere isso é a própria rota (mesmo arranjo de `/api/portal`).
+    //
+    // Sem esta linha o guardião recusa com 401 ANTES de a rota rodar — e as
+    // duas respostas são quase idênticas ("Não autorizado" contra "Não
+    // autorizado."), o que mandou a investigação para o lado errado por três
+    // tentativas e duas trocas de segredo em produção.
+    pathname.startsWith('/api/cron') ||
     // Arquivos dos PWAs (portal e sistema interno)
     pathname === '/sw.js' ||
     pathname === '/portal-manifest.json' ||
