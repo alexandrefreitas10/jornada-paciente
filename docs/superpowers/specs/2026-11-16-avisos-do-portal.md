@@ -94,6 +94,22 @@ celular é dele.
 - **2** é o único que precisa de peça nova: algo que rode uma vez por dia e
   varra quem tem aplicação amanhã.
 
+### Quem dispara o lembrete da véspera
+
+**GitHub Actions**, não um Cron Job do Render: `.github/workflows/lembretes-vespera.yml`.
+
+A primeira escolha foi o Render, e o formulário de criação dele falhou com
+"Failed to fetch (api.render.com)" no navegador do dono, repetidas vezes —
+erro de rede do navegador para a API do Render, sem relação com o que foi
+preenchido. O GitHub já hospeda o código, o agendamento é de graça, e dá para
+disparar na mão pela aba Actions para testar.
+
+O segredo (`CRON_SECRET`) mora em **Settings › Secrets and variables ›
+Actions** do repositório, e tem de ser igual ao do ambiente do app no Render.
+
+Limitações aceitas: o GitHub pode atrasar alguns minutos o horário, e desliga
+agendamentos em repositório parado há 60 dias.
+
 ## O que isto NÃO faz
 
 - Não manda nada por WhatsApp. O aviso é o do celular, pelo portal.
