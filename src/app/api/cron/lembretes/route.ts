@@ -41,6 +41,43 @@ function segredoConfere(enviado: string | null, esperado: string): boolean {
   return diferenca === 0
 }
 
+/** Espaço mínimo entre dois registros de recusa. */
+const INTERVALO_ENTRE_REGISTROS_MS = 60 * 60 * 1000
+
+let ultimaRecusaRegistrada = 0
+
+/**
+ * Anota uma recusa na tela de Erros — no máximo uma por hora.
+ *
+ * O TAMANHO dos dois lados, nunca o conteúdo: sem isso, "401" é tudo o que se
+ * sabe e a diferença é invisível; com o tamanho, um caractere a mais aparece
+ * na hora. A tela de Erros é lida pela clínica, então o segredo não encosta
+ * nela.
+ *
+ * POR QUE ESTRANGULADO: esta rota é PÚBLICA por natureza — o portão é o
+ * segredo, e a porta é alcançável por qualquer um na internet. Gravar uma
+ * linha por tentativa deixaria um desconhecido entupir justamente a tela onde
+ * o diagnóstico apareceria, e crescer a tabela à vontade. Uma por hora basta
+ * para diagnosticar e não serve de alavanca para ninguém.
+ *
+ * O limite vive em memória do processo, não no banco: assim nem a leitura
+ * acontece nas marteladas seguintes. Reiniciar o serviço zera a contagem, o
+ * que é aceitável — reinício não é coisa que quem está do outro lado controla.
+ */
+async function registrarRecusa(recebido: string | null, esperado: string) {
+  const agora = Date.now()
+  if (agora - ultimaRecusaRegistrada < INTERVALO_ENTRE_REGISTROS_MS) return
+  ultimaRecusaRegistrada = agora
+  await logSystemError(
+    'lembretes.disparo.nao-autorizado',
+    'Chamada recusada: o segredo recebido não confere com o do ambiente.',
+    {
+      tamanhoRecebido: recebido?.trim().length ?? 0,
+      tamanhoEsperado: esperado.trim().length,
+    },
+  )
+}
+
 export async function POST(req: NextRequest) {
   const esperado = process.env.CRON_SECRET
   if (!esperado) {
@@ -48,18 +85,7 @@ export async function POST(req: NextRequest) {
   }
   const recebido = req.headers.get('x-cron-secret')
   if (!segredoConfere(recebido, esperado)) {
-    // O TAMANHO dos dois lados, nunca o conteúdo. Sem isto, "401" é tudo o
-    // que se sabe e a diferença é invisível; com o tamanho, um caractere a
-    // mais aparece na hora. A tela de Erros é lida pela clínica, então o
-    // segredo em si não pode encostar nela.
-    await logSystemError(
-      'lembretes.disparo.nao-autorizado',
-      'Chamada recusada: o segredo recebido não confere com o do ambiente.',
-      {
-        tamanhoRecebido: recebido?.trim().length ?? 0,
-        tamanhoEsperado: esperado.trim().length,
-      },
-    )
+    await registrarRecusa(recebido, esperado)
     return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 })
   }
 

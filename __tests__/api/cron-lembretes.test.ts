@@ -34,9 +34,17 @@ jest.mock('@/lib/db', () => {
 const avisarPaciente: jest.Mock = jest.fn(async () => ({ enviados: 1, removidos: 0, falhas: 0 }))
 jest.mock('@/lib/push-envio', () => ({ avisarPaciente: (...a: unknown[]) => avisarPaciente(...a) }))
 jest.mock('@/lib/agenda-db', () => ({ agendamentosDoPeriodo: jest.fn(async () => linhasDoDia) }))
-jest.mock('@/lib/system-errors', () => ({ logSystemError: jest.fn(async () => undefined) }))
+const logSystemError: jest.Mock = jest.fn(async () => undefined)
+jest.mock('@/lib/system-errors', () => ({ logSystemError: (...a: unknown[]) => logSystemError(...a) }))
 
-import { POST } from '@/app/api/cron/lembretes/route'
+// A rota é recarregada a cada teste porque ela guarda estado em memória (o
+// limite de um registro por hora). Sem isso, um teste herdaria o
+// estrangulamento ligado pelo anterior e passaria por engano.
+let POST: (req: never) => Promise<Response>
+async function recarregarRota() {
+  jest.resetModules()
+  POST = (await import('@/app/api/cron/lembretes/route')).POST as unknown as typeof POST
+}
 
 function disparar(cabecalho?: string) {
   return POST(new Request('http://localhost/api/cron/lembretes', {
@@ -45,7 +53,9 @@ function disparar(cabecalho?: string) {
   }) as never)
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await recarregarRota()
+  logSystemError.mockClear()
   process.env.CRON_SECRET = SEGREDO
   jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] })
   // 16/11/2026, 9h de Brasília. Amanhã = 17/11 (terça).
@@ -105,12 +115,31 @@ describe('o portão do disparo', () => {
     expect((await disparar(SEGREDO.toUpperCase())).status).toBe(401)
   })
 
+  it('marteladas repetidas não enchem a tela de Erros', async () => {
+    // Esta rota é PÚBLICA por natureza: o portão é o segredo, e qualquer um
+    // na internet alcança a porta. Gravar uma linha por tentativa recusada
+    // deixaria um desconhecido entupir a tela que a clínica lê — justamente
+    // a tela onde o diagnóstico apareceria. Uma linha por hora basta para
+    // diagnosticar e não serve de alavanca para ninguém.
+    for (let i = 0; i < 20; i++) await disparar('valor-errado')
+    expect(logSystemError).toHaveBeenCalledTimes(1)
+  })
+
+  it('depois de uma hora, volta a registrar', async () => {
+    // O limite não pode virar silêncio permanente: se o problema continuar
+    // amanhã, tem que aparecer de novo.
+    await disparar('valor-errado')
+    expect(logSystemError).toHaveBeenCalledTimes(1)
+
+    jest.setSystemTime(new Date('2026-11-16T13:30:00Z')) // 1h30 depois
+    await disparar('valor-errado')
+    expect(logSystemError).toHaveBeenCalledTimes(2)
+  })
+
   it('recusa anota o TAMANHO de cada lado na tela de Erros, nunca o conteúdo', async () => {
     // Sem isto, "401" é tudo o que se sabe, e a diferença é invisível. Com o
     // tamanho dos dois lados, um caractere a mais aparece na hora. O conteúdo
     // nunca é gravado: a tela de Erros é lida pela clínica.
-    const { logSystemError } = jest.requireMock('@/lib/system-errors') as { logSystemError: jest.Mock }
-    logSystemError.mockClear()
     await disparar('valor-errado')
 
     expect(logSystemError).toHaveBeenCalled()
