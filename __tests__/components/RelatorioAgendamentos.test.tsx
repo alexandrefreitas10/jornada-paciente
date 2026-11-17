@@ -332,8 +332,11 @@ describe('Relatórios › Agendamentos — lista do período', () => {
     // ainda atualiza estado depois do teste e o React reclama.
     expect(await screen.findByText(/nenhum agendamento neste período/i)).toBeInTheDocument()
     expect(urls).toHaveLength(1)
+    // Mês FECHADO (decisão do dono em 17/11): 01/11 a 30/11. O que importa
+    // aqui é o fuso — às 23h30 de Brasília do dia 30, uma máquina em UTC já
+    // está em dezembro e abriria o mês errado.
     expect(urls[0]).toContain('de=2026-11-01')
-    expect(urls[0]).toContain('ate=2026-12-31')
+    expect(urls[0]).toContain('ate=2026-11-30')
   })
 
   it('mudar o período busca de novo com as datas novas', async () => {

@@ -77,8 +77,17 @@ describe('período padrão', () => {
     }
   })
 
-  it('começa no primeiro dia do mês de hoje', () => {
-    expect(periodoPadrao('2026-11-16').de).toBe('2026-11-01')
-    expect(periodoPadrao('2026-11-30').de).toBe('2026-11-01')
+  it('é o MÊS FECHADO: do dia 1 ao último dia', () => {
+    // Decisão do dono em 17/11: a aba serve para fechar o mês, então os
+    // números do topo têm que ser do mês — misturar dias do mês seguinte
+    // fazia "Agendado (40)" responder uma pergunta que ninguém fez.
+    expect(periodoPadrao('2026-11-16')).toEqual({ de: '2026-11-01', ate: '2026-11-30' })
+    expect(periodoPadrao('2026-11-30')).toEqual({ de: '2026-11-01', ate: '2026-11-30' })
+  })
+
+  it('acerta meses de 31 dias e fevereiro, inclusive bissexto', () => {
+    expect(periodoPadrao('2026-01-15').ate).toBe('2026-01-31')
+    expect(periodoPadrao('2026-02-10').ate).toBe('2026-02-28')
+    expect(periodoPadrao('2028-02-10').ate).toBe('2028-02-29')
   })
 })
