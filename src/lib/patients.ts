@@ -35,6 +35,16 @@ export interface PatientListItem extends PatientRow {
    * todos. Um "não" no navegador é definitivo, então vale perguntar certo.
    */
   tem_aviso: boolean
+  /**
+   * Já ATIVOU o portal: tem senha e consegue entrar.
+   *
+   * Não basta ter sido convidado — convite sem ativação não abre porta
+   * nenhuma. Por isso são dois campos e não um: as duas situações pedem
+   * ações diferentes da equipe (cobrar a ativação × enviar o convite).
+   */
+  tem_portal: boolean
+  /** Foi convidado e ainda NÃO ativou. */
+  convite_pendente: boolean
 }
 
 /**
@@ -43,7 +53,7 @@ export interface PatientListItem extends PatientRow {
  * sem trazê-lo do banco seria uma promessa que o tipo faz e o dado não cumpre —
  * `sql<T[]>` é conversão de tipo, não conferência, então ninguém avisaria.
  */
-export interface ArchivedPatientItem extends Omit<PatientListItem, 'tem_prescricao' | 'tem_aviso'> {
+export interface ArchivedPatientItem extends Omit<PatientListItem, 'tem_prescricao' | 'tem_aviso' | 'tem_portal' | 'convite_pendente'> {
   archive_reason: string | null
   archived_by: string | null
   archive_event_at: Date | string | null
@@ -80,7 +90,21 @@ export async function listPatients(): Promise<PatientListItem[]> {
            ) AS tem_prescricao,
            EXISTS (
              SELECT 1 FROM push_subscriptions s WHERE s.patient_id = p.id
-           ) AS tem_aviso
+           ) AS tem_aviso,
+           -- invite_used_at é o que separa "convidei" de "entrou": a linha em
+           -- patient_users nasce com o convite e só ganha essa data na
+           -- ativação. Sem a distinção, a equipe cobraria ativação de quem
+           -- nunca recebeu convite.
+           -- (sem crase neste comentário: ele vive dentro de um template
+           -- literal, e uma crase aqui fecha a string sem avisar.)
+           EXISTS (
+             SELECT 1 FROM patient_users u
+             WHERE u.patient_id = p.id AND u.invite_used_at IS NOT NULL
+           ) AS tem_portal,
+           EXISTS (
+             SELECT 1 FROM patient_users u
+             WHERE u.patient_id = p.id AND u.invite_used_at IS NULL
+           ) AS convite_pendente
     FROM patients p
     LEFT JOIN task_completions tc ON tc.patient_id = p.id
     WHERE p.deleted_at IS NULL AND p.archived_at IS NULL

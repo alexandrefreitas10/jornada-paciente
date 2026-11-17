@@ -24,6 +24,8 @@ function paciente(p: Partial<PatientListItem> & { id: number; name: string }): P
     completed_count: 0,
     tem_prescricao: false,
     tem_aviso: false,
+    tem_portal: false,
+    convite_pendente: false,
     ...p,
   }
 }
@@ -150,6 +152,50 @@ describe('lista de pacientes — quem já tem aviso no celular', () => {
     await user.click(grupo(/aviso/i).getByRole('button', { name: /^Sem aviso/ }))
 
     expect(screen.getByText('Carla Dias')).toBeInTheDocument()
+    expect(screen.queryByText('Bruno Lemos')).toBeNull()
+  })
+})
+
+describe('lista de pacientes — acesso ao portal', () => {
+  // Pedido do dono em 17/11. "Tem acesso" tem TRÊS estados, e a diferença
+  // entre eles muda a ação da equipe:
+  //   ativou        → usa o portal, nada a fazer
+  //   convite feito → cobrar a ativação
+  //   sem convite   → enviar o convite
+  // O filtro é binário (é o que ele pediu), mas o card distingue os dois
+  // tipos de "sem acesso" — senão a equipe cobra quem nunca foi convidado.
+  const COM_PORTAL: PatientListItem[] = [
+    paciente({ id: 1, name: 'Ana Prado', tipo: 'nutrologia', tem_portal: true }),
+    paciente({ id: 2, name: 'Bruno Lemos', tipo: 'nutrologia', convite_pendente: true }),
+    paciente({ id: 3, name: 'Carla Dias', tipo: 'nutrologia' }),
+  ]
+
+  it('marca quem já ativou e quem só foi convidado, de formas diferentes', () => {
+    render(<PatientSearch patients={COM_PORTAL} />)
+    expect(within(cardDe('Ana Prado')).getByText(/portal/i)).toBeInTheDocument()
+    expect(within(cardDe('Bruno Lemos')).getByText(/convite/i)).toBeInTheDocument()
+    expect(within(cardDe('Carla Dias')).queryByText(/portal|convite/i)).toBeNull()
+  })
+
+  it('filtra quem não tem acesso, e convite pendente conta como SEM acesso', async () => {
+    // Quem foi convidado e não ativou não entra no portal: para efeito de
+    // "consegue usar?", está junto de quem nem convite tem.
+    const user = userEvent.setup()
+    render(<PatientSearch patients={COM_PORTAL} />)
+
+    expect(grupo(/portal/i).getByRole('button', { name: /^Sem acesso \(2\)/ })).toBeInTheDocument()
+    await user.click(grupo(/portal/i).getByRole('button', { name: /^Sem acesso/ }))
+
+    expect(screen.queryByText('Ana Prado')).toBeNull()
+    expect(screen.getByText('Bruno Lemos')).toBeInTheDocument()
+    expect(screen.getByText('Carla Dias')).toBeInTheDocument()
+  })
+
+  it('convive com os outros filtros', async () => {
+    const user = userEvent.setup()
+    render(<PatientSearch patients={COM_PORTAL} />)
+    await user.click(grupo(/portal/i).getByRole('button', { name: /^Com acesso/ }))
+    expect(screen.getByText('Ana Prado')).toBeInTheDocument()
     expect(screen.queryByText('Bruno Lemos')).toBeNull()
   })
 })

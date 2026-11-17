@@ -64,6 +64,24 @@ export function PatientCard({ patient }: Props) {
                 🔔 aviso
               </span>
             )}
+            {patient.tem_portal && (
+              <span
+                title="Já ativou o acesso ao portal: tem senha e consegue entrar."
+                className="flex-shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200"
+              >
+                🔑 portal
+              </span>
+            )}
+            {/* Convidado e ainda sem entrar. Aparece separado de propósito:
+                cobrar a ativação é outra conversa que enviar o convite. */}
+            {!patient.tem_portal && patient.convite_pendente && (
+              <span
+                title="Convite enviado, mas o paciente ainda não ativou o acesso."
+                className="flex-shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200"
+              >
+                ⏳ convite pendente
+              </span>
+            )}
           </div>
           <div className="text-xs text-gray-500 mb-2">
             {patient.start_date && `Início: ${fmtDiaPuro(patient.start_date)}`}

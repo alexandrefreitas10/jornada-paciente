@@ -33,6 +33,8 @@ const patient: PatientListItem = {
   completed_count: 7,
   tem_prescricao: false,
   tem_aviso: false,
+  tem_portal: false,
+  convite_pendente: false,
 }
 
 describe('PatientCard', () => {

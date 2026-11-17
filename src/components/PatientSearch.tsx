@@ -19,20 +19,24 @@ export function PatientSearch({ patients }: Props) {
   // semanas: "de quem da nutrologia ainda falta subir a folha?".
   const [prescricao, setPrescricao] = useState<'todos' | 'com' | 'sem'>('todos')
   const [aviso, setAviso] = useState<'todos' | 'com' | 'sem'>('todos')
+  const [portal, setPortal] = useState<'todos' | 'com' | 'sem'>('todos')
 
   const casaTipo = (p: PatientListItem) => tipo === 'todos' || tipoDe(p.tipo) === tipo
   const casaPrescricao = (p: PatientListItem) =>
     prescricao === 'todos' || (prescricao === 'com' ? p.tem_prescricao : !p.tem_prescricao)
   const casaAviso = (p: PatientListItem) =>
     aviso === 'todos' || (aviso === 'com' ? p.tem_aviso : !p.tem_aviso)
+  const casaPortal = (p: PatientListItem) =>
+    portal === 'todos' || (portal === 'com' ? p.tem_portal : !p.tem_portal)
 
   // Cada contagem é feita com os OUTROS filtros já aplicados. Contar sobre a
   // lista inteira faria o botão prometer um número e a tela entregar outro ao
   // clicar — e número que não bate é pior que número nenhum: a pessoa para de
   // confiar na lista toda, não só naquele botão.
-  const semTipo = patients.filter(p => casaPrescricao(p) && casaAviso(p))
-  const semPrescricao = patients.filter(p => casaTipo(p) && casaAviso(p))
-  const semAviso = patients.filter(p => casaTipo(p) && casaPrescricao(p))
+  const semTipo = patients.filter(p => casaPrescricao(p) && casaAviso(p) && casaPortal(p))
+  const semPrescricao = patients.filter(p => casaTipo(p) && casaAviso(p) && casaPortal(p))
+  const semAviso = patients.filter(p => casaTipo(p) && casaPrescricao(p) && casaPortal(p))
+  const semPortal = patients.filter(p => casaTipo(p) && casaPrescricao(p) && casaAviso(p))
 
   const contagem = {
     todos: semTipo.length,
@@ -50,7 +54,13 @@ export function PatientSearch({ patients }: Props) {
     sem: semAviso.filter(p => !p.tem_aviso).length,
   }
 
-  const visiveis = patients.filter(p => casaTipo(p) && casaPrescricao(p) && casaAviso(p))
+  const contagemPortal = {
+    todos: semPortal.length,
+    com: semPortal.filter(p => p.tem_portal).length,
+    sem: semPortal.filter(p => !p.tem_portal).length,
+  }
+
+  const visiveis = patients.filter(p => casaTipo(p) && casaPrescricao(p) && casaAviso(p) && casaPortal(p))
   // A busca por nome NÃO entra nas contagens: ela é consulta passageira, não
   // um recorte da lista como os dois filtros.
   const filtered = query.trim()
@@ -113,6 +123,29 @@ export function PatientSearch({ patients }: Props) {
           pode ligar, no aparelho dela — não há chave do nosso lado. Por isso o
           que a equipe precisa aqui é "quem ainda falta", para pedir a esses em
           vez de aos 193. */}
+      {/* Acesso ao portal. "Com acesso" é só quem ATIVOU: convite enviado e
+          não usado não abre porta nenhuma, então conta como sem acesso. A
+          diferença entre os dois tipos de "sem" aparece na etiqueta do card,
+          porque cobrar ativação é outra conversa que enviar o convite. */}
+      <div role="group" aria-label="Filtrar por acesso ao portal" className="flex gap-2 mb-2 flex-wrap">
+          {([
+            ['todos', 'Todos'],
+            ['com', 'Com acesso'],
+            ['sem', 'Sem acesso'],
+          ] as const).map(([valor, rotulo]) => (
+            <button
+              key={valor}
+              onClick={() => setPortal(valor)}
+              aria-pressed={portal === valor}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                portal === valor ? 'bg-violet-600 text-white' : 'text-gray-500 hover:bg-gray-50 border border-gray-200'
+              }`}
+            >
+              {rotulo} ({contagemPortal[valor]})
+            </button>
+          ))}
+      </div>
+
       <div role="group" aria-label="Filtrar por aviso no celular" className="flex gap-2 mb-2 flex-wrap">
           {([
             ['todos', 'Todos'],
