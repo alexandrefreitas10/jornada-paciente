@@ -221,3 +221,38 @@ describe('AgendaClient', () => {
     expect(await screen.findByText(/passaria da hora em que a clínica fecha/)).toBeInTheDocument()
   })
 })
+
+describe('de quem já saiu baixa dos ativos', () => {
+  // Pedido do dono em 17/11/2026: numa tarde com dez atendidos, o enfermeiro
+  // não tinha como saber de quem já tinha dado baixa — o botão era igual para
+  // todos. O risco não é esquecer alguém: é dar baixa DUAS vezes no estoque.
+
+  it('quem já teve saída mostra que está feito, em vez de convidar de novo', async () => {
+    resposta = {
+      ...DIA,
+      saidas: [{ patient_id: 11, dia: HOJE }],
+    } as typeof resposta
+    render(<AgendaClient hoje={HOJE} podeEstoque />)
+
+    const linha = (await screen.findByText('Marta Exemplo')).closest('div')!.parentElement!
+    expect(within(linha).getByText(/sa[ií]da de ativos registrada/i)).toBeInTheDocument()
+    expect(within(linha).queryByText('Registrar saída dos ativos')).toBeNull()
+  })
+
+  it('quem ainda não teve continua com o convite', async () => {
+    resposta = { ...DIA, saidas: [] } as typeof resposta
+    render(<AgendaClient hoje={HOJE} podeEstoque />)
+    expect(await screen.findByText('Registrar saída dos ativos')).toBeInTheDocument()
+  })
+
+  it('a baixa de OUTRO dia não marca o atendimento de hoje', async () => {
+    // `created_at` é instante e `dia` é calendário: confundir os dois faria o
+    // botão mudar no dia errado.
+    resposta = {
+      ...DIA,
+      saidas: [{ patient_id: 11, dia: '2026-11-12' }],
+    } as typeof resposta
+    render(<AgendaClient hoje={HOJE} podeEstoque />)
+    expect(await screen.findByText('Registrar saída dos ativos')).toBeInTheDocument()
+  })
+})

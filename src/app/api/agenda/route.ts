@@ -7,6 +7,7 @@ import {
   criarAgendamento,
   duracaoValida,
   ehFatiaOcupada,
+  saidasDeEstoquePorDia,
 } from '@/lib/agenda-db'
 import { decidirGravacao, motivoDeRecusa } from '@/lib/agenda-vagas'
 import { vivo } from '@/lib/agenda-grade'
@@ -50,11 +51,14 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  const [agendamentos, bloqueios] = await Promise.all([
+  const [agendamentos, bloqueios, saidas] = await Promise.all([
     agendamentosDoPeriodo(de, ate),
     bloqueiosDoPeriodo(de, ate),
+    // De quem o enfermeiro já deu baixa, para a grade não oferecer o mesmo
+    // botão a quem já foi feito. Ver `saidasDeEstoquePorDia`.
+    saidasDeEstoquePorDia(de, ate),
   ])
-  return NextResponse.json({ agendamentos, bloqueios })
+  return NextResponse.json({ agendamentos, bloqueios, saidas })
 }
 
 export async function POST(req: NextRequest) {

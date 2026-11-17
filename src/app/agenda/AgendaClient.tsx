@@ -25,6 +25,13 @@ const STATUS_ESCOLHA: { valor: StatusAgendamento; rotulo: string }[] = [
   { valor: 'remarcou', rotulo: 'Remarcou' },
 ]
 
+/**
+ * A chave é paciente + DIA, não só paciente: a mesma pessoa volta na semana
+ * seguinte, e a baixa da semana passada não pode marcar o atendimento de hoje
+ * como feito.
+ */
+const chaveDeSaida = (patientId: number, dia: string) => `${patientId}|${dia}`
+
 const DIAS_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
 
 // Lido em UTC: `AAAA-MM-DD` já é meia-noite UTC; em fuso local recuaria um dia.
@@ -46,6 +53,8 @@ export function AgendaClient({ hoje, podeEstoque = false }: { hoje: string; pode
   const [dia, setDia] = useState(hoje)
   const [agendamentos, setAgendamentos] = useState<AgendamentoComNome[]>([])
   const [bloqueios, setBloqueios] = useState<BloqueioGravado[]>([])
+  /** Pares paciente+dia que já têm saída de estoque gravada. */
+  const [saidasFeitas, setSaidasFeitas] = useState<Set<string>>(new Set())
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
   // Avisos do servidor ficam na tela até a pessoa fechar: furar a regra sabendo é
@@ -77,6 +86,10 @@ export function AgendaClient({ hoje, podeEstoque = false }: { hoje: string; pode
       setErro(null)
       setAgendamentos(dados.agendamentos ?? [])
       setBloqueios(dados.bloqueios ?? [])
+      setSaidasFeitas(new Set(
+        (dados.saidas ?? []).map((s: { patient_id: number; dia: string }) =>
+          chaveDeSaida(s.patient_id, s.dia)),
+      ))
     } catch {
       if (minha === seq.current) setErro('Não foi possível carregar a agenda.')
     } finally {
@@ -160,6 +173,7 @@ export function AgendaClient({ hoje, podeEstoque = false }: { hoje: string; pode
       a={a}
       ocupado={ocupado}
       podeEstoque={podeEstoque}
+      jaTeveSaida={saidasFeitas.has(chaveDeSaida(a.patient_id, a.dia))}
       pendente={pendente?.id === a.id ? pendente : null}
       onStatus={pedirStatus}
       onDuracao={mudarDuracao}
@@ -342,11 +356,13 @@ export function AgendaClient({ hoje, podeEstoque = false }: { hoje: string; pode
 }
 
 function CartaoAgendamento({
-  a, ocupado, podeEstoque, pendente, onStatus, onDuracao, onConfirmar, onCancelar, onDesmarcar,
+  a, ocupado, podeEstoque, jaTeveSaida, pendente, onStatus, onDuracao, onConfirmar, onCancelar, onDesmarcar,
 }: {
   a: AgendamentoComNome
   ocupado: boolean
   podeEstoque: boolean
+  /** Já há saída de estoque gravada para este paciente NESTE dia. */
+  jaTeveSaida: boolean
   pendente: Pendente | null
   onStatus: (a: AgendamentoComNome, para: StatusAgendamento) => void
   onDuracao: (a: AgendamentoComNome, d: Duracao) => void
@@ -367,12 +383,21 @@ function CartaoAgendamento({
           </span>
         )}
         <span className="text-xs text-gray-400">{a.duracao} min</span>
+        {/* Já deu baixa neste paciente, neste dia? O rótulo muda em vez de
+            sumir: some esconderia a informação, e continuar igual era o que
+            obrigava o enfermeiro a abrir um por um para lembrar de quem já
+            tinha feito — com risco de baixar o estoque duas vezes. Continua
+            clicável de propósito, para acrescentar um item esquecido. */}
         {a.status === 'atendido' && podeEstoque && (
           <a
             href={`/estoque/saida?paciente=${a.patient_id}`}
-            className="ml-auto text-xs font-medium text-green-700 border border-green-300 bg-green-50 rounded-lg px-2 py-1 hover:bg-green-100"
+            className={`ml-auto text-xs font-medium rounded-lg px-2 py-1 border ${
+              jaTeveSaida
+                ? 'text-gray-500 border-gray-200 bg-gray-50 hover:bg-gray-100'
+                : 'text-green-700 border-green-300 bg-green-50 hover:bg-green-100'
+            }`}
           >
-            Registrar saída dos ativos
+            {jaTeveSaida ? '✓ Saída de ativos registrada' : 'Registrar saída dos ativos'}
           </a>
         )}
       </div>

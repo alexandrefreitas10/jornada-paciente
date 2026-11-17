@@ -232,6 +232,34 @@ export async function historicoDoPaciente(patientId: number): Promise<Agendament
 }
 
 /**
+ * Quais pacientes já tiveram saída de estoque registrada em cada dia do
+ * período. Para a grade da agenda marcar de quem o enfermeiro já deu baixa.
+ *
+ * POR QUE ISTO EXISTE: a grade mostrava "Registrar saída dos ativos" igual
+ * para todo mundo, inclusive para quem já teve a baixa feita. Numa tarde com
+ * dez atendidos, a única forma de saber de quem faltava era abrir um por um —
+ * e o risco não é esquecer, é dar baixa DUAS vezes no estoque.
+ *
+ * `created_at` é `timestamptz`, ou seja um INSTANTE: vira dia de calendário no
+ * fuso da clínica antes de comparar. Sem isso, uma saída registrada às 21h de
+ * Brasília contaria no dia seguinte e o botão não mudaria.
+ */
+export async function saidasDeEstoquePorDia(
+  de: string,
+  ate: string,
+): Promise<{ patient_id: number; dia: string }[]> {
+  await initSchema()
+  return sql<{ patient_id: number; dia: string }[]>`
+    SELECT DISTINCT m.patient_id,
+           to_char((m.created_at AT TIME ZONE 'America/Sao_Paulo')::date, 'YYYY-MM-DD') AS dia
+    FROM stock_movements m
+    WHERE m.type = 'saida'
+      AND m.patient_id IS NOT NULL
+      AND (m.created_at AT TIME ZONE 'America/Sao_Paulo')::date
+          BETWEEN ${de}::date AND ${ate}::date`
+}
+
+/**
  * O paciente tem folha na aba Prescrições?
  *
  * É o portão da aba Agenda, decidido pelo dono: qualquer arquivo serve, e o

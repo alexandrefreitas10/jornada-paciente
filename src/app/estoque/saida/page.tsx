@@ -336,7 +336,17 @@ function SaidaForm() {
     </div>
   )
 
-  if ((!itemId && !pacienteParam) || (!item && step !== 'cart')) return (
+  // "Não encontrada" só faz sentido no PRIMEIRO passo, quando a tela abriu
+  // para confirmar um item e não conseguiu carregá-lo.
+  //
+  // A condição anterior era `!item && step !== 'cart'`, e isso escondia a tela
+  // de sucesso de quem entrou pelo atalho da Agenda: ali nunca existe um
+  // `item` solto (os itens vivem no carrinho, o leitor de QR não navega), e o
+  // passo vira 'done' ao gravar. Resultado real, relatado em 17/11/2026: a
+  // baixa era gravada certinho e o enfermeiro via um X vermelho dizendo que a
+  // medicação não existia. Diante disso a reação natural é refazer — e refazer
+  // escaneia de novo, com chaves de idempotência novas, dando baixa em dobro.
+  if (step === 'confirm' && !item) return (
     <div className="flex items-center justify-center min-h-screen bg-gray-50 p-6 text-center">
       <div>
         <p className="text-5xl mb-3">❌</p>
